@@ -75,4 +75,4 @@ Ordenadas por cuándo bloquean. La recomendación es mía; quien decide aparece 
 
 ## Siguiente paso
 
-Abrir una sesión nueva en esta carpeta —arrancará con el CTO como agente principal— y encargarle H0 y H1 con estos documentos como base. Lo primero que necesitará cerrar son las decisiones de «Antes de H0».
+H0 (base mínima) está implementado y verificado por QA el 11 de noviembre de 2026: ver el [diseño técnico](h0-diseno-tecnico.md), el [diseño UX](h0-diseno-ux.md) y el README para arrancarlo. Lo siguiente es H1, la [entrevista con Cupidilla](entrevista-cupidilla.md); antes de diseñarla hay que cerrar las decisiones de «Antes de diseñar H1».

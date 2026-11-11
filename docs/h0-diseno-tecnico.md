@@ -696,8 +696,8 @@ Se llaman `API_HOST`/`API_PORT`, y no `HOST`/`PORT`, porque `adapter-node` lee `
 - Duración: `SESSION_TTL_DAYS` (30) **deslizante**. `SessionsService.validate`:
   - Si no existe → 401.
   - Si `expires_at <= now` → borra la fila y responde 401.
-  - Si faltan menos de 15 días → `expires_at = now + 30 días` y `renewed = true`.
-  - Como mucho, una escritura cada 15 días por sesión.
+  - Si falta menos de la mitad de `SESSION_TTL_DAYS` (15 días con el valor por defecto) → `expires_at = now + SESSION_TTL_DAYS` y `renewed = true`.
+  - Como mucho, una escritura por sesión cada medio TTL, también si el TTL se configura más corto.
 - Al hacer login se borran también las sesiones caducadas de ese usuario. No hay tarea programada en H0.
 - Salir: `DELETE FROM sessions WHERE token_hash = $1`. La revocación es inmediata porque cada petición consulta la tabla.
 - Cada login crea un token nuevo, así que no hay fijación de sesión.
