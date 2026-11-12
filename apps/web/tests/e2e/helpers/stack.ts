@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer, type AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
+import { e2eDatabaseUrl } from './e2e-database.ts';
 
 /**
  * Pila propia de un test: una API y una web que el test arranca y para a su gusto, sobre la base
@@ -61,14 +62,13 @@ export interface StackOptions {
   apiUp?: boolean;
   /** Multiplicador de los límites de intentos de la API. Con 1 son los límites reales. */
   rateLimitFactor?: number;
+  /** URL de la API que usa la web, si no es la propia API (p. ej. un proxy que simula fallos). */
+  webApiUrl?: string;
 }
 
 export async function startStack(options: StackOptions = {}): Promise<Stack> {
-  const { apiUp = true, rateLimitFactor = 1 } = options;
-  const databaseUrl = process.env.E2E_DATABASE_URL;
-  if (!databaseUrl?.endsWith('_e2e')) {
-    throw new Error('E2E_DATABASE_URL debe apuntar a una base de datos *_e2e');
-  }
+  const { apiUp = true, rateLimitFactor = 1, webApiUrl } = options;
+  const databaseUrl = e2eDatabaseUrl();
   const [apiPort, webPort] = [await freePort(), await freePort()];
   const apiUrl = `http://127.0.0.1:${apiPort}`;
   const webUrl = `http://localhost:${webPort}`;
@@ -107,7 +107,7 @@ export async function startStack(options: StackOptions = {}): Promise<Stack> {
         PORT: String(webPort),
         HOST: '127.0.0.1',
         ORIGIN: webUrl,
-        API_URL: apiUrl,
+        API_URL: webApiUrl ?? apiUrl,
       },
       stdio: 'ignore',
     });

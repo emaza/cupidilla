@@ -217,6 +217,7 @@ Estados:
 | Correo ya registrado | Error en el campo correo con enlace a `/entrar` (ver 3.2.1) |
 | Menor de edad | Pantalla de cierre sin formulario (ver 3.2.2) |
 | Error general | Demasiados intentos o servidor caído: bloque `role="alert"` arriba; el formulario se conserva con los valores |
+| Resultado incierto (503) | La petición se envió pero no hubo respuesta: no sabemos si la cuenta se creó. Misma página, sin cookie de sesión, valores conservados salvo contraseña. Bloque general de 2.2 (`role="alert"`, `tabindex="-1"`, sin lista de enlaces, primero de `<main>`, `<title>` con «Error:», foco con JS) con `registro.error.resultado_incierto` y debajo el enlace `registro.enlace.comprobar_entrada` (a `/entrar`, pestaña nueva). Es un aviso general, no un error de campo: no marca ningún `aria-invalid`. El botón vuelve a «Crear cuenta». Si la cuenta sí se creó, volver a enviar daría `registro.error.correo_existente` (3.2.1) y entrar funcionaría. |
 | Éxito | 303 a `/cuenta` |
 
 #### 3.2.1 Correo que ya existe
@@ -314,6 +315,7 @@ Cancelar                                       (enlace a /cuenta)
 | Enviando (JS) | «Eliminando…», `aria-disabled` |
 | Contraseña vacía o incorrecta | Error en el campo y en el resumen. No se borra nada. Este mensaje sí puede ser específico (la persona ya tiene sesión) |
 | Error general | `comun.error.limite` o `eliminar.error.servidor` («Tu cuenta sigue como estaba») |
+| Resultado incierto (503) | La petición se envió pero no hubo respuesta: no sabemos si se borró. Misma página, cookie conservada, campo de contraseña vacío. Bloque general de 2.2 (`role="alert"`, `tabindex="-1"`, sin lista de enlaces, primero de `<main>`, `<title>` con «Error:», foco con JS) con `eliminar.error.resultado_incierto` y debajo el enlace `eliminar.enlace.comprobar` (a `/cuenta`). Nunca se afirma que la cuenta sigue ni que se borró; no se usa `eliminar.error.servidor`. El botón vuelve a «Eliminar mi cuenta definitivamente» y se puede reintentar a mano. Si la cuenta ya no existe, ir a `/cuenta` lleva a `/entrar` (1.7). |
 | Éxito | La cuenta ya no existe, sesión cerrada, 303 a `/?aviso=cuenta-eliminada` |
 
 ### 3.6 `/legal/condiciones`
@@ -336,11 +338,11 @@ Texto a ancho de lectura (máx. 65 caracteres por línea aprox.), jerarquía `h1
 
 | Pantalla | Inicial | Enviando | Error por campo | Error general | Éxito |
 |---|---|---|---|---|---|
-| `/registro` | vacío, casilla desmarcada | botón «Creando cuenta…» | correo, contraseña, fecha, condiciones | límite o servidor | `/cuenta` |
+| `/registro` | vacío, casilla desmarcada | botón «Creando cuenta…» | correo, contraseña, fecha, condiciones | límite, servidor o resultado incierto (503) | `/cuenta` |
 | `/registro` (menor) | n/a | n/a | n/a | pantalla de cierre | n/a |
 | `/entrar` | vacío (+ aviso si viene de ruta privada) | «Entrando…» | correo vacío, contraseña vacía | credenciales (genérico), límite, servidor | `/cuenta` o `siguiente` |
 | `/cuenta` | datos | n/a | n/a | fallo al cerrar sesión | `/` con aviso |
-| `/cuenta/eliminar` | contraseña vacía | «Eliminando…» | vacía, incorrecta | límite, servidor | `/` con aviso |
+| `/cuenta/eliminar` | contraseña vacía | «Eliminando…» | vacía, incorrecta | límite, servidor o resultado incierto (503) | `/` con aviso |
 
 Casos límite: correo de hasta 254 caracteres (se parte, no desborda); contraseña de 128 caracteres; zoom 200 %; texto ampliado; sin JavaScript; doble envío; botón «atrás» tras cerrar sesión (la página privada debe pedir sesión de nuevo, no mostrar datos en caché: cabecera `Cache-Control: no-store` en rutas privadas).
 
@@ -422,10 +424,14 @@ Convención de claves: `pantalla.tipo.nombre`. Tipos: `meta` (título del docume
 | `registro.error.condiciones` | Para crear la cuenta tienes que aceptar las condiciones de uso. |
 | `registro.error.condiciones_version` | Las condiciones han cambiado mientras rellenabas el formulario. Léelas de nuevo y vuelve a marcar la casilla. |
 | `registro.error.servidor` | Algo ha fallado por nuestra parte y no hemos podido crear tu cuenta. Inténtalo de nuevo en unos minutos. |
+| `registro.error.resultado_incierto` | No sabemos si tu cuenta se ha creado: se ha perdido la conexión antes de recibir la respuesta. Antes de volver a registrarte, prueba a entrar con este correo y esta contraseña. Si entras, la cuenta ya existe. Si no puedes entrar, pulsa «Crear cuenta» otra vez. |
+| `registro.enlace.comprobar_entrada` | Probar a entrar con este correo |
 | `registro.menor.meta.titulo` | No podemos crear tu cuenta |
 | `registro.menor.titulo` | No podemos crear tu cuenta |
 | `registro.menor.texto1` | Cupidilla es solo para personas de 18 años o más, así que no hemos creado tu cuenta ni hemos guardado ningún dato. |
 | `registro.menor.texto2` | No es nada personal: es una condición del servicio. |
+
+`registro.error.servidor` solo se usa cuando sabemos que no se creó nada; si no lo sabemos, `registro.error.resultado_incierto`. El enlace `registro.enlace.comprobar_entrada` va dentro del mismo bloque, tras el texto, lleva a `/entrar` y se abre en pestaña nueva con `comun.nueva_pestana`. No se rellena el correo en `/entrar`: no se pasan datos por la URL.
 
 Si un error de fecha afecta a una sola parte (día, mes o año), se usa el mensaje de esa parte; si faltan varias, `registro.error.fecha_vacia` si están todas vacías y, si no, el de la primera parte con problema. Año menor de 1900: `registro.error.anio`.
 
@@ -483,6 +489,10 @@ Si un error de fecha afecta a una sola parte (día, mes o año), se usa el mensa
 | `eliminar.error.contrasena_vacia` | Escribe tu contraseña para confirmar. |
 | `eliminar.error.contrasena` | La contraseña no es correcta. No hemos borrado nada. |
 | `eliminar.error.servidor` | Algo ha fallado por nuestra parte y no hemos podido eliminar tu cuenta. Tu cuenta sigue como estaba. Inténtalo de nuevo en unos minutos. |
+| `eliminar.error.resultado_incierto` | No sabemos si tu cuenta se ha eliminado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta. Si te lleva a la pantalla de entrada, la cuenta ya no existe. Si ves tu cuenta, sigue activa y puedes volver a intentarlo. |
+| `eliminar.enlace.comprobar` | Comprobar si mi cuenta sigue activa |
+
+`eliminar.error.servidor` solo se usa cuando sabemos que no se borró nada; si no lo sabemos, `eliminar.error.resultado_incierto`. El enlace `eliminar.enlace.comprobar` va en el mismo bloque, tras el texto, a `/cuenta` y en la misma pestaña. Si la cuenta se borró, `/cuenta` lleva a `/entrar` con `entrar.aviso.necesita_sesion`: es coherente con 1.7, porque el texto ya avisa de ese resultado.
 
 ### 5.7 Errores de página
 
@@ -735,3 +745,12 @@ Cada criterio se puede comprobar uno a uno. Salvo que se indique, aplica con y s
 57. Los tres formularios funcionan con JavaScript desactivado (registro, entrada, cierre de sesión y eliminación) y recargan la página con los valores y errores.
 58. Cerrar sesión no se puede hacer con un enlace GET (visitar la URL de la acción no cierra la sesión).
 59. Los campos de contraseña nunca reaparecen rellenos en el HTML devuelto por el servidor.
+
+### Resultado incierto (`OUTCOME_UNKNOWN`, solo registro y eliminación)
+
+60. Si el POST de registro se envía pero no llega respuesta (tiempo agotado o conexión perdida), `/registro` se vuelve a mostrar con estado 503, sin cookie de sesión, con un bloque `role="alert"` al inicio de `<main>` que contiene `registro.error.resultado_incierto` y el enlace `registro.enlace.comprobar_entrada`. No aparece `registro.error.servidor` ni ningún otro texto «no se ha podido».
+61. En ese caso se conservan correo, día, mes, año y casilla de condiciones; la contraseña está vacía (criterio 59). El enlace `registro.enlace.comprobar_entrada` apunta a `/entrar`, se abre en pestaña nueva y lo anuncia con `comun.nueva_pestana`; lo escrito no se pierde. La URL no lleva el correo ni ningún otro dato.
+62. Si el POST de eliminación se envía pero no llega respuesta, `/cuenta/eliminar` se vuelve a mostrar con estado 503, con la cookie de sesión intacta y un bloque `role="alert"` al inicio de `<main>` que contiene `eliminar.error.resultado_incierto` y el enlace `eliminar.enlace.comprobar`. No aparece `eliminar.error.servidor` («Tu cuenta sigue como estaba») ni ninguna frase que afirme que la cuenta sigue o que se ha borrado.
+63. El enlace `eliminar.enlace.comprobar` apunta a `/cuenta` (misma pestaña). Si la cuenta se borró, lleva a `/entrar` (criterio 12); si no, muestra `/cuenta` con sesión. La contraseña escrita no se conserva y el campo está vacío.
+64. En ambos casos: el `<title>` empieza por «Error:»; con JavaScript el foco pasa al bloque (`tabindex="-1"`); sin JavaScript el bloque es lo primero de `<main>`; el botón de envío vuelve a su texto normal y es operable; no hay reintento automático (la API recibe una sola petición).
+65. El texto de resultado incierto solo se muestra cuando la petición se envió y no hubo respuesta, palabra por palabra como en 5.3 y 5.6. Si la conexión se rechaza antes de enviar (API parada), se sigue mostrando `registro.error.servidor` o `eliminar.error.servidor`. `OUTCOME_UNKNOWN` nunca se muestra en `/entrar`, `/cuenta` ni al cerrar sesión.

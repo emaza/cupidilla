@@ -67,7 +67,7 @@ Todas se han comprobado hoy, 11 de noviembre de 2026, con `npm view <paquete>@<v
 | Node.js | **24.x LTS** (instalada 24.21.0; última 24.22.2, del 27 de octubre de 2026) | `nodejs.org/dist/index.json` y `github.com/nodejs/Release/schedule.json`. Node 24 está en *maintenance LTS* desde el 20 de octubre de 2026, con soporte hasta el 30 de abril de 2028 |
 | `engines.node` | `>=24.15.0 <25` | El mínimo lo marca `@nestjs/schematics@12.0.13` (`^22.22.3 \|\| ^24.15.0 \|\| >=26`). SvelteKit 3 pide `>=22.17`; Vitest 5, `^22.12 \|\| ^24 \|\| >=26` |
 | `.nvmrc` | `24` | — |
-| npm | 11.19.0 (`packageManager: "npm@11.19.0"`, `engines.npm: ">=11.6"`) | Instalada |
+| npm | 11.19.0 (`packageManager: "npm@11.19.0"`, `engines.npm: ">=11.19"`) | Instalada |
 | PostgreSQL | **`postgres:18.6-alpine`** | Docker Hub y `docker-library/postgres/versions.json`. La 19 está en `19rc1`, así que no se usa. Desde la 18 la imagen declara `VOLUME /var/lib/postgresql` y `PGDATA=/var/lib/postgresql/18/docker`: el volumen se monta en `/var/lib/postgresql` (comprobado en el Dockerfile oficial y en un contenedor de prueba) |
 
 ### Web (`apps/web`)
@@ -207,7 +207,7 @@ cupidilla/
 │  │  │  │  ├─ decorators/public.decorator.ts          # @Public(): sin sesión
 │  │  │  │  ├─ decorators/skip-internal-key.decorator.ts  # solo /health
 │  │  │  │  ├─ decorators/current-session.decorator.ts
-│  │  │  │  └─ logging/request-logging.interceptor.ts
+│  │  │  │  └─ logging/request-logging.middleware.ts
 │  │  │  ├─ database/
 │  │  │  │  ├─ database.module.ts    # global; provee DB y cierra el pool
 │  │  │  │  ├─ database.types.ts     # Database, Tx
@@ -286,7 +286,7 @@ Los grupos de rutas `(invitado)` y `(privado)` no cambian las URL: siguen siendo
   "private": true,
   "type": "module",
   "packageManager": "npm@11.19.0",
-  "engines": { "node": ">=24.15.0 <25", "npm": ">=11.6" },
+  "engines": { "node": ">=24.15.0 <25", "npm": ">=11.19" },
   "workspaces": ["packages/*", "apps/*"],
   "allowScripts": { "argon2": false, "esbuild": false },
   "scripts": { /* ver §11.3 */ },
@@ -542,8 +542,8 @@ Los mensajes de error de los esquemas **son códigos estables** (`FieldIssue`), 
 | Esquema | Campos y reglas |
 |---|---|
 | `emailSchema` | `z.string({ error: 'required' }).trim().toLowerCase().max(254, { error: 'too_long' }).pipe(z.email({ error: 'invalid_format' }))` |
-| `newPasswordSchema` | `string`. Puntos de código (`[...s].length`) ≥ 10 → si no, `too_short`; ≤ 128 → si no, `too_long`. Sin `trim` ni reglas de composición |
-| `passwordInputSchema` (login, borrado) | `string`, de 1 a 128 puntos de código (`required` / `too_long`). No exige 10: si la política cambia, las cuentas antiguas siguen pudiendo entrar |
+| `newPasswordSchema` | `string`. Puntos de código tras NFKC (`[...s.normalize('NFKC')].length`, la misma normalización que §8.1; el valor no cambia) ≥ 10 → si no, `too_short`; ≤ 128 → si no, `too_long`. Sin `trim` ni reglas de composición |
+| `passwordInputSchema` (login, borrado) | `string`, de 1 a 128 puntos de código tras NFKC (`required` / `too_long`). No exige 10: si la política cambia, las cuentas antiguas siguen pudiendo entrar |
 | `birthDateSchema` | `z.iso.date()`: formato `YYYY-MM-DD` y fecha real de calendario, bisiestos incluidos. Error `required` si falta e `invalid_format` si no vale; `.refine(d => d >= MIN_BIRTH_DATE, 'too_old')`. **Ni el futuro ni la edad** se comprueban aquí, porque dependen de «hoy» (§9) |
 | `registerRequestSchema` | `z.strictObject({ email, password: newPasswordSchema, birthDate, acceptTerms: z.literal(true, { error: 'required' }), termsVersion: z.string().min(1).max(64) })` |
 | `loginRequestSchema` | `z.strictObject({ email, password: passwordInputSchema })` |
@@ -598,7 +598,12 @@ export const FIELD_ISSUES = [
 ] as const;
 ```
 
-La web añade un código propio que la API nunca emite: `API_UNAVAILABLE`, para un fallo de red, un tiempo agotado o un 5xx sin cuerpo válido. `apps/web/src/lib/errors/messages.ts` es un `Record<ErrorCode | 'API_UNAVAILABLE', string>` y un mapa `(campo, issue) → texto`, en español. Un test comprueba que cubre **todos** los códigos. Los textos son los de la tabla de [UX §5](h0-diseno-ux.md#5-textos-de-interfaz), palabra por palabra (acuerdo A12).
+La web añade dos códigos propios que la API nunca emite (`WEB_ERROR_CODES` en `messages.ts`):
+
+- `API_UNAVAILABLE`: la petición no llegó a la API (conexión rechazada), o la API respondió un 5xx sin cuerpo válido. Sabemos que no se hizo nada. Es también lo que dan las lecturas, `login` y `logout` ante cualquier fallo de red o tiempo agotado.
+- `OUTCOME_UNKNOWN` (HTTP 503 en la acción): una escritura no idempotente (registro, borrado de la cuenta) se envió y no llegó respuesta. No sabemos si la API la hizo. La web muestra `registro.error.resultado_incierto` o `eliminar.error.resultado_incierto` con su enlace de comprobación (UX §3.2, §3.5 y criterios 60 a 65), y nunca un texto que afirme que no se hizo nada.
+
+`apps/web/src/lib/errors/messages.ts` es un `Record<ErrorCode | WebErrorCode, string>` y un mapa `(campo, issue) → texto`, en español. Un test comprueba que cubre **todos** los códigos. Los textos son los de la tabla de [UX §5](h0-diseno-ux.md#5-textos-de-interfaz), palabra por palabra (acuerdo A12).
 
 ---
 
@@ -626,12 +631,23 @@ El borrado es `POST .../deletion`, y no `DELETE` con cuerpo, porque la semántic
 
 | Módulo | Contiene | Depende de |
 |---|---|---|
-| `DatabaseModule` (global) | Proveedor `DB` (`NodePgDatabase<typeof schema>`) creado con un `pg.Pool` desde `DATABASE_URL`. Cierra el pool en `onApplicationShutdown`. Exporta los tipos `Database` y `Tx` | `ConfigService` |
+| `DatabaseModule` (global) | Proveedor `DB` (`NodePgDatabase<typeof schema>`) creado con un `pg.Pool` desde `DATABASE_URL` (ver «Límites de tiempo de la base de datos», abajo). Cierra el pool en `onApplicationShutdown`. Exporta los tipos `Database` y `Tx` | `ConfigService` |
 | `UsersModule` | `UsersService`: `create(tx, data)`, `findCredentialsByEmail`, `getAccount(userId)`, `deleteAccount(userId, password)`, `updatePasswordHash`. `PasswordService`: argon2id. Las credenciales son columnas de `users`, y por eso el hash vive aquí. `UsersController` | `DatabaseModule`, `ConsentsModule` (para `getAccount`) |
 | `ConsentsModule` | `ConsentsService`: `grant(tx, userId, purpose, version)`, `listForUser(userId)`, `revoke(tx, userId, purpose)` (sin endpoint en H0, pero con test) | `DatabaseModule` |
 | `AuthModule` | `AuthService` (registro, login, logout), `SessionsService` (crear, validar/renovar, revocar), `SessionGuard` registrado como `APP_GUARD`, `AuthController` | `UsersModule`, `ConsentsModule` |
 | `HealthModule` | `HealthController` | `DatabaseModule` |
-| `AppModule` | Importa todos, `ConfigModule.forRoot`, `ThrottlerModule.forRoot`. Registra los guards globales en este orden: `InternalKeyGuard` → `AppThrottlerGuard` → `SessionGuard`. Registra el interceptor de log | — |
+| `AppModule` | Importa todos, `ConfigModule.forRoot`, `ThrottlerModule.forRoot`. Registra los guards globales en este orden: `InternalKeyGuard` → `AppThrottlerGuard` → `SessionGuard`. El log de peticiones no está aquí: es un middleware que registra `configureApp` (§7.4) | — |
+
+**Límites de tiempo de la base de datos.** Ninguna espera es infinita: si PostgreSQL se cuelga o una consulta se alarga, la API responde con un error antes de que la web agote sus 5 s (§8.4). Por eso los dos primeros límites no pueden pasar de 4000 ms: con el margen de `query_timeout`, la espera más larga de una consulta es de 4,5 s.
+
+| Límite | Opción de `pg` | Variable (valor por defecto) | Qué pasa al superarlo |
+|---|---|---|---|
+| Conseguir una conexión (conectar o esperar un hueco en el pool) | `connectionTimeoutMillis` | `DB_CONNECTION_TIMEOUT_MS` (3000; máximo 4000) | La consulta falla en la API: 500, o 503 en `/health` |
+| Duración de una sentencia | `statement_timeout` (se envía al servidor al conectar) | `DB_STATEMENT_TIMEOUT_MS` (4000; máximo 4000) | PostgreSQL la cancela (`57014`) y deshace la transacción |
+| Respuesta del servidor a una consulta sobre una conexión ya abierta | `query_timeout` (en el cliente) | Derivado, sin variable propia: `DB_STATEMENT_TIMEOUT_MS` + 500 (4500 como mucho) | pg rechaza la consulta: 500, o 503 en `/health`. Cubre un PostgreSQL congelado o una red que descarta paquetes sin cerrar la conexión, que el servidor no puede avisar (BUG-QA-8). PostgreSQL podría seguir ejecutándola hasta su `statement_timeout` |
+| Transacción abierta sin actividad | `idle_in_transaction_session_timeout` (ídem) | `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS` (10000) | PostgreSQL cierra la sesión y deshace la transacción |
+
+El pool escucha su evento `error`: si un cliente inactivo pierde la conexión (por ejemplo, porque PostgreSQL se reinicia), el proceso no cae, y el `Logger` de Nest registra solo `{ event: 'pg_pool_error', code }`. El mensaje no se registra porque puede llevar la cadena de conexión (§8.9).
 
 Las transacciones las orquesta el servicio que coordina; los demás reciben el `tx`. Los métodos de escritura aceptan `db: Database | Tx` como primer argumento, y la transacción se abre con `this.db.transaction(async (tx) => ...)`.
 
@@ -656,6 +672,7 @@ Las transacciones las orquesta el servicio que coordina; los demás reciben el `
   - `NotFoundException` → 404 `NOT_FOUND`.
   - Errores del *body parser* (JSON ilegible o demasiado grande) → 400 `MALFORMED_REQUEST`.
   - Todo lo demás → 500 `INTERNAL_ERROR`. Se registra con las reglas de §8.9.
+- `configureApp` registra **lo primero** el middleware de log de peticiones (§8.9), antes de los *parsers* del cuerpo y de los guards, para que también queden registradas las respuestas que estos cortan (400, 401, 403, 429).
 - `configureApp` fija además: un cuerpo JSON de 16 kB como máximo (`app.useBodyParser('json', { limit: '16kb' })`), `x-powered-by` desactivado y `app.enableShutdownHooks()`. **`main.ts` y los tests llaman a la misma `configureApp`**, para que lo probado sea lo que se ejecuta.
 
 ### 7.5 Configuración por variables de entorno
@@ -668,6 +685,11 @@ export const envSchema = z.object({
   API_HOST: z.string().default('127.0.0.1'),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+  // Límites de PostgreSQL en ms (§7.2). Máximo 4000: la API responde antes de los 5 s de la web
+  // (el query_timeout del cliente es DB_STATEMENT_TIMEOUT_MS + 500).
+  DB_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(1).max(4000).default(3000),
+  DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(1).max(4000).default(4000),
+  DB_IDLE_IN_TRANSACTION_TIMEOUT_MS: z.coerce.number().int().min(1).max(600_000).default(10_000),
   INTERNAL_API_KEY: z.string().min(32),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
   RATE_LIMIT_FACTOR: z.coerce.number().int().min(1).max(1000).default(1),
@@ -746,10 +768,16 @@ sequenceDiagram
 
 Todas las llamadas pasan por `#lib/server/api-client.ts`:
 
-- Usa `fetch` global, con `AbortSignal.timeout(5000)`.
+- Usa `fetch` global, con `AbortSignal.timeout(5000)`. Los límites de la base de datos (§7.2) son menores, para que la API conteste antes de que la web aborte: `DB_CONNECTION_TIMEOUT_MS` y `DB_STATEMENT_TIMEOUT_MS` valen como mucho 4000 ms, y el `query_timeout` del cliente de pg, que cubre un PostgreSQL que deja de responder sin cerrar la conexión, es 500 ms más (4500 como mucho).
 - Añade `X-Internal-Api-Key`, `X-Client-Ip: event.getClientAddress()` y, si procede, `Authorization`.
 - Valida la respuesta con el esquema de `contracts`.
 - Devuelve `{ ok: true, data } | { ok: false, status, error: ApiError }`.
+- **Nunca reintenta.** Si `fetch` falla, distingue por la causa (§6.3):
+  - Antes de enviar (`error.cause.code` en `ECONNREFUSED`, `ENOTFOUND`, `EAI_AGAIN`, `EHOSTUNREACH`, `ENETUNREACH`, `EADDRNOTAVAIL` o `UND_ERR_CONNECT_TIMEOUT`, también dentro de un `AggregateError`) → `API_UNAVAILABLE`.
+  - Cualquier otro fallo (tiempo agotado `TimeoutError`, conexión cortada tras enviar: `ECONNRESET`, `UND_ERR_SOCKET` «other side closed»…) → `OUTCOME_UNKNOWN`, **solo** si la petición lleva la opción `nonIdempotent`, que activan `register` y `deleteAccount`. En las demás (`login`, `logout`, los GET) sigue siendo `API_UNAVAILABLE`.
+  - Un 2xx cuyo cuerpo no se puede leer (cortado a mitad) o no cumple el esquema → `OUTCOME_UNKNOWN` en las peticiones `nonIdempotent`: la API ha confirmado la operación, pero sin el cuerpo no hay token y no se puede iniciar la sesión, así que lo correcto es pedir que se compruebe. En las demás, `API_UNAVAILABLE` (502).
+  - Limitaciones aceptadas: un tiempo agotado se trata como incierto aunque la conexión no llegara a establecerse (la API colgada en el `connect`), y una conexión *keep-alive* que el servidor cerró justo antes de reutilizarla también. En los dos casos el texto pide comprobar, lo que es prudente, aunque nada se hiciera.
+- Las páginas de registro y de eliminación muestran el enlace de comprobación dentro del bloque de error general (`ErrorSummary`, prop `generalLink`). El de `/cuenta` lleva `data-sveltekit-reload`: así no se usan datos de `/cuenta` precargados (`data-sveltekit-preload-data="hover"`) antes de que terminara el borrado.
 
 El token **nunca** se devuelve en `data` de un `load`, ni en `form` de una acción.
 
@@ -857,7 +885,7 @@ Enumeración de cuentas:
 ### 8.9 Qué NO se registra en los logs
 
 - Nunca: contraseñas, hashes, tokens o sus hashes, cabeceras `Authorization`/`Cookie`/`X-Internal-Api-Key`, cuerpos de petición o de respuesta, fechas de nacimiento, correos, IP ni identificadores de usuario.
-- **Log de peticiones** de la API (interceptor): `{ method, route, status, ms }`, donde `route` es el patrón de la ruta y no la URL con su *query*.
+- **Log de peticiones** de la API (middleware `requestLoggingMiddleware`, registrado el primero en `configureApp`, que escribe al terminar la respuesta): `{ method, route, status, ms }`, donde `route` es el patrón de la ruta que coincidió (`request.route.path`) y no la URL con su *query*. Si no coincidió ninguna (404, o cuerpo ilegible que corta el *parser* antes del enrutado), `route` es `'(sin ruta)'`. Al ser un middleware, y no un interceptor, registra también las respuestas de los guards (401, 403, 429).
 - **Errores**:
   - `DrizzleQueryError` → solo `{ name, code: cause.code, constraint: cause.constraint }`. Su `message` y su `stack` contienen los parámetros.
   - Errores del *body parser* → solo `{ name, type }`. Su mensaje puede incluir un trozo del cuerpo.
@@ -985,6 +1013,11 @@ POSTGRES_PORT=5432
 
 # API (127.0.0.1 y no localhost: Node puede resolver localhost a ::1 y Docker solo escucha en IPv4)
 DATABASE_URL=postgres://cupidilla:cupidilla_dev@127.0.0.1:5432/cupidilla
+# Límites de PostgreSQL en ms (§7.2); se muestran sus valores por defecto.
+# Los dos primeros, 4000 como mucho (query_timeout = DB_STATEMENT_TIMEOUT_MS + 500 < 5 s de la web)
+# DB_CONNECTION_TIMEOUT_MS=3000
+# DB_STATEMENT_TIMEOUT_MS=4000
+# DB_IDLE_IN_TRANSACTION_TIMEOUT_MS=10000
 TEST_DATABASE_URL=postgres://cupidilla:cupidilla_dev@127.0.0.1:5432/cupidilla_test
 E2E_DATABASE_URL=postgres://cupidilla:cupidilla_dev@127.0.0.1:5432/cupidilla_e2e
 API_HOST=127.0.0.1
@@ -1137,13 +1170,16 @@ Tests: con `npm run db:up` hecho, `npm test`. La primera vez, `npm run e2e:insta
 - I-18. `ConsentsService`: un segundo `grant` activo de la misma finalidad viola `consents_one_active_per_purpose`; `revoke` y después `grant` → bien, con histórico de 2 filas. La base de datos rechaza `purpose='otra'` (`CHECK`).
 - I-19. Cuerpo JSON ilegible → 400 `MALFORMED_REQUEST`; cuerpo de más de 16 kB → 400.
 - I-20. Ruta inexistente → 404 `NOT_FOUND` con la forma de §6.3.
-- I-21. **Logs**: se captura la salida del logger durante el registro (adulto y menor), el login fallido, la violación de unicidad y el borrado. Se comprueba que no aparecen la contraseña, el token, su hash, la fecha de nacimiento, el correo ni la clave interna.
+- I-21. **Logs**: se captura la salida del logger durante el registro (adulto y menor), el login fallido, la violación de unicidad y el borrado. Se comprueba que no aparecen la contraseña, el token, su hash, la fecha de nacimiento, el correo ni la clave interna. Además, las respuestas que cortan los guards y el *parser* (403 sin clave interna, 401 sin sesión, 429, 400 de JSON ilegible) y el 404 dejan su entrada de log, con la ruta declarada o `'(sin ruta)'` y nunca la URL real con su *query*.
+- I-22. **Límites de la base de datos** (§7.2): `select pg_sleep(2)` con un `statement_timeout` de 200 ms falla con `57014` y el pool sigue sirviendo; una transacción inactiva más que `idle_in_transaction_session_timeout` se aborta; `/health` con la base colgada responde 503 dentro del plazo de adquisición. El unitario del módulo comprueba que `query_timeout` es `statement_timeout` + 500, y `qa-db-hang.int.spec.ts` (BUG-QA-8), que una consulta sobre una conexión abierta cuya red deja de pasar datos falla en pocos segundos.
 
 **Web (unitarios)**
 
-- W-1. `messages.ts` tiene texto para cada `ErrorCode`, para `API_UNAVAILABLE` y para cada `FieldIssue` de los campos de los formularios.
+- W-1. `messages.ts` tiene texto para cada `ErrorCode`, para `API_UNAVAILABLE` y `OUTCOME_UNKNOWN` y para cada `FieldIssue` de los campos de los formularios. `OUTCOME_UNKNOWN` solo tiene texto propio en registro y eliminación.
 - W-2. `parseBirthDateParts`: `5`, `05` y `5 ` valen como día y como mes; `31/2/2000` → fecha inexistente; `0/5/1990` → error de día; `12/13/1990` → error de mes; un año de tres cifras → error de año; los tres vacíos → fecha vacía.
 - W-3. `safeReturnPath`: devuelve `/cuenta` y `/cuenta/eliminar` tal cual; `https://otro.sitio`, `//otro.sitio`, `/otra` y vacío → `/cuenta`.
+- W-4. `api-client` contra un servidor TCP falso (`api-client.spec.ts`): conexión rechazada → `API_UNAVAILABLE` en todas las peticiones; tiempo agotado y conexión cortada tras enviar (cierre y RST) → `OUTCOME_UNKNOWN` en `register` y `deleteAccount`, con una sola petición recibida; `login` en los mismos casos → `API_UNAVAILABLE`. Un 201 con el cuerpo truncado o fuera del esquema → `OUTCOME_UNKNOWN` en `register` y `API_UNAVAILABLE` (502) en `login`.
+- W-5. Acciones (`routes/actions.spec.ts`): con `OUTCOME_UNKNOWN`, el registro da 503 con `registro.error.resultado_incierto`, los valores sin la contraseña y sin cookie; el borrado da 503 con `eliminar.error.resultado_incierto` y no borra la cookie.
 
 **E2E (Playwright)**
 
@@ -1155,6 +1191,7 @@ Tests: con `npm run db:up` hecho, `npm test`. La primera vez, `npm run e2e:insta
 - E-6. El proyecto `chromium-sin-js` repite E-1 a E-4: los formularios funcionan sin JavaScript.
 - E-7. **CSRF**: un `POST` a `/entrar` con `Origin: https://evil.example` y `Content-Type: application/x-www-form-urlencoded` → 403.
 - E-8. La consola del navegador no muestra violaciones de CSP en `/`, `/registro` ni `/cuenta`.
+- E-9. **Resultado incierto** (`outcome-unknown.e2e.ts`, criterios de UX 60 a 65, con y sin JavaScript). La web habla con su propia API (`helpers/stack.ts`, opción `webApiUrl`) a través de un proxy (`helpers/api-proxy.ts`) que, en la ruta elegida, no responde nunca (`hang`) o pasa la petición a la API y corta sin devolver la respuesta (`cut`). Se comprueba: estado 503, bloque `role="alert"` primero de `<main>` con el texto y el enlace, `<title>` con «Error:», foco con JavaScript, botón operable, valores conservados sin contraseña, cookie (ausente en el registro, intacta en el borrado), una sola petición en el proxy y que el enlace de comprobación lleva a donde toca según la API hiciera o no la operación. `/entrar` y «Cerrar sesión» siguen mostrando su error de servidor. Con la API parada (conexión rechazada), C31 y el borrado con la API caída de `resilience.e2e.ts` siguen mostrando `*.error.servidor`.
 
 **El criterio de hecho del hito se cumple cuando** `npm run lint`, `npm run typecheck`, `npm test` y `npm run test:e2e` pasan en verde partiendo de `npm run db:reset`.
 
@@ -1202,7 +1239,7 @@ Tareas en orden. Cada una se da por hecha solo cuando cumple su criterio.
 | T1 | Raíz del monorepo: `package.json` con workspaces y `allowScripts`, `.nvmrc`, `.npmrc`, `tsconfig.base.json`, `eslint.config.js`, `prettier.config.js`, `.gitignore`, `.env.example`, `docker-compose.yml` e `init` | `npm install` sin errores; `npm install-scripts ls` vacío; `npm run db:up` deja `db` en *healthy*; `psql` muestra `cupidilla`, `cupidilla_test` y `cupidilla_e2e` |
 | T2 | `packages/contracts`: constantes, esquemas, errores, `age.ts` y sus tests | Pasan C-1 a C-6; `npm run build:contracts` genera `dist/` con `.d.ts`; un `node -e "import('@cupidilla/contracts')"` desde la raíz lo importa |
 | T3 | `apps/api` generada (§4.2) con `envSchema`, `DatabaseModule`, esquema Drizzle, migración `init`, `migrate.ts`, `reset-db.ts` y `/health` | `npm run db:migrate` crea las tres tablas con sus restricciones; `GET /health` → 200; con `INTERNAL_API_KEY` corta, la API no arranca y nombra la variable |
-| T4 | Infraestructura común: `configureApp`, `ApiException` y su filtro, `exceptionFactory`, `InternalKeyGuard`, `AppThrottlerGuard`, `Clock`, interceptor de log | Pasan los unitarios y la integración I-13, I-19 e I-20 |
+| T4 | Infraestructura común: `configureApp`, `ApiException` y su filtro, `exceptionFactory`, `InternalKeyGuard`, `AppThrottlerGuard`, `Clock`, middleware de log de peticiones | Pasan los unitarios y la integración I-13, I-19 e I-20 |
 | T5 | `users`, `consents` y `auth`: registro, login, logout, `GET /auth/session` y `GET /users/me` | Pasan I-1 a I-12, I-14, I-18 e I-21 (parcial) |
 | T6 | Eliminación de la cuenta | Pasan I-15 a I-17 e I-21 completo |
 | T7 | `apps/web` generada (§4.3) con `env.ts`, `hooks.server.ts`, `api-client.ts`, `session-cookie.ts`, `messages.ts`, CSP y cabeceras | `npm run typecheck` en verde; `npm ls svelte @sveltejs/kit` muestra 5.57.3 y 3.2.0; `/cuenta` sin sesión redirige a `/entrar`; pasa W-1 |

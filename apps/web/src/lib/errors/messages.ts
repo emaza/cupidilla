@@ -1,8 +1,15 @@
 import { ERROR_CODES, FIELD_ISSUES, type ErrorCode, type FieldIssue } from '@cupidilla/contracts';
 import type { TextKey } from '#lib/texts.ts';
 
-/** Código propio de la web: fallo de red, tiempo agotado o 5xx sin cuerpo válido. La API nunca lo emite. */
-export type WebErrorCode = ErrorCode | 'API_UNAVAILABLE';
+/**
+ * Códigos propios de la web; la API nunca los emite.
+ * - `API_UNAVAILABLE`: la petición no llegó a la API (conexión rechazada) o la API respondió
+ *   un 5xx sin cuerpo válido. Sabemos que no se hizo nada.
+ * - `OUTCOME_UNKNOWN`: una escritura no idempotente (registro, borrado) se envió y no hubo
+ *   respuesta (tiempo agotado o conexión cortada). No sabemos si se hizo.
+ */
+export const WEB_ERROR_CODES = ['API_UNAVAILABLE', 'OUTCOME_UNKNOWN'] as const;
+export type WebErrorCode = ErrorCode | (typeof WEB_ERROR_CODES)[number];
 
 /** Formularios de H0. Cada uno tiene sus propios textos de error (UX §5). */
 export type FormName = 'registro' | 'entrar' | 'eliminar' | 'salir';
@@ -11,7 +18,7 @@ function byCode(
   fallback: TextKey,
   specific: Partial<Record<WebErrorCode, TextKey>>,
 ): Record<WebErrorCode, TextKey> {
-  const entries = [...ERROR_CODES, 'API_UNAVAILABLE' as const].map(
+  const entries = [...ERROR_CODES, ...WEB_ERROR_CODES].map(
     (code) => [code, specific[code] ?? fallback] as const,
   );
   return Object.fromEntries(entries) as Record<WebErrorCode, TextKey>;
@@ -32,6 +39,7 @@ export const errorMessages: Record<FormName, Record<WebErrorCode, TextKey>> = {
     TERMS_VERSION_OUTDATED: 'registro.error.condiciones_version',
     UNDERAGE: 'registro.menor.texto1',
     RATE_LIMITED: 'comun.error.limite',
+    OUTCOME_UNKNOWN: 'registro.error.resultado_incierto',
   }),
   entrar: byCode('entrar.error.servidor', {
     // Un correo mal formado se trata como unas credenciales incorrectas (acuerdo A10).
@@ -43,6 +51,7 @@ export const errorMessages: Record<FormName, Record<WebErrorCode, TextKey>> = {
     VALIDATION_FAILED: 'eliminar.error.contrasena',
     PASSWORD_INCORRECT: 'eliminar.error.contrasena',
     RATE_LIMITED: 'comun.error.limite',
+    OUTCOME_UNKNOWN: 'eliminar.error.resultado_incierto',
   }),
   salir: byCode('cuenta.error.servidor', {}),
 };

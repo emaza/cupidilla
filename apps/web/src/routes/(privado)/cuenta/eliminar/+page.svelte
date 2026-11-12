@@ -24,6 +24,9 @@
 <ErrorSummary
   items={passwordError ? [{ target: 'contrasena', text: t(passwordError) }] : []}
   general={general ? t(general) : undefined}
+  generalLink={general === 'eliminar.error.resultado_incierto'
+    ? { route: 'cuenta', text: t('eliminar.enlace.comprobar') }
+    : undefined}
 />
 
 <div class="tarjeta">

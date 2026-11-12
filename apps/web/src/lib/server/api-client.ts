@@ -32,6 +32,39 @@ const unavailable = (status = 503): ApiResult<never> => ({
   error: { code: 'API_UNAVAILABLE' },
 });
 
+const outcomeUnknown = (): ApiResult<never> => ({
+  ok: false,
+  status: 503,
+  error: { code: 'OUTCOME_UNKNOWN' },
+});
+
+/**
+ * Códigos de error de conexión (en `error.cause.code` de `fetch`) que indican que la petición no
+ * llegó a salir: la API no ha hecho nada.
+ */
+const NOT_SENT_CODES = new Set([
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'EADDRNOTAVAIL',
+  'UND_ERR_CONNECT_TIMEOUT',
+]);
+
+function errorCode(value: unknown): unknown {
+  return typeof value === 'object' && value !== null
+    ? (value as { code?: unknown }).code
+    : undefined;
+}
+
+/** ¿Falló `fetch` antes de enviar la petición? Con varias direcciones, la causa es un `AggregateError`. */
+export function failedBeforeSending(error: unknown): boolean {
+  const cause = error instanceof Error ? error.cause : undefined;
+  const codes = [cause, ...(cause instanceof AggregateError ? cause.errors : [])].map(errorCode);
+  return codes.some((code) => typeof code === 'string' && NOT_SENT_CODES.has(code));
+}
+
 interface RequestOptions<T> {
   method: 'GET' | 'POST';
   path: string;
@@ -39,6 +72,13 @@ interface RequestOptions<T> {
   body?: unknown;
   /** Esquema de la respuesta correcta. Sin esquema, la respuesta no tiene cuerpo (204). */
   schema?: z.ZodType<T>;
+  /**
+   * Escritura no idempotente (registro, borrado). Si la petición se envió y no hubo respuesta
+   * (tiempo agotado, conexión cortada o cualquier fallo que no sea de conexión), el resultado es
+   * `OUTCOME_UNKNOWN` y no `API_UNAVAILABLE`: no sabemos si la API la llegó a hacer. Nunca se
+   * reintenta.
+   */
+  nonIdempotent?: boolean;
 }
 
 /**
@@ -47,7 +87,7 @@ interface RequestOptions<T> {
  */
 async function request<T>(
   event: RequestEvent,
-  { method, path, token, body, schema }: RequestOptions<T>,
+  { method, path, token, body, schema, nonIdempotent = false }: RequestOptions<T>,
 ): Promise<ApiResult<T>> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -65,7 +105,9 @@ async function request<T>(
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-  } catch {
+  } catch (error) {
+    // Tiempo agotado (TimeoutError) o conexión cortada tras enviar (ECONNRESET, UND_ERR_SOCKET…).
+    if (nonIdempotent && !failedBeforeSending(error)) return outcomeUnknown();
     return unavailable();
   }
 
@@ -83,14 +125,21 @@ async function request<T>(
 
   if (!schema) return { ok: true, status: response.status, data: undefined as T };
   const parsed = schema.safeParse(payload);
-  return parsed.success
-    ? { ok: true, status: response.status, data: parsed.data }
-    : unavailable(502);
+  if (parsed.success) return { ok: true, status: response.status, data: parsed.data };
+  // Un 2xx confirma que la API hizo la operación, pero sin un cuerpo válido (cortado a mitad o
+  // fuera del esquema) no se puede usar: en una escritura no idempotente, resultado incierto.
+  return nonIdempotent ? outcomeUnknown() : unavailable(502);
 }
 
 export const api = {
   register: (event: RequestEvent, body: RegisterRequest): Promise<ApiResult<AuthResponse>> =>
-    request(event, { method: 'POST', path: '/auth/register', body, schema: authResponseSchema }),
+    request(event, {
+      method: 'POST',
+      path: '/auth/register',
+      body,
+      schema: authResponseSchema,
+      nonIdempotent: true,
+    }),
 
   login: (event: RequestEvent, body: LoginRequest): Promise<ApiResult<AuthResponse>> =>
     request(event, { method: 'POST', path: '/auth/login', body, schema: authResponseSchema }),
@@ -109,5 +158,11 @@ export const api = {
     token: string,
     body: DeleteAccountRequest,
   ): Promise<ApiResult<void>> =>
-    request(event, { method: 'POST', path: '/users/me/deletion', token, body }),
+    request(event, {
+      method: 'POST',
+      path: '/users/me/deletion',
+      token,
+      body,
+      nonIdempotent: true,
+    }),
 };

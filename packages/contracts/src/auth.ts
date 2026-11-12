@@ -5,8 +5,12 @@ export const PASSWORD_MIN = 10; // puntos de código
 export const PASSWORD_MAX = 128; // puntos de código
 export const EMAIL_MAX = 254;
 
-/** Longitud en puntos de código Unicode, no en unidades UTF-16. */
-const codePoints = (value: string): number => [...value].length;
+/**
+ * Longitud en puntos de código Unicode, no en unidades UTF-16, tras la normalización NFKC que
+ * aplica la API antes de hashear (§8.1): así 'é' compuesta y 'e' + acento cuentan igual.
+ * Solo se mide así; el valor que se valida y se envía no cambia.
+ */
+const codePoints = (value: string): number => [...value.normalize('NFKC')].length;
 
 /**
  * Recorta y pasa a minúsculas antes de validar el formato: así se guarda normalizado.

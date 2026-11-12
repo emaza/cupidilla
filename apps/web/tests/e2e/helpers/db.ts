@@ -1,12 +1,10 @@
 import pg from 'pg';
+import { e2eDatabaseUrl } from './e2e-database.ts';
 
 let pool: pg.Pool | undefined;
 
 function getPool(): pg.Pool {
-  const connectionString = process.env.E2E_DATABASE_URL;
-  if (!connectionString?.endsWith('_e2e')) {
-    throw new Error('E2E_DATABASE_URL debe apuntar a una base de datos *_e2e');
-  }
+  const connectionString = e2eDatabaseUrl();
   pool ??= new pg.Pool({ connectionString, max: 2 });
   return pool;
 }

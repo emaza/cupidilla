@@ -18,7 +18,7 @@ El código es un monorepo con npm workspaces:
 
 ## Clonar y arrancar
 
-Necesitas Node 24 (`.nvmrc`), npm 11 y Docker.
+Necesitas Node 24 (`.nvmrc`), npm 11.19 o posterior y Docker.
 
 ```sh
 nvm use                       # Node 24 (.nvmrc)

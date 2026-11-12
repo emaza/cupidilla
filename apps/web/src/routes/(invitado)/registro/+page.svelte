@@ -75,7 +75,13 @@
     <a class="boton boton-primario" href={resolve('')}>{t('comun.boton.volver_inicio')}</a>
   </div>
 {:else}
-  <ErrorSummary items={summary} general={general ? t(general) : undefined} />
+  <ErrorSummary
+    items={summary}
+    general={general ? t(general) : undefined}
+    generalLink={general === 'registro.error.resultado_incierto'
+      ? { route: 'entrar', text: t('registro.enlace.comprobar_entrada'), newTab: true }
+      : undefined}
+  />
 
   <div class="tarjeta">
     <h1>{t('registro.titulo')}</h1>

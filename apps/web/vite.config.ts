@@ -39,7 +39,8 @@ export default defineConfig({
         test: {
           name: 'server',
           environment: 'node',
-          include: ['src/**/*.{test,spec}.{js,ts}'],
+          // Más los unitarios de los helpers de e2e (Playwright solo recoge `*.e2e.ts`).
+          include: ['src/**/*.{test,spec}.{js,ts}', 'tests/e2e/helpers/**/*.spec.ts'],
           exclude: ['src/**/*.svelte.{test,spec}.{js,ts}'],
         },
       },

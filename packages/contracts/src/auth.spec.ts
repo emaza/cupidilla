@@ -61,6 +61,25 @@ describe('passwordInputSchema', () => {
   });
 });
 
+describe('longitud de la contraseña tras NFKC (§8.1)', () => {
+  const composed = '\u00e9'; // «é» en un punto de código
+  const decomposed = 'e\u0301'; // «e» + acento combinante: dos puntos de código
+
+  it('«é» compuesta y descompuesta ×128 dan el mismo resultado en los dos esquemas', () => {
+    for (const schema of [newPasswordSchema, passwordInputSchema]) {
+      expect(issues(schema, composed.repeat(128))).toEqual([]);
+      expect(issues(schema, decomposed.repeat(128))).toEqual([]);
+      expect(issues(schema, composed.repeat(129))).toEqual(['too_long']);
+      expect(issues(schema, decomposed.repeat(129))).toEqual(['too_long']);
+    }
+  });
+
+  it('no cambia el valor validado', () => {
+    expect(newPasswordSchema.parse(decomposed.repeat(10))).toBe(decomposed.repeat(10));
+    expect(passwordInputSchema.parse(decomposed)).toBe(decomposed);
+  });
+});
+
 describe('birthDateSchema (C-6)', () => {
   it('rechaza fechas imposibles y anteriores a 1900', () => {
     expect(issues(birthDateSchema, '2007-02-29')).toEqual(['invalid_format']);

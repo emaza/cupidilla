@@ -79,6 +79,9 @@ export const texts = {
     'Las condiciones han cambiado mientras rellenabas el formulario. Léelas de nuevo y vuelve a marcar la casilla.',
   'registro.error.servidor':
     'Algo ha fallado por nuestra parte y no hemos podido crear tu cuenta. Inténtalo de nuevo en unos minutos.',
+  'registro.error.resultado_incierto':
+    'No sabemos si tu cuenta se ha creado: se ha perdido la conexión antes de recibir la respuesta. Antes de volver a registrarte, prueba a entrar con este correo y esta contraseña. Si entras, la cuenta ya existe. Si no puedes entrar, pulsa «Crear cuenta» otra vez.',
+  'registro.enlace.comprobar_entrada': 'Probar a entrar con este correo',
   'registro.menor.meta.titulo': 'No podemos crear tu cuenta',
   'registro.menor.titulo': 'No podemos crear tu cuenta',
   'registro.menor.texto1':
@@ -136,6 +139,9 @@ export const texts = {
   'eliminar.error.contrasena': 'La contraseña no es correcta. No hemos borrado nada.',
   'eliminar.error.servidor':
     'Algo ha fallado por nuestra parte y no hemos podido eliminar tu cuenta. Tu cuenta sigue como estaba. Inténtalo de nuevo en unos minutos.',
+  'eliminar.error.resultado_incierto':
+    'No sabemos si tu cuenta se ha eliminado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta. Si te lleva a la pantalla de entrada, la cuenta ya no existe. Si ves tu cuenta, sigue activa y puedes volver a intentarlo.',
+  'eliminar.enlace.comprobar': 'Comprobar si mi cuenta sigue activa',
 
   // 5.7 Errores de página
   'error404.titulo': 'No encontramos esta página',

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module.js';
 import { SessionGuard } from './auth/session.guard.js';
@@ -14,7 +14,6 @@ import {
   THROTTLE_TTL,
 } from './common/guards/app-throttler.guard.js';
 import { InternalKeyGuard } from './common/guards/internal-key.guard.js';
-import { RequestLoggingInterceptor } from './common/logging/request-logging.interceptor.js';
 import { envSchema } from './config/env.schema.js';
 import { ConsentsModule } from './consents/consents.module.js';
 import { DatabaseModule } from './database/database.module.js';
@@ -49,7 +48,6 @@ import { UsersModule } from './users/users.module.js';
     { provide: APP_GUARD, useClass: InternalKeyGuard },
     { provide: APP_GUARD, useClass: AppThrottlerGuard },
     { provide: APP_GUARD, useExisting: SessionGuard },
-    { provide: APP_INTERCEPTOR, useClass: RequestLoggingInterceptor },
   ],
 })
 export class AppModule {}

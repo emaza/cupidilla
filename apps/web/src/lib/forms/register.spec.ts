@@ -32,6 +32,14 @@ describe('parseRegisterForm (acuerdos A2 a A5)', () => {
     });
   });
 
+  it('mide la contraseña como la API, tras NFKC: «e» + acento ×128 cabe', () => {
+    const decomposed = 'e\u0301'.repeat(128); // 256 puntos de código sin normalizar
+    expect(parseRegisterForm(form({ contrasena: decomposed }), TODAY)).toMatchObject({
+      kind: 'valid',
+      request: { password: decomposed },
+    });
+  });
+
   it('quien cumple 18 hoy es válido y quien los cumple mañana es un menor', () => {
     expect(parseRegisterForm(form({ dia: '11', mes: '11', anio: '2008' }), TODAY).kind).toBe(
       'valid',

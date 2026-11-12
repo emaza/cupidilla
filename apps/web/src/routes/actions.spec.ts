@@ -104,6 +104,22 @@ describe('registro: respuestas de la API (criterios 31 y 32)', () => {
     expect(JSON.stringify(result)).not.toMatch(/API_UNAVAILABLE|ECONN|fetch/);
   });
 
+  it('resultado incierto → 503 con registro.error.resultado_incierto, sin cookie y sin la contraseña (criterios 60 y 61)', async () => {
+    api.register.mockResolvedValue(apiFailure(503, 'OUTCOME_UNKNOWN'));
+    const { result, redirect } = await submit();
+    expect(redirect).toBeUndefined();
+    expect(result).toMatchObject({
+      status: 503,
+      data: {
+        errors: { fields: {}, dateParts: [], general: 'registro.error.resultado_incierto' },
+        values: { correo: 'ana@example.com', dia: '5', mes: '5', anio: '1990', condiciones: true },
+      },
+    });
+    expect(api.register).toHaveBeenCalledOnce();
+    expect(cookie.set).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toMatch(/una frase larga de prueba|OUTCOME_UNKNOWN/);
+  });
+
   it('una respuesta 500 de la API también es registro.error.servidor', async () => {
     api.register.mockResolvedValue(apiFailure(500, 'INTERNAL_ERROR'));
     expect((await submit()).result).toMatchObject({
@@ -306,6 +322,19 @@ describe('/cuenta/eliminar', () => {
       data: { errors: { general: 'eliminar.error.servidor' } },
     });
     expect(cookie.clear).not.toHaveBeenCalled();
+  });
+
+  it('resultado incierto → 503 con eliminar.error.resultado_incierto; la cookie se conserva (criterios 62 y 63)', async () => {
+    api.deleteAccount.mockResolvedValue(apiFailure(503, 'OUTCOME_UNKNOWN'));
+    const { result, redirect } = await submit();
+    expect(redirect).toBeUndefined();
+    expect(result).toMatchObject({
+      status: 503,
+      data: { errors: { fields: {}, general: 'eliminar.error.resultado_incierto' } },
+    });
+    expect(api.deleteAccount).toHaveBeenCalledOnce();
+    expect(cookie.clear).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toMatch(/una frase larga|OUTCOME_UNKNOWN/);
   });
 
   it('sesión caducada (401): como sin sesión, a /entrar?siguiente=/cuenta', async () => {
