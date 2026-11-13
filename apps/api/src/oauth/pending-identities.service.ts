@@ -1,17 +1,19 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   checkBirthDate,
+  OAUTH_LINK_MAX_FAILURES,
   OAUTH_PENDING_TTL_MINUTES,
   referenceToday,
   SERVICE_TERMS_VERSION,
   type OAuthAuthResponse,
   type OAuthEntryPoint,
+  type OAuthLinkRequest,
   type OAuthProvider,
   type OAuthSignupRequest,
   type PendingIdentityResponse,
   type PendingToken,
 } from '@cupidilla/contracts';
-import { and, eq, gt, lte } from 'drizzle-orm';
+import { and, eq, gt, lte, sql } from 'drizzle-orm';
 import { SessionsService } from '../auth/sessions.service.js';
 import { Clock } from '../common/clock.js';
 import {
@@ -25,6 +27,7 @@ import { DB, type Database } from '../database/database.types.js';
 import { isUniqueViolation } from '../database/pg-errors.js';
 import { pendingIdentities, users } from '../database/schema/index.js';
 import { Transactions } from '../database/transactions.js';
+import { PasswordService } from '../users/password.service.js';
 import { UsersService } from '../users/users.service.js';
 import { IdentitiesService } from './identities.service.js';
 
@@ -66,6 +69,7 @@ export class PendingIdentitiesService {
     private readonly identities: IdentitiesService,
     private readonly consents: ConsentsService,
     private readonly sessions: SessionsService,
+    private readonly passwords: PasswordService,
   ) {}
 
   /** Borra las filas caducadas (limpieza sin tareas programadas, §4). */
@@ -183,6 +187,94 @@ export class PendingIdentitiesService {
     } catch (error) {
       throw await this.resolveSignupConflict(tokenHash, error);
     }
+  }
+
+  /**
+   * POST /auth/oauth/link (§8): une la identidad a la cuenta con contraseña. El throttler ya
+   * aplicó antes el cubo por correo, compartido con /auth/login (§12.5).
+   */
+  async link(request: OAuthLinkRequest): Promise<OAuthAuthResponse> {
+    const tokenHash = pendingTokenHash(request.pendingToken);
+    const [row] = await this.db
+      .select({ pending: pendingIdentities, account: users })
+      .from(pendingIdentities)
+      .innerJoin(users, eq(users.id, pendingIdentities.userId))
+      .where(
+        and(
+          eq(pendingIdentities.tokenHash, tokenHash),
+          eq(pendingIdentities.kind, 'link'),
+          gt(pendingIdentities.expiresAt, this.clock.now()),
+        ),
+      )
+      .limit(1);
+    // Un correo que no es el de la cuenta: ni siquiera se verifica la contraseña.
+    if (!row || row.account.email !== request.email || row.account.passwordHash === null) {
+      throw flowInvalid();
+    }
+    const { pending, account } = row;
+    const passwordHash = account.passwordHash;
+    if (passwordHash === null) throw flowInvalid();
+
+    if (!(await this.passwords.verify(passwordHash, request.password))) {
+      const [updated] = await this.db
+        .update(pendingIdentities)
+        .set({ failedAttempts: sql`${pendingIdentities.failedAttempts} + 1` })
+        .where(and(eq(pendingIdentities.tokenHash, tokenHash), eq(pendingIdentities.kind, 'link')))
+        .returning({ failedAttempts: pendingIdentities.failedAttempts });
+      if (!updated) throw flowInvalid();
+      if (updated.failedAttempts >= OAUTH_LINK_MAX_FAILURES) {
+        // El tope está en PostgreSQL: sobrevive a un reinicio de la API (§12.5).
+        await this.db.delete(pendingIdentities).where(eq(pendingIdentities.tokenHash, tokenHash));
+        this.logger.log({ event: 'oauth_link_locked' });
+        throw new ApiException('LINK_ATTEMPTS_EXCEEDED', 403, undefined, 'Link attempts exceeded');
+      }
+      throw new ApiException('PASSWORD_INCORRECT', 403, undefined, 'Password does not match');
+    }
+
+    if (this.passwords.needsRehash(passwordHash)) {
+      await this.users.updatePasswordHash(account.id, await this.passwords.hash(request.password));
+    }
+    let session: { token: string; expiresAt: Date };
+    try {
+      session = await this.transactions.run(async (tx) => {
+        const [consumed] = await tx
+          .delete(pendingIdentities)
+          .where(
+            and(
+              eq(pendingIdentities.tokenHash, tokenHash),
+              eq(pendingIdentities.kind, 'link'),
+              gt(pendingIdentities.expiresAt, this.clock.now()),
+            ),
+          )
+          .returning();
+        if (!consumed) throw flowInvalid();
+        await this.identities.create(tx, {
+          userId: account.id,
+          provider: pending.provider,
+          subject: pending.subject,
+          providerEmail: pending.providerEmail,
+          emailVerified: pending.emailVerified,
+        });
+        return this.sessions.create(tx, account.id);
+      });
+    } catch (error) {
+      // La identidad se unió entre medias (otra pestaña) o la cuenta ya tiene ese proveedor.
+      if (
+        isUniqueViolation(error, 'identities_provider_subject_unique') ||
+        isUniqueViolation(error, 'identities_user_provider_unique')
+      ) {
+        await this.db.delete(pendingIdentities).where(eq(pendingIdentities.tokenHash, tokenHash));
+        throw flowInvalid();
+      }
+      throw error;
+    }
+    await this.sessions.deleteExpiredForUser(account.id);
+    this.logger.log({ event: 'oauth_linked' });
+    return {
+      user: { id: account.id, email: account.email, createdAt: account.createdAt.toISOString() },
+      session: { token: session.token, expiresAt: session.expiresAt.toISOString() },
+      returnPath: pending.returnPath,
+    };
   }
 
   /**

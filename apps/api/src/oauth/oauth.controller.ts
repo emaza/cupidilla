@@ -4,12 +4,14 @@ import {
   OAUTH_PROVIDERS,
   oauthCallbackRequestSchema,
   oauthCancelPendingRequestSchema,
+  oauthLinkRequestSchema,
   oauthSignupRequestSchema,
   oauthStartRequestSchema,
   type OAuthAuthResponse,
   type OAuthCallbackRequest,
   type OAuthCallbackResponse,
   type OAuthCancelPendingRequest,
+  type OAuthLinkRequest,
   type OAuthProvider,
   type OAuthProvidersResponse,
   type OAuthSignupRequest,
@@ -19,7 +21,11 @@ import {
 } from '@cupidilla/contracts';
 import { Public } from '../common/decorators/public.decorator.js';
 import { ApiException } from '../common/errors/api.exception.js';
-import { IP_THROTTLER, THROTTLE_TTL } from '../common/guards/app-throttler.guard.js';
+import {
+  ACCOUNT_THROTTLER,
+  IP_THROTTLER,
+  THROTTLE_TTL,
+} from '../common/guards/app-throttler.guard.js';
 import { OAuthFlowService } from './oauth-flow.service.js';
 import { PendingIdentitiesService } from './pending-identities.service.js';
 
@@ -64,6 +70,26 @@ export class OAuthController {
     @Body({ schema: oauthSignupRequestSchema }) body: OAuthSignupRequest,
   ): Promise<OAuthAuthResponse> {
     return this.pending.signup(body);
+  }
+
+  /**
+   * Mismo límite que /auth/login y el mismo cubo por correo (§12.5): la web envía el correo que
+   * le dio GET /auth/oauth/pending.
+   */
+  @Post('link')
+  @HttpCode(200)
+  @Throttle({
+    [IP_THROTTLER]: { limit: 10, ttl: THROTTLE_TTL.quarterHour },
+    [ACCOUNT_THROTTLER]: {
+      limit: 5,
+      ttl: THROTTLE_TTL.quarterHour,
+      blockDuration: THROTTLE_TTL.quarterHour,
+    },
+  })
+  link(
+    @Body({ schema: oauthLinkRequestSchema }) body: OAuthLinkRequest,
+  ): Promise<OAuthAuthResponse> {
+    return this.pending.link(body);
   }
 
   @Post('pending/cancellation')

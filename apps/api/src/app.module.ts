@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { SessionGuard } from './auth/session.guard.js';
 import { ClockModule } from './common/clock.js';
 import {
+  accountKey,
   accountTracker,
   ACCOUNT_THROTTLER,
   AppThrottlerGuard,
@@ -34,6 +35,8 @@ import { UsersModule } from './users/users.module.js';
           ttl: THROTTLE_TTL.quarterHour,
           limit: 5,
           getTracker: accountTracker,
+          // Un cubo por correo o por sesión, compartido entre rutas (técnico terceros §12.5).
+          generateKey: accountKey,
         },
       ],
     }),

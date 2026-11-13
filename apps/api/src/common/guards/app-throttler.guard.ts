@@ -57,6 +57,15 @@ export function accountTracker(req: TrackedRequest): string {
 }
 
 /**
+ * Clave del conjunto `account`: solo el tracker, sin la clase ni el método (técnico terceros
+ * §12.5). Así el cubo es el mismo en todas las rutas que lo declaran: por correo, `/auth/login`
+ * y `/auth/oauth/link`; por sesión, borrado, reautenticación y crear contraseña.
+ */
+export function accountKey(_context: ExecutionContext, tracker: string, name: string): string {
+  return createHash('sha256').update(`${name}-${tracker}`).digest('hex');
+}
+
+/**
  * Límite de intentos con dos conjuntos con nombre (§8.8). Multiplica los límites por
  * `RATE_LIMIT_FACTOR`, solo aplica `account` donde la ruta lo declara y responde con
  * `Retry-After`.
