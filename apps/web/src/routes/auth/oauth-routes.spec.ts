@@ -279,7 +279,7 @@ describe('/register/complete', () => {
       ok({ user: {}, session: { token: SESSION, expiresAt: EXPIRES }, returnPath: null }, 201),
     );
     const cookies = jar({ cupidilla_oauth: PENDING });
-    const result = await run(() => complete.actions.default(event({ cookies, form: adult })));
+    const result = await run(() => complete.actions.signup(event({ cookies, form: adult })));
     expect(result.location).toBe('/account');
     expect(api.oauthSignup).toHaveBeenCalledWith(expect.anything(), {
       pendingToken: PENDING,
@@ -295,7 +295,7 @@ describe('/register/complete', () => {
     api.oauthPending.mockResolvedValue(pendingLookup);
     const cookies = jar({ cupidilla_oauth: PENDING });
     const result = await run(() =>
-      complete.actions.default(event({ cookies, form: { ...adult, year: '2015' } })),
+      complete.actions.signup(event({ cookies, form: { ...adult, year: '2015' } })),
     );
     expect(api.oauthSignup).not.toHaveBeenCalled();
     expect(api.oauthCancelPending).toHaveBeenCalledWith(expect.anything(), PENDING);
@@ -314,7 +314,7 @@ describe('/register/complete', () => {
     api.oauthSignup.mockResolvedValue(response);
     const cookies = jar({ cupidilla_oauth: PENDING });
     expect(
-      (await run(() => complete.actions.default(event({ cookies, form: adult })))).location,
+      (await run(() => complete.actions.signup(event({ cookies, form: adult })))).location,
     ).toBe(location);
     expect(cookies.values.has('cupidilla_oauth')).toBe(keepsCookie);
   });
@@ -322,7 +322,7 @@ describe('/register/complete', () => {
   it('resultado incierto: error general propio y los valores se conservan', async () => {
     api.oauthSignup.mockResolvedValue(failure(503, 'OUTCOME_UNKNOWN'));
     const result = await run(() =>
-      complete.actions.default(event({ cookies: jar({ cupidilla_oauth: PENDING }), form: adult })),
+      complete.actions.signup(event({ cookies: jar({ cupidilla_oauth: PENDING }), form: adult })),
     );
     expect(result.response).toMatchObject({
       status: 503,

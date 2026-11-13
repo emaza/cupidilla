@@ -57,7 +57,8 @@ async function underage(event: RequestEvent, token: string, provider: OAuthProvi
 }
 
 export const actions = {
-  default: async (event) => {
+  // SvelteKit no admite una acción `default` junto a otras con nombre.
+  signup: async (event) => {
     const token = getOAuthToken(event.cookies);
     if (!token) redirect(303, EXPIRED);
     const data = await event.request.formData();

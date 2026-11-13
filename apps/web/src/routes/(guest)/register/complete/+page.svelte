@@ -85,7 +85,7 @@
     <p>{text('alta.texto.acceso')}</p>
 
     {#key form}
-      <form method="POST" novalidate use:enhance={submission.submit}>
+      <form method="POST" action="?/signup" novalidate use:enhance={submission.submit}>
         <BirthDateFieldset
           {values}
           error={fields.birthDate ? t(fields.birthDate) : undefined}
