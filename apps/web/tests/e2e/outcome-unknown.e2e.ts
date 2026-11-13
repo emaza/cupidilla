@@ -15,7 +15,7 @@ const INCIERTO_REGISTRO =
   'No sabemos si tu cuenta se ha creado: se ha perdido la conexión antes de recibir la respuesta. Antes de volver a registrarte, prueba a entrar con este correo y esta contraseña. Si entras, la cuenta ya existe. Si no puedes entrar, pulsa «Crear cuenta» otra vez.';
 const COMPROBAR_ENTRADA = 'Probar a entrar con este correo (se abre en una pestaña nueva)';
 const INCIERTO_ELIMINAR =
-  'No sabemos si tu cuenta se ha eliminado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta. Si la ves, sigue activa y puedes volver a intentarlo. Si te pide entrar, entra con tu correo y tu contraseña: si entras, la cuenta sigue activa. Si no puedes entrar con la contraseña correcta, lo más probable es que se haya eliminado.';
+  'No sabemos si tu cuenta se ha eliminado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta. Si la ves, sigue activa y puedes volver a intentarlo. Si te pide entrar, entra con tu correo y tu contraseña: si entras, la cuenta sigue activa. Si te dice que el correo o la contraseña son incorrectos y has escrito bien la contraseña, lo más probable es que se haya eliminado. Si te dice que hay demasiados intentos o que algo ha fallado, espera unos minutos y vuelve a intentarlo: eso no dice nada sobre tu cuenta.';
 const COMPROBAR_CUENTA = 'Ir a mi cuenta para comprobarlo';
 const SERVIDOR_ENTRAR =
   'Algo ha fallado por nuestra parte y no hemos podido iniciar tu sesión. Inténtalo de nuevo en unos minutos.';
@@ -310,6 +310,40 @@ test('C62, C63: borrado incierto sin borrar y con la sesión revocada: /entrar n
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tu cuenta');
   await expect(page.locator('main')).toContainText(email);
   expect(proxy.count(DELETION) - before).toBe(1); // sin reintento automático
+
+  await context.close();
+});
+
+test('C62, C63: borrado incierto sin borrar, sesión revocada y /entrar que falla por servicio: su texto habitual, nada sobre el borrado', async ({
+  browser,
+  javaScriptEnabled,
+}) => {
+  const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
+  const page = await context.newPage();
+  const email = await signedInOnDeletePage(page);
+  proxy.setFault(DELETION, 'hang');
+
+  expect(await submitDeletion(page)).toBe(503);
+  await expect(page.locator('main > .resumen-errores')).toContainText(INCIERTO_ELIMINAR);
+  expect(await revokeSessionsForEmail(email)).toBe(1);
+
+  await page
+    .locator('main > .resumen-errores')
+    .getByRole('link', { name: COMPROBAR_CUENTA })
+    .click();
+  await expect(page).toHaveURL(/\/entrar/);
+
+  // El servicio de entrada no responde: /entrar muestra su error de servidor de siempre.
+  proxy.setFault('POST /auth/login', 'hang');
+  await login(page, email);
+  const main = page.locator('main');
+  await expect(main).toContainText(SERVIDOR_ENTRAR, { timeout: 15_000 });
+  await expect(page.getByRole('alert')).toContainText(SERVIDOR_ENTRAR);
+  const text = await main.innerText();
+  expect(text).not.toMatch(/eliminad|borrad|No sabemos si|ya no existe|sigue activa/i);
+
+  // La cuenta sigue en la base de datos.
+  expect((await rowsForEmail(email)).users).toBe(1);
 
   await context.close();
 });

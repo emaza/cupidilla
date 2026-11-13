@@ -13,7 +13,16 @@ vi.mock('$app/env/private', () => ({
 
 const { api } = await import('./api-client.ts');
 
-type Mode = 'silent' | 'close' | 'reset' | 'truncated' | 'off-schema' | 'api-outcome-unknown';
+type Mode =
+  | 'silent'
+  | 'close'
+  | 'reset'
+  | 'truncated'
+  | 'off-schema'
+  | 'api-outcome-unknown'
+  | 'status-200'
+  | 'status-204'
+  | 'bare-502';
 
 /** Respuestas 201 que llegan pero no se pueden usar. */
 const BROKEN_201: Partial<Record<Mode, string>> = {
@@ -25,6 +34,12 @@ const BROKEN_201: Partial<Record<Mode, string>> = {
   // No es un 201: es la API diciendo que perdió la conexión con la base de datos (§6.3).
   'api-outcome-unknown':
     'HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\nContent-Length: 64\r\nConnection: close\r\n\r\n{"error":{"code":"OUTCOME_UNKNOWN","message":"Outcome unknown"}}',
+  // 2xx sin cuerpo: 204 es el del borrado; 200 podría ser de un intermediario.
+  'status-200': 'HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n',
+  'status-204': 'HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n',
+  // Un proxy que no llega a la API, o que la pierde después de enviarle la petición.
+  'bare-502':
+    'HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/html\r\nContent-Length: 11\r\nConnection: close\r\n\r\nBad Gateway',
 };
 
 let mode: Mode = 'silent';
@@ -137,6 +152,31 @@ describe('api-client: resultado incierto (OUTCOME_UNKNOWN)', () => {
       expect(received).toBe(2);
     },
   );
+
+  it('borrado: solo un 204 confirma; un 200 (de un intermediario) es OUTCOME_UNKNOWN', async () => {
+    target.url = serverUrl;
+    mode = 'status-204';
+    expect(await deleteAccount()).toEqual({ ok: true, status: 204, data: undefined });
+    mode = 'status-200';
+    expect(await deleteAccount()).toEqual({
+      ok: false,
+      status: 503,
+      error: { code: 'OUTCOME_UNKNOWN' },
+    });
+    expect(received).toBe(2);
+  });
+
+  it('un 502 sin cuerpo de la API → OUTCOME_UNKNOWN en el registro; API_UNAVAILABLE en el login', async () => {
+    target.url = serverUrl;
+    mode = 'bare-502';
+    expect(await register()).toEqual({
+      ok: false,
+      status: 503,
+      error: { code: 'OUTCOME_UNKNOWN' },
+    });
+    // En el login, API_UNAVAILABLE: la acción muestra entrar.error.servidor.
+    expect(await login()).toEqual({ ok: false, status: 502, error: { code: 'API_UNAVAILABLE' } });
+  });
 
   it('un 503 OUTCOME_UNKNOWN de la API llega tal cual en registro, borrado y login', async () => {
     target.url = serverUrl;

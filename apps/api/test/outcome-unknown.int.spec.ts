@@ -38,7 +38,11 @@ describe('OUTCOME_UNKNOWN cuando se pierde la respuesta de la base de datos', ()
     await t.app.close();
     await direct.end();
     await relay.close();
-    Object.assign(process.env, previous);
+    // Las que no existían se borran: asignar `undefined` dejaría la cadena 'undefined'.
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) Reflect.deleteProperty(process.env, name);
+      else process.env[name] = value;
+    }
   });
   beforeEach(async () => {
     await truncateAll(directDb);

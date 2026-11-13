@@ -25,6 +25,7 @@ Registro de lo que está decidido y de lo que sigue abierto. Cuando una decisió
 | 15 | **Autenticación: correo y contraseña.** Sesiones opacas guardadas en PostgreSQL y cookie `httpOnly`, sin JWT. H0 no envía correo: sin verificación de correo ni recuperación de contraseña ([detalle](h0-diseno-tecnico.md#8-sesión-y-seguridad)) | 11 de noviembre de 2026, CTO con el arquitecto |
 | 16 | **Base técnica de H0**: npm workspaces, Node 24, todo en ESM, TypeScript 6.0 y PostgreSQL 18 en Docker. El navegador solo habla con SvelteKit, y SvelteKit con la API ([diseño técnico](h0-diseno-tecnico.md), [diseño UX](h0-diseno-ux.md)) | 11 de noviembre de 2026, CTO con el arquitecto |
 | 17 | **Aspecto de Cupidilla en H1: minimalista.** Interfaz solo de conversación con un avatar sencillo; el personaje ilustrado llega con la identidad visual | 12 de noviembre de 2026, el CEO |
+| 18 | **URLs y nombres internos de la web en inglés**: `/register`, `/login`, `/account`, `/account/delete`, `/legal/terms`, con parámetros, acciones y campos de formulario también en inglés. Los textos de la interfaz y sus claves siguen en español. Se hace en un PR aparte después de fusionar H0 y antes de H1 ([plan](plan-rutas-en-ingles.md)) | 13 de noviembre de 2026, el CEO |
 
 ## Abiertas
 

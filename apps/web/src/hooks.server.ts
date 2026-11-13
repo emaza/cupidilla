@@ -1,12 +1,24 @@
 import { redirect } from '@sveltejs/kit';
-import { sequence, type Handle, type HandleServerError } from '@sveltejs/kit/hooks';
+import {
+  sequence,
+  type Handle,
+  type HandleServerError,
+  type ServerInit,
+} from '@sveltejs/kit/hooks';
+import { API_URL, API_URL_ALLOW_HTTP } from '$app/env/private';
 import { api } from '#lib/server/api-client.ts';
+import { assertApiUrlTransport } from '#lib/server/api-url.ts';
 import { DEFAULT_RETURN_PATH, safeReturnPath } from '#lib/server/return-path.ts';
 import {
   clearSessionCookie,
   getSessionToken,
   setSessionCookie,
 } from '#lib/server/session-cookie.ts';
+
+/** Al arrancar el servidor: sin https, la clave interna y los tokens viajarían en claro (§8.4). */
+export const init: ServerInit = () => {
+  assertApiUrlTransport(API_URL, API_URL_ALLOW_HTTP);
+};
 
 /** Comprueba la cookie contra la API y rellena `locals`. */
 const authenticate: Handle = async ({ event, resolve }) => {

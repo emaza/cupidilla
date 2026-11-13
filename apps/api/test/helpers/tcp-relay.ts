@@ -22,6 +22,8 @@ export interface TcpRelay {
    * Las demás conexiones siguen funcionando. Es de un solo uso.
    */
   arm(pattern: string, mode: FreezeMode): void;
+  /** Quita el patrón armado sin dispararlo. */
+  disarm(): void;
   /** ¿Se ha disparado el último `arm`? */
   readonly fired: boolean;
   close(): Promise<void>;
@@ -33,6 +35,12 @@ export async function startTcpRelay(databaseUrl: string): Promise<TcpRelay> {
   const sockets = new Set<Socket>();
   let armed: { pattern: string; mode: FreezeMode } | null = null;
   let fired = false;
+  /** Final del trozo anterior de cada conexión: el patrón puede llegar partido entre dos. */
+  const tails = new Map<Socket, Buffer>();
+  const disarm = (): void => {
+    armed = null;
+    tails.clear();
+  };
 
   const server: Server = createServer((client) => {
     const upstream = createConnection({ host: target.hostname, port: Number(target.port) });
@@ -40,9 +48,18 @@ export async function startTcpRelay(databaseUrl: string): Promise<TcpRelay> {
     sockets.add(client).add(upstream);
     client.on('data', (chunk: Buffer) => {
       if (frozen) return;
-      if (armed && chunk.includes(armed.pattern)) {
+      if (armed) {
+        const pattern = Buffer.from(armed.pattern);
+        const tail = tails.get(client) ?? Buffer.alloc(0);
+        const joined = Buffer.concat([tail, chunk]);
+        const matched = joined.includes(pattern);
+        tails.set(client, joined.subarray(Math.max(0, joined.length - (pattern.length - 1))));
+        if (!matched) {
+          upstream.write(chunk);
+          return;
+        }
         const { mode } = armed;
-        armed = null;
+        disarm();
         fired = true;
         frozen = true;
         if (mode === 'after') upstream.write(chunk);
@@ -55,7 +72,10 @@ export async function startTcpRelay(databaseUrl: string): Promise<TcpRelay> {
     });
     for (const socket of [client, upstream]) {
       socket.on('error', () => undefined);
-      socket.on('close', () => sockets.delete(socket));
+      socket.on('close', () => {
+        sockets.delete(socket);
+        tails.delete(socket);
+      });
     }
     client.on('close', () => upstream.destroy());
     upstream.on('close', () => client.destroy());
@@ -68,9 +88,11 @@ export async function startTcpRelay(databaseUrl: string): Promise<TcpRelay> {
   return {
     url: through.toString(),
     arm(pattern, mode) {
+      disarm();
       armed = { pattern, mode };
       fired = false;
     },
+    disarm,
     get fired() {
       return fired;
     },

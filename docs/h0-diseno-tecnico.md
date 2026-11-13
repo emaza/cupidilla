@@ -249,7 +249,7 @@ cupidilla/
 │     │  ├─ app.html              # lang="es"
 │     │  ├─ app.css
 │     │  ├─ app.d.ts              # App.Locals
-│     │  ├─ env.ts                # defineEnvVars: API_URL, INTERNAL_API_KEY
+│     │  ├─ env.ts                # defineEnvVars: API_URL, API_URL_ALLOW_HTTP, INTERNAL_API_KEY
 │     │  ├─ hooks.server.ts       # sesión, guardia de rutas, cabeceras, handleError
 │     │  ├─ lib/
 │     │  │  ├─ server/api-client.ts     # única puerta a la API
@@ -613,7 +613,7 @@ export const FIELD_ISSUES = [
 
 La web añade un código propio que la API nunca emite (`WEB_ERROR_CODES` en `messages.ts`), y usa además `OUTCOME_UNKNOWN` en un segundo caso:
 
-- `API_UNAVAILABLE`: la petición no llegó a la API (conexión rechazada), o la API respondió un 5xx sin cuerpo válido. Sabemos que no se hizo nada. Es también lo que dan las lecturas, `login` y `logout` ante cualquier fallo de red o tiempo agotado.
+- `API_UNAVAILABLE`: la petición no llegó a la API (conexión rechazada), o la respuesta no sirve (un 5xx sin el cuerpo de error de la API, un 2xx inesperado). Solo significa «no se hizo nada» cuando se sabe que la petición no salió. En las lecturas, `login` y `logout` es también lo que da cualquier otro fallo de red, tiempo agotado o respuesta inservible: ahí no importa, porque no son escrituras que la persona tenga que comprobar. En el registro y el borrado, todo lo que pudo llegar a la API da `OUTCOME_UNKNOWN` (§8.4).
 - `OUTCOME_UNKNOWN` (HTTP 503 en la acción): lo emite la API (arriba), o lo genera la web cuando una escritura no idempotente (registro, borrado de la cuenta) se envió y no llegó respuesta. No sabemos si se hizo. En `/entrar` y al cerrar sesión, `messages.ts` lo traduce a su texto de servidor (UX, criterio 65). La web muestra `registro.error.resultado_incierto` o `eliminar.error.resultado_incierto` con su enlace de comprobación (UX §3.2, §3.5 y criterios 60 a 65), y nunca un texto que afirme que no se hizo nada.
 
 `apps/web/src/lib/errors/messages.ts` es un `Record<ErrorCode | WebErrorCode, string>` y un mapa `(campo, issue) → texto`, en español. Un test comprueba que cubre **todos** los códigos. Los textos son los de la tabla de [UX §5](h0-diseno-ux.md#5-textos-de-interfaz), palabra por palabra (acuerdo A12).
@@ -651,13 +651,13 @@ El borrado es `POST .../deletion`, y no `DELETE` con cuerpo, porque la semántic
 | `HealthModule` | `HealthController` | `DatabaseModule` |
 | `AppModule` | Importa todos, `ConfigModule.forRoot`, `ThrottlerModule.forRoot`. Registra los guards globales en este orden: `InternalKeyGuard` → `AppThrottlerGuard` → `SessionGuard`. El log de peticiones no está aquí: es un middleware que registra `configureApp` (§7.4) | — |
 
-**Límites de tiempo de la base de datos.** Ninguna espera es infinita: si PostgreSQL se cuelga o una consulta se alarga, la API responde con un error antes de que la web agote sus 5 s (§8.4). Por eso los dos primeros límites no pueden pasar de 4000 ms: con el margen de `query_timeout`, la espera más larga de una consulta es de 4,5 s.
+**Límites de tiempo de la base de datos.** Ninguna espera es infinita: si PostgreSQL se cuelga o una consulta se alarga, cada operación con la base de datos falla en un plazo acotado. Los dos primeros límites no pueden pasar de 4000 ms: con el margen de `query_timeout`, una sola consulta espera como mucho 4,5 s, menos que los 5 s de la web (§8.4). No es una garantía para la petición entera (ver «Los límites son por operación», abajo).
 
 | Límite | Opción de `pg` | Variable (valor por defecto) | Qué pasa al superarlo |
 |---|---|---|---|
-| Conseguir una conexión (conectar o esperar un hueco en el pool) | `connectionTimeoutMillis` | `DB_CONNECTION_TIMEOUT_MS` (3000; máximo 4000) | La consulta falla en la API: 500, o 503 en `/health` |
+| Conseguir una conexión (conectar o esperar un hueco en el pool) | `connectionTimeoutMillis` | `DB_CONNECTION_TIMEOUT_MS` (3000; máximo 4000) | La consulta falla en la API: 500 (no se envió nada, nunca es incierto), o 503 en `/health` |
 | Duración de una sentencia | `statement_timeout` (se envía al servidor al conectar) | `DB_STATEMENT_TIMEOUT_MS` (4000; máximo 4000) | PostgreSQL la cancela (`57014`) y deshace la transacción |
-| Respuesta del servidor a una consulta sobre una conexión ya abierta | `query_timeout` (en el cliente) | Derivado, sin variable propia: `DB_STATEMENT_TIMEOUT_MS` + 500 (4500 como mucho) | pg rechaza la consulta: 500, o 503 en `/health`. Cubre un PostgreSQL congelado o una red que descarta paquetes sin cerrar la conexión, que el servidor no puede avisar (BUG-QA-8). PostgreSQL podría seguir ejecutándola hasta su `statement_timeout` |
+| Respuesta del servidor a una consulta sobre una conexión ya abierta | `query_timeout` (en el cliente) | Derivado, sin variable propia: `DB_STATEMENT_TIMEOUT_MS` + 500 (4500 como mucho) | pg rechaza la consulta. En una lectura, 500 (o 503 en `/health`); en una escritura (petición que no es GET), 503 `OUTCOME_UNKNOWN` (§6.3), porque la sentencia ya salió. Cubre un PostgreSQL congelado o una red que descarta paquetes sin cerrar la conexión, que el servidor no puede avisar (BUG-QA-8). PostgreSQL podría seguir ejecutándola hasta su `statement_timeout` |
 | Transacción abierta sin actividad | `idle_in_transaction_session_timeout` (ídem) | `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS` (10000) | PostgreSQL cierra la sesión y deshace la transacción |
 
 El pool escucha su evento `error`: si un cliente inactivo pierde la conexión (por ejemplo, porque PostgreSQL se reinicia), el proceso no cae, y el `Logger` de Nest registra solo `{ event: 'pg_pool_error', code }`. El mensaje no se registra porque puede llevar la cadena de conexión (§8.9).
@@ -709,7 +709,10 @@ export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   API_HOST: z.string().default('127.0.0.1'),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
-  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+  // Sin statement_timeout, query_timeout, idle_in_transaction_session_timeout,
+  // connectionTimeoutMillis, connect_timeout ni options en la query: pg los mezcla por encima de
+  // las opciones del pool y anularían los límites de §7.2. Se comparan sin mayúsculas.
+  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }).refine(sinParametrosDeTiempo),
   // Límites de PostgreSQL en ms (§7.2). Máximo 4000: la API responde antes de los 5 s de la web
   // (el query_timeout del cliente es DB_STATEMENT_TIMEOUT_MS + 500).
   DB_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(1).max(4000).default(3000),
@@ -798,6 +801,9 @@ Todas las llamadas pasan por `#lib/server/api-client.ts`:
 - Valida la respuesta con el esquema de `contracts`.
 - Devuelve `{ ok: true, data } | { ok: false, status, error: ApiError }`.
 - Un 503 `OUTCOME_UNKNOWN` de la API (§6.3) se devuelve tal cual, en cualquier petición. En el registro y el borrado se muestra «resultado incierto»; en `login` y `logout`, el texto de servidor.
+- Un 5xx sin el cuerpo de error de la API (por ejemplo, un 502 o un 504 de un proxy, que pueden llegar después de que la escritura se haya hecho) → `OUTCOME_UNKNOWN` en las peticiones `nonIdempotent`, y `API_UNAVAILABLE` con su estado en las demás. Un 4xx sin cuerpo válido sigue dando `API_UNAVAILABLE` (502).
+- Opción `expectStatus`: el 2xx exacto que confirma la operación. `deleteAccount` exige 204 (`@HttpCode(204)` en `users.controller.ts`), porque no tiene esquema de respuesta: sin esta opción, un 200 de un intermediario se tomaría como borrado, y la web borraría la cookie y anunciaría el borrado. Otro 2xx → `OUTCOME_UNKNOWN` si la petición es `nonIdempotent`, `API_UNAVAILABLE` (502) si no.
+- **Transporte**: `API_URL` tiene que ser `https:`, salvo en loopback (`127.0.0.1`, `localhost`, `::1`), porque por ahí viajan la clave interna y los tokens. Para una red privada de contenedores, `API_URL_ALLOW_HTTP=true` permite `http:` de forma explícita (por defecto, `false`). Lo comprueba `assertApiUrlTransport` (`#lib/server/api-url.ts`) en el hook `init` de `hooks.server.ts`, al arrancar el servidor, con un error que no muestra la URL.
 - **Nunca reintenta.** Si `fetch` falla, distingue por la causa (§6.3):
   - Antes de enviar (`error.cause.code` en `ECONNREFUSED`, `ENOTFOUND`, `EAI_AGAIN`, `EHOSTUNREACH`, `ENETUNREACH`, `EADDRNOTAVAIL` o `UND_ERR_CONNECT_TIMEOUT`, también dentro de un `AggregateError`) → `API_UNAVAILABLE`.
   - Cualquier otro fallo (tiempo agotado `TimeoutError`, conexión cortada tras enviar: `ECONNRESET`, `UND_ERR_SOCKET` «other side closed»…) → `OUTCOME_UNKNOWN`, **solo** si la petición lleva la opción `nonIdempotent`, que activan `register` y `deleteAccount`. En las demás (`login`, `logout`, los GET) sigue siendo `API_UNAVAILABLE`.
@@ -1054,8 +1060,10 @@ SESSION_TTL_DAYS=30
 RATE_LIMIT_FACTOR=1
 LOG_FORMAT=pretty
 
-# Web (SvelteKit)
+# Web (SvelteKit). API_URL: https: salvo en loopback (127.0.0.1, localhost, ::1)
 API_URL=http://127.0.0.1:3001
+# Solo en una red privada de contenedores: permite API_URL con http: fuera de loopback
+# API_URL_ALLOW_HTTP=false
 ```
 
 Cómo lee cada pieza el **único `.env` de la raíz**:
@@ -1064,7 +1072,7 @@ Cómo lee cada pieza el **único `.env` de la raíz**:
 |---|---|
 | Compose | Lo lee solo |
 | API | `node --env-file-if-exists=../../.env` y `nest start --env-file ../../.env` |
-| Web | `sveltekit({ env: { dir: '../..' } })` (opción `env.dir` de SvelteKit 3). Las variables se declaran en `src/env.ts` con `defineEnvVars` (`@sveltejs/kit/env`), las dos privadas y validadas con Zod: `API_URL` (`z.url()`) e `INTERNAL_API_KEY` (`min(32)`). Se importan desde `$app/env/private` |
+| Web | `sveltekit({ env: { dir: '../..' } })` (opción `env.dir` de SvelteKit 3). Las variables se declaran en `src/env.ts` con `defineEnvVars` (`@sveltejs/kit/env`), las tres privadas y validadas con Zod: `API_URL` (`z.url()`; `https:` salvo loopback, §8.4), `API_URL_ALLOW_HTTP` (`'true'`/`'false'`, por defecto `false`) e `INTERNAL_API_KEY` (`min(32)`). Se importan desde `$app/env/private` |
 | Playwright | `process.loadEnvFile('../../.env')` |
 
 ### 11.3 Scripts de npm
@@ -1206,7 +1214,7 @@ Tests: con `npm run db:up` hecho, `npm test`. La primera vez, `npm run e2e:insta
 - W-1. `messages.ts` tiene texto para cada `ErrorCode`, para `API_UNAVAILABLE` y `OUTCOME_UNKNOWN` y para cada `FieldIssue` de los campos de los formularios. `OUTCOME_UNKNOWN` solo tiene texto propio en registro y eliminación.
 - W-2. `parseBirthDateParts`: `5`, `05` y `5 ` valen como día y como mes; `31/2/2000` → fecha inexistente; `0/5/1990` → error de día; `12/13/1990` → error de mes; un año de tres cifras → error de año; los tres vacíos → fecha vacía.
 - W-3. `safeReturnPath`: devuelve `/cuenta` y `/cuenta/eliminar` tal cual; `https://otro.sitio`, `//otro.sitio`, `/otra` y vacío → `/cuenta`.
-- W-4. `api-client` contra un servidor TCP falso (`api-client.spec.ts`): conexión rechazada → `API_UNAVAILABLE` en todas las peticiones; tiempo agotado y conexión cortada tras enviar (cierre y RST) → `OUTCOME_UNKNOWN` en `register` y `deleteAccount`, con una sola petición recibida; `login` en los mismos casos → `API_UNAVAILABLE`. Un 201 con el cuerpo truncado o fuera del esquema → `OUTCOME_UNKNOWN` en `register` y `API_UNAVAILABLE` (502) en `login`.
+- W-4. `api-client` contra un servidor TCP falso (`api-client.spec.ts`): conexión rechazada → `API_UNAVAILABLE` en todas las peticiones; tiempo agotado y conexión cortada tras enviar (cierre y RST) → `OUTCOME_UNKNOWN` en `register` y `deleteAccount`, con una sola petición recibida; `login` en los mismos casos → `API_UNAVAILABLE`. Un 201 con el cuerpo truncado o fuera del esquema → `OUTCOME_UNKNOWN` en `register` y `API_UNAVAILABLE` (502) en `login`. En el borrado, un 204 es éxito y un 200 → `OUTCOME_UNKNOWN`. Un 502 sin cuerpo → `OUTCOME_UNKNOWN` en `register` y `API_UNAVAILABLE` en `login`. `api-url.spec.ts`: `https:` siempre vale; `http:` solo en loopback o con `API_URL_ALLOW_HTTP=true`.
 - W-5. Acciones (`routes/actions.spec.ts`): con `OUTCOME_UNKNOWN`, el registro da 503 con `registro.error.resultado_incierto`, los valores sin la contraseña y sin cookie; el borrado da 503 con `eliminar.error.resultado_incierto` y no borra la cookie.
 
 **E2E (Playwright)**

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { e2eDatabaseUrl } from './e2e-database.ts';
 
 describe('e2eDatabaseUrl', () => {
@@ -14,7 +14,6 @@ describe('e2eDatabaseUrl', () => {
 
   it('rechaza cualquier otra base, aunque la URL acabe en _e2e', () => {
     for (const url of [
-      undefined,
       '',
       'no es una url',
       'postgres://u:p@127.0.0.1:5432/cupidilla',
@@ -24,5 +23,21 @@ describe('e2eDatabaseUrl', () => {
     ]) {
       expect(() => e2eDatabaseUrl(url), String(url)).toThrow(/\*_e2e/);
     }
+  });
+
+  describe('sin argumento, lee E2E_DATABASE_URL', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('si la variable no está definida, se niega', () => {
+      vi.stubEnv('E2E_DATABASE_URL', undefined);
+      expect(() => e2eDatabaseUrl()).toThrow(/\*_e2e/);
+    });
+
+    it('si apunta a una base *_e2e, la devuelve', () => {
+      vi.stubEnv('E2E_DATABASE_URL', 'postgres://u:p@127.0.0.1:5432/cupidilla_e2e');
+      expect(e2eDatabaseUrl()).toBe('postgres://u:p@127.0.0.1:5432/cupidilla_e2e');
+    });
   });
 });

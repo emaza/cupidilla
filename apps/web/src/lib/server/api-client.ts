@@ -79,6 +79,12 @@ interface RequestOptions<T> {
    * reintenta.
    */
   nonIdempotent?: boolean;
+  /**
+   * Estado 2xx exacto que confirma la operación (p. ej. 204 en el borrado). Cualquier otro 2xx,
+   * que podría venir de un intermediario, no se toma como éxito: `OUTCOME_UNKNOWN` si la
+   * petición es `nonIdempotent`, `API_UNAVAILABLE` (502) si no.
+   */
+  expectStatus?: number;
 }
 
 /**
@@ -87,7 +93,7 @@ interface RequestOptions<T> {
  */
 async function request<T>(
   event: RequestEvent,
-  { method, path, token, body, schema, nonIdempotent = false }: RequestOptions<T>,
+  { method, path, token, body, schema, nonIdempotent = false, expectStatus }: RequestOptions<T>,
 ): Promise<ApiResult<T>> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -115,7 +121,12 @@ async function request<T>(
 
   if (!response.ok) {
     const parsed = apiErrorSchema.safeParse(payload);
-    if (!parsed.success) return unavailable(response.status >= 500 ? response.status : 502);
+    if (!parsed.success) {
+      // Un 5xx sin el cuerpo de error de la API (p. ej. un 502 o un 504 de un proxy) puede llegar
+      // después de que la escritura se haya hecho: en una no idempotente, resultado incierto.
+      if (response.status >= 500 && nonIdempotent) return outcomeUnknown();
+      return unavailable(response.status >= 500 ? response.status : 502);
+    }
     return {
       ok: false,
       status: response.status,
@@ -123,6 +134,9 @@ async function request<T>(
     };
   }
 
+  if (expectStatus !== undefined && response.status !== expectStatus) {
+    return nonIdempotent ? outcomeUnknown() : unavailable(502);
+  }
   if (!schema) return { ok: true, status: response.status, data: undefined as T };
   const parsed = schema.safeParse(payload);
   if (parsed.success) return { ok: true, status: response.status, data: parsed.data };
@@ -164,5 +178,6 @@ export const api = {
       token,
       body,
       nonIdempotent: true,
+      expectStatus: 204, // users.controller.ts: @HttpCode(204)
     }),
 };

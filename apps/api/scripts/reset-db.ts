@@ -7,6 +7,11 @@ if (!databaseUrl) {
   process.exit(1);
 }
 
+// Sin `new URL` directo: su TypeError lleva la URL (con la contraseña) en `input`.
+if (!URL.canParse(databaseUrl)) {
+  console.error('DATABASE_URL no es una URL válida.');
+  process.exit(1);
+}
 const databaseName = new URL(databaseUrl).pathname.slice(1);
 if (!/_(test|e2e)$/.test(databaseName)) {
   console.error(

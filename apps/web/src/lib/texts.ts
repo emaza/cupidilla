@@ -140,7 +140,7 @@ export const texts = {
   'eliminar.error.servidor':
     'Algo ha fallado por nuestra parte y no hemos podido eliminar tu cuenta. Tu cuenta sigue como estaba. Inténtalo de nuevo en unos minutos.',
   'eliminar.error.resultado_incierto':
-    'No sabemos si tu cuenta se ha eliminado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta. Si la ves, sigue activa y puedes volver a intentarlo. Si te pide entrar, entra con tu correo y tu contraseña: si entras, la cuenta sigue activa. Si no puedes entrar con la contraseña correcta, lo más probable es que se haya eliminado.',
+    'No sabemos si tu cuenta se ha eliminado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta. Si la ves, sigue activa y puedes volver a intentarlo. Si te pide entrar, entra con tu correo y tu contraseña: si entras, la cuenta sigue activa. Si te dice que el correo o la contraseña son incorrectos y has escrito bien la contraseña, lo más probable es que se haya eliminado. Si te dice que hay demasiados intentos o que algo ha fallado, espera unos minutos y vuelve a intentarlo: eso no dice nada sobre tu cuenta.',
   'eliminar.enlace.comprobar': 'Ir a mi cuenta para comprobarlo',
 
   // 5.7 Errores de página

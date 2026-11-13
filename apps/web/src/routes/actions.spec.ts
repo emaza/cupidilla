@@ -234,6 +234,14 @@ describe('entrar: respuestas de la API (criterios 31, 32, 8 y 10)', () => {
     });
   });
 
+  it('un 502 sin cuerpo de un proxy (API_UNAVAILABLE 502) → entrar.error.servidor', async () => {
+    api.login.mockResolvedValue(apiFailure(502, 'API_UNAVAILABLE'));
+    expect((await submit()).result).toMatchObject({
+      status: 502,
+      data: { errors: { general: 'entrar.error.servidor' } },
+    });
+  });
+
   it('credenciales incorrectas y validación de la API dan el mismo texto genérico', async () => {
     api.login.mockResolvedValue(apiFailure(401, 'INVALID_CREDENTIALS'));
     const wrong = await submit();

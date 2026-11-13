@@ -47,6 +47,11 @@ export async function startApiProxy(): Promise<ApiProxy> {
     if (fault === 'hang') return;
 
     const upstream = await forward(req, Buffer.concat(chunks));
+    // Si la respuesta de la API se corta, `end` no llega nunca: se corta también hacia la web.
+    upstream.once('error', () => {
+      if (fault === 'cut' || res.headersSent) req.socket.destroy();
+      else res.writeHead(502).end();
+    });
     if (fault === 'cut') {
       upstream.resume();
       upstream.once('end', () => req.socket.destroy());

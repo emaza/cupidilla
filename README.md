@@ -39,6 +39,8 @@ npm run dev                   # web en http://localhost:5173 · API en http://12
 - Configura `ADDRESS_HEADER` solo si el proxy sobrescribe esa cabecera en cada petición (o, con `X-Forwarded-For`, le añade la IP real al final). Las cabeceras se falsean con facilidad: si el proxy deja pasar la que manda el cliente, cualquiera podría poner la IP que quiera y saltarse el límite de intentos.
 - Si `ADDRESS_HEADER` está configurada y una petición llega sin esa cabecera (o, con `X-Forwarded-For`, con menos direcciones que `XFF_DEPTH`), `adapter-node` lanza un error al pedir la IP y la petición falla. Configúrala solo cuando todo el tráfico pase por el proxy.
 
+**La web y la API**: la web manda a la API la clave interna y los tokens de sesión, así que `API_URL` tiene que ser `https:`, salvo en loopback (`127.0.0.1`, `localhost`, `::1`); si no, la web no arranca. Si la API está en una red privada de contenedores sin TLS, pon `API_URL_ALLOW_HTTP=true` para permitir `http:` de forma explícita. No lo actives si el tráfico entre la web y la API pasa por una red que no controlas.
+
 Los scripts de `docker/postgres/init` solo se ejecutan con el volumen vacío: si cambian, `npm run db:reset` (borra los datos locales).
 
 ## Documentos
