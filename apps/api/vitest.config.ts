@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { loadEnv } from 'vite';
 import { defineConfig } from 'vitest/config';
+import { OAUTH_TEST_ENV } from './test/helpers/oauth-env.js';
 
 const repoRoot = resolve(import.meta.dirname, '../..');
 const rootEnv = loadEnv('test', repoRoot, '');
@@ -32,6 +33,7 @@ export default defineConfig({
             LOG_FORMAT: 'json',
             SESSION_TTL_DAYS: '30',
             RATE_LIMIT_FACTOR: '1',
+            ...OAUTH_TEST_ENV,
           },
         },
       },

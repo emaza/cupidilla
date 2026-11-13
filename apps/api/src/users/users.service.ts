@@ -8,11 +8,13 @@ import { ConsentsService } from '../consents/consents.service.js';
 import { DB, type Database, type Executor } from '../database/database.types.js';
 import { isUniqueViolation } from '../database/pg-errors.js';
 import { users } from '../database/schema/index.js';
+import { IdentitiesService } from '../oauth/identities.service.js';
 import { PasswordService } from './password.service.js';
 
 export interface NewUser {
   email: string;
-  passwordHash: string;
+  /** `null` en una cuenta creada con un proveedor (§5.1). */
+  passwordHash: string | null;
   birthDate: string;
 }
 
@@ -38,6 +40,7 @@ export class UsersService {
     @Inject(DB) private readonly db: Database,
     private readonly passwords: PasswordService,
     private readonly consents: ConsentsService,
+    private readonly identities: IdentitiesService,
     private readonly clock: Clock,
   ) {}
 
@@ -64,6 +67,11 @@ export class UsersService {
     return row ? { user: toPublicUser(row), passwordHash: row.passwordHash } : undefined;
   }
 
+  async findPublicById(userId: string): Promise<PublicUser | undefined> {
+    const [row] = await this.db.select().from(users).where(eq(users.id, userId)).limit(1);
+    return row ? toPublicUser(row) : undefined;
+  }
+
   async updatePasswordHash(userId: string, passwordHash: string): Promise<void> {
     await this.db
       .update(users)
@@ -77,11 +85,17 @@ export class UsersService {
   ): Promise<AccountResponse> {
     const [row] = await this.db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (!row) throw new ApiException('UNAUTHENTICATED', 401);
+    const linked = await this.identities.listForUser(userId);
     return {
       user: { ...toPublicUser(row), birthDate: row.birthDate },
       consents: await this.consents.listForUser(userId),
-      // Las identidades se listan cuando exista IdentitiesService (fase 2 del diseño).
-      signInMethods: { password: row.passwordHash !== null, identities: [] },
+      signInMethods: {
+        password: row.passwordHash !== null,
+        identities: linked.map(({ provider, linkedAt }) => ({
+          provider,
+          linkedAt: linkedAt.toISOString(),
+        })),
+      },
       session: { authenticatedAt: session.authenticatedAt.toISOString() },
     };
   }

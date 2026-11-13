@@ -18,6 +18,7 @@ import { envSchema } from './config/env.schema.js';
 import { ConsentsModule } from './consents/consents.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
+import { OAuthModule } from './oauth/oauth.module.js';
 import { UsersModule } from './users/users.module.js';
 
 @Module({
@@ -41,6 +42,7 @@ import { UsersModule } from './users/users.module.js';
     ConsentsModule,
     UsersModule,
     AuthModule,
+    OAuthModule,
     HealthModule,
   ],
   providers: [

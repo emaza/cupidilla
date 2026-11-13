@@ -16,6 +16,10 @@ export class FakeClock implements Clock {
     this.current = new Date(now);
   }
 
+  advanceMinutes(minutes: number): void {
+    this.current = new Date(this.current.getTime() + minutes * 60 * 1000);
+  }
+
   advanceDays(days: number): void {
     this.current = new Date(this.current.getTime() + days * 24 * 60 * 60 * 1000);
   }
