@@ -14,7 +14,7 @@ async function mainText(page: Page): Promise<string> {
   return page.locator('main').innerText();
 }
 
-test('BUG-QA-1: ningún ?aviso= que no sea de la lista muestra un aviso (nombres de Object, mayúsculas, espacios, repetidos)', async ({
+test('BUG-QA-1: ningún ?notice= que no sea de la lista muestra un aviso (nombres de Object, mayúsculas, espacios, repetidos)', async ({
   page,
 }) => {
   const unknown = [
@@ -25,27 +25,33 @@ test('BUG-QA-1: ningún ?aviso= que no sea de la lista muestra un aviso (nombres
     '__defineGetter__',
     'hasOwnProperty',
     'isPrototypeOf',
-    'sesion-cerrada%20',
-    '%20sesion-cerrada',
-    'SESION-CERRADA',
-    'sesion_cerrada',
+    'signed-out%20',
+    '%20signed-out',
+    'SIGNED-OUT',
+    'signed_out',
+    // Los valores de antes de pasar las rutas a inglés ya no valen.
+    'sesion-cerrada',
+    'cuenta-eliminada',
     'zzz',
     '',
   ];
-  for (const aviso of unknown) {
-    await page.goto(`/?aviso=${aviso}`);
+  for (const notice of unknown) {
+    await page.goto(`/?notice=${notice}`);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(page.getByRole('status'), `aviso=${aviso}`).toHaveCount(0);
+    await expect(page.getByRole('status'), `notice=${notice}`).toHaveCount(0);
   }
-  // Un array (aviso[]=...) y un nombre heredado detrás de uno válido: gana el primero.
-  await page.goto('/?aviso[]=sesion-cerrada');
+  // El parámetro de antes de pasar las rutas a inglés tampoco.
+  await page.goto('/?aviso=sesion-cerrada');
   await expect(page.getByRole('status')).toHaveCount(0);
-  await page.goto('/?aviso=constructor&aviso=sesion-cerrada');
+  // Un array (notice[]=...) y un nombre heredado detrás de uno válido: gana el primero.
+  await page.goto('/?notice[]=signed-out');
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await page.goto('/?notice=constructor&notice=signed-out');
   await expect(page.getByRole('status')).toHaveCount(0);
   // Los dos válidos siguen funcionando y con su texto.
-  await page.goto('/?aviso=sesion-cerrada');
+  await page.goto('/?notice=signed-out');
   await expect(page.getByRole('status')).toHaveText(/Has cerrado sesión\./);
-  await page.goto('/?aviso=cuenta-eliminada');
+  await page.goto('/?notice=account-deleted');
   await expect(page.getByRole('status')).not.toHaveText(/^\s*$/);
 });
 
@@ -53,7 +59,7 @@ test('BUG-QA-2: los textos de «vacío» y de «formato» salen donde toca en re
   page,
 }) => {
   // Registro: todo vacío.
-  await page.goto('/registro');
+  await page.goto('/register');
   await page.getByRole('button', { name: 'Crear cuenta' }).click();
   await expect(page.getByText(SUMMARY_TITLE)).toBeVisible();
   let text = await mainText(page);
@@ -79,7 +85,7 @@ test('BUG-QA-2: los textos de «vacío» y de «formato» salen donde toca en re
   expect(text).not.toContain('Elige una contraseña.');
 
   // Entrar: vacío.
-  await page.goto('/entrar');
+  await page.goto('/login');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(page.getByText(SUMMARY_TITLE)).toBeVisible();
   text = await mainText(page);
@@ -87,7 +93,7 @@ test('BUG-QA-2: los textos de «vacío» y de «formato» salen donde toca en re
   expect(text).toContain('Escribe tu contraseña.');
 
   // Entrar: correo en blanco con contraseña.
-  await page.goto('/entrar');
+  await page.goto('/login');
   await page.getByLabel('Correo electrónico').fill('   ');
   await page.getByLabel('Contraseña', { exact: true }).fill('lo que sea');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
@@ -98,7 +104,7 @@ test('BUG-QA-2: los textos de «vacío» y de «formato» salen donde toca en re
 
   // Eliminar: contraseña vacía.
   await registerAdult(page);
-  await page.goto('/cuenta/eliminar');
+  await page.goto('/account/delete');
   await page.getByRole('button', { name: /Eliminar/ }).click();
   await expect(page.getByText(SUMMARY_TITLE)).toBeVisible();
   expect(await mainText(page)).toContain('Escribe tu contraseña para confirmar.');
@@ -110,7 +116,7 @@ test('BUG-QA-2 (regresión): entrar con un correo mal escrito da el mismo mensaj
   const generic = 'Correo o contraseña incorrectos.';
   const html: string[] = [];
   for (const email of ['malcorreo', 'nadie.existe@example.com', 'sin-arroba.example.com']) {
-    await page.goto('/entrar');
+    await page.goto('/login');
     await page.getByLabel('Correo electrónico').fill(email);
     await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
     await page.getByRole('button', { name: 'Entrar', exact: true }).click();
@@ -127,12 +133,12 @@ test('BUG-QA-2 (regresión): entrar con un correo mal escrito da el mismo mensaj
 test('BUG-QA-5: entre la casilla y «Leer las condiciones» hay 8 px en todos los anchos', async ({
   page,
 }) => {
-  await page.goto('/registro');
+  await page.goto('/register');
   for (const width of [320, 360, 390, 768, 1280]) {
     await page.setViewportSize({ width, height: 800 });
     const gap = await page.evaluate(() => {
-      const row = document.querySelector('label.casilla')?.getBoundingClientRect();
-      const link = document.querySelector('.enlace-bloque')?.getBoundingClientRect();
+      const row = document.querySelector('label.checkbox')?.getBoundingClientRect();
+      const link = document.querySelector('.block-link')?.getBoundingClientRect();
       return row && link ? link.top - row.bottom : Number.NaN;
     });
     expect(gap, `separación a ${width} px`).toBeGreaterThanOrEqual(8);
@@ -145,10 +151,10 @@ test('BUG-QA-4: con texto normal, día/mes/año van en una fila a 320 px; al 200
   javaScriptEnabled,
 }) => {
   await page.setViewportSize({ width: 320, height: 700 });
-  await page.goto('/registro');
+  await page.goto('/register');
   const tops = () =>
     page.evaluate(() =>
-      ['dia', 'mes', 'anio'].map((id) => document.getElementById(id)?.getBoundingClientRect()),
+      ['day', 'month', 'year'].map((id) => document.getElementById(id)?.getBoundingClientRect()),
     );
   const row = await tops();
   expect(new Set(row.map((box) => Math.round(box?.top ?? -1))).size, 'una sola fila').toBe(1);
@@ -171,6 +177,8 @@ test('[BUG-QA-6] C44: sin desplazamiento horizontal a 320 px con el texto al 200
   javaScriptEnabled,
 }) => {
   test.skip(!javaScriptEnabled, 'Para ampliar el texto hace falta inyectar CSS desde el test');
+  // Recorre todas las pantallas y estados de error: bajo carga supera los 30 s por defecto.
+  test.setTimeout(90_000);
   await page.setViewportSize({ width: 320, height: 700 });
 
   const overflows: string[] = [];
@@ -179,7 +187,8 @@ test('[BUG-QA-6] C44: sin desplazamiento horizontal a 320 px con el texto al 200
     const { scroll, client, culprit } = await page.evaluate(() => {
       const root = document.documentElement;
       const wide = [...document.querySelectorAll<HTMLElement>('body *')].find(
-        (el) => !el.matches('.saltar') && el.getBoundingClientRect().right > root.clientWidth + 0.5,
+        (el) =>
+          !el.matches('.skip-link') && el.getBoundingClientRect().right > root.clientWidth + 0.5,
       );
       return {
         scroll: root.scrollWidth,
@@ -200,21 +209,15 @@ test('[BUG-QA-6] C44: sin desplazamiento horizontal a 320 px con el texto al 200
     await expect(page.getByText(SUMMARY_TITLE)).toBeVisible();
   };
 
-  for (const path of [
-    '/',
-    '/?aviso=sesion-cerrada',
-    '/registro',
-    '/entrar',
-    '/legal/condiciones',
-  ]) {
+  for (const path of ['/', '/?notice=signed-out', '/register', '/login', '/legal/terms']) {
     await open(path);
     await measure(path);
   }
   await open('/una/ruta/que/no/existe');
   await measure('404');
 
-  // Estados de error de /registro: cada uno con un texto distinto en el resumen y en el campo.
-  const registroConErrores: [string, Parameters<typeof fillRegister>[1]][] = [
+  // Estados de error de /register: cada uno con un texto distinto en el resumen y en el campo.
+  const registerErrorCases: [string, Parameters<typeof fillRegister>[1]][] = [
     ['correo vacío y contraseña vacía', { email: '', password: '' }],
     ['correo mal escrito', { email: 'ana@', password: PASSWORD }],
     ['correo sin arroba y contraseña corta', { email: 'anaexample.com', password: 'abc' }],
@@ -228,10 +231,10 @@ test('[BUG-QA-6] C44: sin desplazamiento horizontal a 320 px con el texto al 200
     ['fecha anterior a 1900', { email: uniqueEmail(), year: '1850' }],
     ['sin aceptar las condiciones', { email: uniqueEmail(), acceptTerms: false }],
   ];
-  for (const [name, input] of registroConErrores) {
+  for (const [name, input] of registerErrorCases) {
     await fillRegister(page, input);
     await expect(page.getByText(SUMMARY_TITLE), name).toBeVisible();
-    await measure(`/registro: ${name}`);
+    await measure(`/register: ${name}`);
   }
 
   // Pantalla de menor.
@@ -239,29 +242,29 @@ test('[BUG-QA-6] C44: sin desplazamiento horizontal a 320 px con el texto al 200
   await expect(page.getByRole('heading', { name: 'No podemos crear tu cuenta' })).toBeVisible();
   await measure('pantalla de menor');
 
-  // Correo ya registrado (409) y errores de /entrar.
+  // Correo ya registrado (409) y errores de /login.
   const email = uniqueEmail();
   await registerAdult(page, email);
-  await measure('/cuenta');
+  await measure('/account');
   await page.getByRole('button', { name: 'Cerrar sesión' }).click();
-  await expect(page).toHaveURL('/?aviso=sesion-cerrada');
+  await expect(page).toHaveURL('/?notice=signed-out');
   await fillRegister(page, { email });
   await expect(page.getByText(SUMMARY_TITLE)).toBeVisible();
-  await measure('/registro: correo ya registrado');
+  await measure('/register: correo ya registrado');
 
-  await open('/entrar');
+  await open('/login');
   await submit('Entrar', true);
-  await measure('/entrar: vacío');
-  await open('/entrar');
+  await measure('/login: vacío');
+  await open('/login');
   await page.getByLabel('Correo electrónico').fill('malcorreo');
   await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
   await submit('Entrar', true);
-  await measure('/entrar: correo mal escrito');
-  await open('/entrar');
+  await measure('/login: correo mal escrito');
+  await open('/login');
   await page.getByLabel('Correo electrónico').fill(email);
   await page.getByLabel('Contraseña', { exact: true }).fill('contraseña equivocada');
   await submit('Entrar', true);
-  await measure('/entrar: contraseña equivocada');
+  await measure('/login: contraseña equivocada');
 
   // Pantallas con sesión: cuenta con un correo de 254 caracteres, y eliminar con errores.
   const unique = randomUUID().replaceAll('-', '');
@@ -269,15 +272,15 @@ test('[BUG-QA-6] C44: sin desplazamiento horizontal a 320 px con el texto al 200
   await page.setViewportSize({ width: 1280, height: 800 });
   await registerAdult(page, longEmail);
   await page.setViewportSize({ width: 320, height: 700 });
-  await open('/cuenta');
-  await measure('/cuenta con un correo de 254 caracteres');
-  await open('/cuenta/eliminar');
-  await measure('/cuenta/eliminar');
+  await open('/account');
+  await measure('/account con un correo de 254 caracteres');
+  await open('/account/delete');
+  await measure('/account/delete');
   await submit(/Eliminar/);
-  await measure('/cuenta/eliminar: contraseña vacía');
+  await measure('/account/delete: contraseña vacía');
   await page.getByLabel('Contraseña', { exact: true }).fill('contraseña equivocada');
   await submit(/Eliminar/);
-  await measure('/cuenta/eliminar: contraseña equivocada');
+  await measure('/account/delete: contraseña equivocada');
 
   expect(overflows, 'pantallas que se desbordan a 320 px con el texto al 200 %').toEqual([]);
 });
@@ -292,13 +295,13 @@ test('[BUG-QA-7] lo que se escribe antes de que cargue el JavaScript no se borra
     await new Promise((resolve) => setTimeout(resolve, 2000));
     await route.continue();
   });
-  await page.goto('/registro', { waitUntil: 'domcontentloaded' });
-  await page.locator('#correo').fill('ana@example.com');
-  await page.locator('#dia').fill('5');
-  await page.locator('#condiciones').check();
+  await page.goto('/register', { waitUntil: 'domcontentloaded' });
+  await page.locator('#email').fill('ana@example.com');
+  await page.locator('#day').fill('5');
+  await page.locator('#acceptTerms').check();
   await page.waitForLoadState('networkidle');
   await page.waitForTimeout(1000);
-  await expect(page.locator('#correo')).toHaveValue('ana@example.com');
-  await expect(page.locator('#dia')).toHaveValue('5');
-  await expect(page.locator('#condiciones')).toBeChecked();
+  await expect(page.locator('#email')).toHaveValue('ana@example.com');
+  await expect(page.locator('#day')).toHaveValue('5');
+  await expect(page.locator('#acceptTerms')).toBeChecked();
 });

@@ -17,9 +17,9 @@
 </svelte:head>
 
 {#if general}
-  <div class="resumen-errores" role="alert" tabindex="-1" data-foco-resultado>
+  <div class="error-summary" role="alert" tabindex="-1" data-result-focus>
     <p>
-      <span class="visualmente-oculto">{t('comun.error.prefijo_oculto')}</span>
+      <span class="visually-hidden">{t('comun.error.prefijo_oculto')}</span>
       {t(general)}
     </p>
   </div>
@@ -28,9 +28,9 @@
 <h1>{t('cuenta.titulo')}</h1>
 
 {#if data.account}
-  <section class="seccion" aria-labelledby="cuenta-datos">
-    <h2 id="cuenta-datos">{t('cuenta.datos.titulo')}</h2>
-    <dl class="datos">
+  <section class="section" aria-labelledby="account-details">
+    <h2 id="account-details">{t('cuenta.datos.titulo')}</h2>
+    <dl class="data-list">
       <dt>{t('cuenta.datos.correo')}</dt>
       <dd>{data.account.email}</dd>
       {#if data.account.terms}
@@ -46,25 +46,25 @@
   </section>
 {/if}
 
-<section class="seccion" aria-labelledby="cuenta-cupidilla">
-  <h2 id="cuenta-cupidilla">{t('cuenta.cupidilla.titulo')}</h2>
+<section class="section" aria-labelledby="account-cupidilla">
+  <h2 id="account-cupidilla">{t('cuenta.cupidilla.titulo')}</h2>
   <p>{t('cuenta.cupidilla.texto')}</p>
 </section>
 
-<section class="seccion" aria-labelledby="cuenta-sesion">
-  <h2 id="cuenta-sesion">{t('cuenta.sesion.titulo')}</h2>
-  <form method="POST" action="/cuenta?/salir" use:enhance={submission.submit}>
-    <div class="acciones">
+<section class="section" aria-labelledby="account-session">
+  <h2 id="account-session">{t('cuenta.sesion.titulo')}</h2>
+  <form method="POST" action="/account?/logout" use:enhance={submission.submit}>
+    <div class="actions">
       <SubmitButton label={t('cuenta.sesion.boton')} sending={submission.sending} />
     </div>
   </form>
 </section>
 
-<section class="seccion" aria-labelledby="cuenta-eliminar">
-  <h2 id="cuenta-eliminar">{t('cuenta.eliminar.titulo')}</h2>
+<section class="section" aria-labelledby="account-delete">
+  <h2 id="account-delete">{t('cuenta.eliminar.titulo')}</h2>
   <p>{t('cuenta.eliminar.texto')}</p>
-  <div class="acciones">
-    <a class="boton boton-peligro-secundario" href={resolve('cuenta/eliminar')}
+  <div class="actions">
+    <a class="button button-danger-secondary" href={resolve('account/delete')}
       >{t('cuenta.eliminar.enlace')}</a
     >
   </div>

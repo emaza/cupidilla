@@ -23,21 +23,21 @@ export const actions = {
       // Sesión caducada o cuenta ya eliminada en otra pestaña: como sin sesión (UX §1.7).
       clearSessionCookie(event.cookies);
       event.locals.user = null;
-      redirect(303, '/entrar?siguiente=/cuenta');
+      redirect(303, '/login?next=/account');
     }
     if (result.ok) {
       clearSessionCookie(event.cookies);
       event.locals.user = null;
       event.locals.sessionToken = null;
-      redirect(303, '/?aviso=cuenta-eliminada');
+      redirect(303, '/?notice=account-deleted');
     }
 
-    const message = errorMessages.eliminar[result.error.code];
+    const message = errorMessages.delete[result.error.code];
     // Contraseña incorrecta: el error va en el campo y en el resumen (UX §3.5).
     const onField =
       result.error.code === 'PASSWORD_INCORRECT' || result.error.code === 'VALIDATION_FAILED';
     const errors: FormErrors<DeleteAccountField> = onField
-      ? { fields: { contrasena: message } }
+      ? { fields: { password: message } }
       : { fields: {}, general: message };
     return fail(result.status, { errors });
   },

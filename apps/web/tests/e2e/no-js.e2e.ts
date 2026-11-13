@@ -5,7 +5,7 @@ test('«Mostrar contraseña» solo existe con JavaScript y la contraseña nunca 
   page,
   javaScriptEnabled,
 }) => {
-  await page.goto('/registro');
+  await page.goto('/register');
   const toggle = page.getByRole('button', { name: 'Mostrar contraseña' });
   const password = page.getByLabel('Contraseña', { exact: true });
 
@@ -29,5 +29,5 @@ test('«Mostrar contraseña» solo existe con JavaScript y la contraseña nunca 
   await expect(page.getByLabel('Día')).toHaveValue('5');
   await expect(password).toHaveValue('');
   expect(await page.content()).not.toContain(PASSWORD);
-  if (javaScriptEnabled) await expect(page.locator('.resumen-errores')).toBeFocused();
+  if (javaScriptEnabled) await expect(page.locator('.error-summary')).toBeFocused();
 });

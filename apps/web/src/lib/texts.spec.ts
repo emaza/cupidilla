@@ -46,7 +46,7 @@ describe('Textos de interfaz = tabla de UX §5 (criterio 49)', () => {
     expect(different).toEqual([]);
   });
 
-  it('cada clave de la tabla (salvo /legal/condiciones) está en texts.ts: no falta ningún texto', () => {
+  it('cada clave de la tabla (salvo /legal/terms) está en texts.ts: no falta ningún texto', () => {
     const missing = [...table.keys()].filter(
       (key) => !key.startsWith('condiciones.') && !(key in texts),
     );

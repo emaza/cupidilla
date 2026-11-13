@@ -28,7 +28,7 @@ export const actions = {
     const result = await api.register(event, parsed.request);
     if (result.ok) {
       setSessionCookie(event.cookies, result.data.session.token, result.data.session.expiresAt);
-      redirect(303, '/cuenta');
+      redirect(303, '/account');
     }
 
     const { code, fields } = result.error;
@@ -38,13 +38,13 @@ export const actions = {
       case 'EMAIL_TAKEN':
         return fail(409, {
           values,
-          errors: onlyField({ correo: 'registro.error.correo_existente' }),
+          errors: onlyField({ email: 'registro.error.correo_existente' }),
         });
       case 'TERMS_VERSION_OUTDATED':
         // La casilla vuelve desmarcada para que se lean y acepten las condiciones vigentes (A11).
         return fail(409, {
-          values: { ...values, condiciones: false },
-          errors: onlyField({ condiciones: 'registro.error.condiciones_version' }),
+          values: { ...values, acceptTerms: false },
+          errors: onlyField({ acceptTerms: 'registro.error.condiciones_version' }),
         });
       case 'VALIDATION_FAILED': {
         const errors = registerErrorsFromIssues(firstApiIssueByField(fields));
@@ -55,7 +55,7 @@ export const actions = {
     const errors: RegisterErrors = {
       fields: {},
       dateParts: [],
-      general: errorMessages.registro[code],
+      general: errorMessages.register[code],
     };
     return fail(result.status, { values, errors });
   },

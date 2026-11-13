@@ -30,20 +30,18 @@ describe('W-1: messages.ts', () => {
   });
 
   it('usa los textos de UX §5 para los casos principales', () => {
-    expect(texts[errorMessages.entrar.INVALID_CREDENTIALS]).toBe(
-      'Correo o contraseña incorrectos.',
-    );
-    expect(texts[errorMessages.registro.RATE_LIMITED]).toBe(
+    expect(texts[errorMessages.login.INVALID_CREDENTIALS]).toBe('Correo o contraseña incorrectos.');
+    expect(texts[errorMessages.register.RATE_LIMITED]).toBe(
       'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.',
     );
-    expect(errorMessages.registro.API_UNAVAILABLE).toBe('registro.error.servidor');
-    expect(errorMessages.salir.API_UNAVAILABLE).toBe('cuenta.error.servidor');
+    expect(errorMessages.register.API_UNAVAILABLE).toBe('registro.error.servidor');
+    expect(errorMessages.logout.API_UNAVAILABLE).toBe('cuenta.error.servidor');
     // Resultado incierto: solo registro y eliminación tienen texto propio (criterio 65).
-    expect(errorMessages.registro.OUTCOME_UNKNOWN).toBe('registro.error.resultado_incierto');
-    expect(errorMessages.eliminar.OUTCOME_UNKNOWN).toBe('eliminar.error.resultado_incierto');
-    expect(errorMessages.entrar.OUTCOME_UNKNOWN).toBe('entrar.error.servidor');
-    expect(errorMessages.salir.OUTCOME_UNKNOWN).toBe('cuenta.error.servidor');
-    expect(fieldMessages.registro.birthDate.in_future).toBe('registro.error.fecha_futura');
-    expect(fieldMessages.registro.password.too_short).toBe('registro.error.contrasena_corta');
+    expect(errorMessages.register.OUTCOME_UNKNOWN).toBe('registro.error.resultado_incierto');
+    expect(errorMessages.delete.OUTCOME_UNKNOWN).toBe('eliminar.error.resultado_incierto');
+    expect(errorMessages.login.OUTCOME_UNKNOWN).toBe('entrar.error.servidor');
+    expect(errorMessages.logout.OUTCOME_UNKNOWN).toBe('cuenta.error.servidor');
+    expect(fieldMessages.register.birthDate.in_future).toBe('registro.error.fecha_futura');
+    expect(fieldMessages.register.password.too_short).toBe('registro.error.contrasena_corta');
   });
 });

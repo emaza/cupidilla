@@ -1,5 +1,5 @@
 <!--
-  Borrador de /legal/condiciones, versión 2026-11-borrador (SERVICE_TERMS_VERSION).
+  Borrador de /legal/terms, versión 2026-11-borrador (SERVICE_TERMS_VERSION).
   Texto copiado palabra por palabra de UX §5.9. Los [PENDIENTE] se muestran tal cual.
   Una versión nueva del texto es un archivo nuevo y un cambio de SERVICE_TERMS_VERSION.
 -->
@@ -7,8 +7,8 @@
   <title>Condiciones de uso (borrador) — Cupidilla</title>
 </svelte:head>
 
-<article class="lectura">
-  <div class="borrador">
+<article class="prose">
+  <div class="draft">
     <p>Borrador pendiente de revisión jurídica. No es el texto definitivo y puede cambiar.</p>
   </div>
 

@@ -23,7 +23,7 @@ export function createSubmission() {
       if (result.type === 'failure') {
         await tick();
         // El resumen de errores o el título de la pantalla de menor llevan este atributo.
-        document.querySelector<HTMLElement>('[data-foco-resultado]')?.focus();
+        document.querySelector<HTMLElement>('[data-result-focus]')?.focus();
       }
     };
   };

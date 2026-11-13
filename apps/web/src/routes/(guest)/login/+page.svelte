@@ -19,8 +19,8 @@
   const hasErrors = $derived(Object.keys(fields).length > 0 || general !== undefined);
   const summary = $derived(
     [
-      { target: 'correo', key: fields.correo },
-      { target: 'contrasena', key: fields.contrasena },
+      { target: 'email', key: fields.email },
+      { target: 'password', key: fields.password },
     ].flatMap(({ target, key }) => (key ? [{ target, text: t(key) }] : [])),
   );
 </script>
@@ -35,29 +35,29 @@
   <Notice tone="info" text={t('entrar.aviso.necesita_sesion')} />
 {/if}
 
-<div class="tarjeta">
+<div class="card">
   <h1>{t('entrar.titulo')}</h1>
   <p>{t('comun.campos_obligatorios')}</p>
 
   {#key form}
     <form method="POST" novalidate use:enhance={submission.submit}>
       {#if data.next}
-        <input type="hidden" name="siguiente" value={data.next} />
+        <input type="hidden" name="next" value={data.next} />
       {/if}
 
       <EmailField
         label={t('entrar.campo.correo')}
-        value={form?.values?.correo ?? ''}
-        error={fields.correo ? t(fields.correo) : undefined}
+        value={form?.values?.email ?? ''}
+        error={fields.email ? t(fields.email) : undefined}
       />
 
       <PasswordField
         label={t('entrar.campo.contrasena')}
         autocomplete="current-password"
-        error={fields.contrasena ? t(fields.contrasena) : undefined}
+        error={fields.password ? t(fields.password) : undefined}
       />
 
-      <div class="acciones">
+      <div class="actions">
         <SubmitButton
           label={t('entrar.boton.enviar')}
           sendingLabel={t('entrar.boton.enviando')}
@@ -68,5 +68,5 @@
     </form>
   {/key}
 
-  <p><a class="enlace-bloque" href={resolve('registro')}>{t('entrar.enlace.registro')}</a></p>
+  <p><a class="block-link" href={resolve('register')}>{t('entrar.enlace.registro')}</a></p>
 </div>

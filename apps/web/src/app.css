@@ -119,7 +119,7 @@ a:hover {
   outline: none;
 }
 
-.visualmente-oculto {
+.visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -132,7 +132,7 @@ a:hover {
 }
 
 /* Saltar al contenido: primer tabulable, visible al recibir el foco. */
-.saltar {
+.skip-link {
   position: absolute;
   left: var(--espacio-4);
   top: var(--espacio-2);
@@ -142,13 +142,13 @@ a:hover {
   border-radius: var(--radio-s);
 }
 
-.saltar:focus {
+.skip-link:focus {
   transform: none;
 }
 
 /* Estructura */
-.cabecera,
-.pie,
+.site-header,
+.site-footer,
 main {
   width: 100%;
   max-width: var(--ancho-pagina);
@@ -156,7 +156,7 @@ main {
   padding-inline: var(--espacio-4);
 }
 
-.cabecera {
+.site-header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -165,7 +165,7 @@ main {
   padding-block: var(--espacio-4);
 }
 
-.marca {
+.brand {
   font-weight: var(--peso-fuerte);
   color: var(--color-texto);
   text-decoration: none;
@@ -174,7 +174,7 @@ main {
   min-height: var(--tactil-minimo);
 }
 
-.navegacion ul {
+.site-nav ul {
   display: flex;
   gap: var(--espacio-2);
   list-style: none;
@@ -182,7 +182,7 @@ main {
   padding: 0;
 }
 
-.navegacion a {
+.site-nav a {
   display: inline-flex;
   align-items: center;
   min-height: var(--tactil-minimo);
@@ -197,7 +197,7 @@ main:focus {
   outline: none;
 }
 
-.pie {
+.site-footer {
   display: flex;
   flex-direction: column;
   gap: var(--espacio-2);
@@ -207,14 +207,14 @@ main:focus {
   color: var(--color-texto-suave);
 }
 
-.pie a {
+.site-footer a {
   display: inline-flex;
   align-items: center;
   min-height: var(--tactil-minimo);
 }
 
 @media (min-width: 48em) {
-  .pie {
+  .site-footer {
     flex-direction: row;
     align-items: center;
     gap: var(--espacio-6);
@@ -222,8 +222,8 @@ main:focus {
 }
 
 /* Avisos y errores: el color va en el borde y el icono; el texto, en --color-texto. */
-.aviso,
-.resumen-errores {
+.notice,
+.error-summary {
   border: var(--borde-grueso) solid var(--color-borde);
   border-radius: var(--radio-m);
   background: var(--color-superficie);
@@ -231,69 +231,69 @@ main:focus {
   margin-bottom: var(--espacio-6);
 }
 
-.aviso {
+.notice {
   display: flex;
   gap: var(--espacio-2);
 }
 
-.aviso p {
+.notice p {
   margin: 0;
 }
 
-.aviso-exito {
+.notice-success {
   border-color: var(--color-exito);
 }
 
-.aviso-exito .icono {
+.notice-success .icon {
   color: var(--color-exito);
 }
 
-.aviso-info {
+.notice-info {
   border-color: var(--color-primario);
 }
 
-.resumen-errores {
+.error-summary {
   border-color: var(--color-error);
 }
 
-.resumen-errores h2 {
+.error-summary h2 {
   margin-bottom: var(--espacio-2);
 }
 
-.resumen-errores ul {
+.error-summary ul {
   margin: 0;
   padding-left: var(--espacio-6);
 }
 
-.resumen-errores li a {
+.error-summary li a {
   display: inline-block;
   padding-block: var(--espacio-3);
   /* `break-word` no reduce el ancho mínimo de un inline-block; `anywhere` sí (C44). */
   overflow-wrap: anywhere;
 }
 
-.resumen-errores p {
+.error-summary p {
   margin: 0;
 }
 
-.error-campo {
+.field-error {
   margin: 0 0 var(--espacio-2);
   color: var(--color-texto);
   font-weight: var(--peso-fuerte);
 }
 
-.error-campo .icono {
+.field-error .icon {
   color: var(--color-error);
   margin-right: var(--espacio-1);
 }
 
 /* Formularios */
-.tarjeta {
+.card {
   width: 100%;
 }
 
 @media (min-width: 48em) {
-  .tarjeta {
+  .card {
     max-width: var(--ancho-formulario);
     margin-inline: auto;
     border: var(--borde-fino) solid var(--color-borde-suave);
@@ -302,21 +302,21 @@ main:focus {
   }
 }
 
-.campo,
-.fecha,
-.casilla-bloque {
+.field,
+.birth-date,
+.checkbox-block {
   margin: 0 0 var(--espacio-6);
 }
 
-.campo label,
-.fecha legend,
-.fecha label {
+.field label,
+.birth-date legend,
+.birth-date label {
   display: block;
   font-weight: var(--peso-fuerte);
   margin-bottom: var(--espacio-1);
 }
 
-.ayuda {
+.help {
   color: var(--color-texto-suave);
   margin: 0 0 var(--espacio-2);
 }
@@ -339,42 +339,42 @@ input[aria-invalid='true'] {
   border: var(--borde-grueso) solid var(--color-error);
 }
 
-.control-contrasena {
+.password-control {
   display: flex;
   flex-wrap: wrap;
   gap: var(--espacio-2);
 }
 
-.control-contrasena input {
+.password-control input {
   flex: 1 1 12rem;
 }
 
-.fecha {
+.birth-date {
   border: 0;
   padding: 0;
   min-width: 0;
 }
 
-.fecha legend {
+.birth-date legend {
   padding: 0;
 }
 
 /* Una fila con texto normal; con el texto ampliado, se parte en líneas en vez de desbordar. */
-.fecha-partes {
+.birth-date-parts {
   display: flex;
   flex-wrap: wrap;
   gap: var(--espacio-2);
 }
 
-.fecha-partes .parte input {
+.birth-date-parts .date-part input {
   width: var(--ancho-dia);
 }
 
-.fecha-partes .parte-anio input {
+.birth-date-parts .date-part-year input {
   width: var(--ancho-anio);
 }
 
-.casilla {
+.checkbox {
   display: flex;
   align-items: flex-start;
   gap: var(--espacio-3);
@@ -383,7 +383,7 @@ input[aria-invalid='true'] {
   cursor: pointer;
 }
 
-.casilla input {
+.checkbox input {
   flex: none;
   width: var(--casilla);
   height: var(--casilla);
@@ -391,24 +391,24 @@ input[aria-invalid='true'] {
   accent-color: var(--color-primario);
 }
 
-.casilla input[aria-invalid='true'] {
+.checkbox input[aria-invalid='true'] {
   outline: var(--borde-grueso) solid var(--color-error);
   outline-offset: var(--foco-margen);
 }
 
-.enlace-bloque {
+.block-link {
   display: inline-flex;
   align-items: center;
   min-height: var(--tactil-minimo);
 }
 
 /* Separación entre objetivos táctiles (UX §6): la fila de la casilla y el enlace de debajo. */
-.casilla + .enlace-bloque {
+.checkbox + .block-link {
   margin-top: var(--espacio-2);
 }
 
 /* Botones */
-.acciones {
+.actions {
   display: flex;
   flex-direction: column;
   gap: var(--espacio-2);
@@ -416,14 +416,14 @@ input[aria-invalid='true'] {
 }
 
 @media (min-width: 30em) {
-  .acciones {
+  .actions {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
   }
 }
 
-.boton {
+.button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -444,59 +444,59 @@ input[aria-invalid='true'] {
 }
 
 @media (min-width: 30em) {
-  .boton {
+  .button {
     width: auto;
   }
 }
 
-.boton-primario {
+.button-primary {
   background: var(--color-primario);
   border-color: var(--color-primario);
   color: var(--color-sobre-primario);
 }
 
-.boton-primario:hover {
+.button-primary:hover {
   background: var(--color-primario-hover);
   border-color: var(--color-primario-hover);
   color: var(--color-sobre-primario);
 }
 
-.boton-secundario {
+.button-secondary {
   background: var(--color-fondo);
   border-color: var(--color-primario);
   color: var(--color-primario);
 }
 
-.boton-secundario:hover {
+.button-secondary:hover {
   border-color: var(--color-primario-hover);
   color: var(--color-primario-hover);
 }
 
-.boton-peligro {
+.button-danger {
   background: var(--color-error);
   border-color: var(--color-error);
   color: var(--color-sobre-primario);
 }
 
-.boton-peligro:hover {
+.button-danger:hover {
   color: var(--color-sobre-primario);
 }
 
-.boton-peligro-secundario {
+.button-danger-secondary {
   background: var(--color-fondo);
   border-color: var(--color-error);
   color: var(--color-error);
 }
 
-.boton-peligro-secundario:hover {
+.button-danger-secondary:hover {
   color: var(--color-error);
 }
 
-.boton[aria-disabled='true'] {
+.button[aria-disabled='true'] {
   cursor: progress;
 }
 
-.boton-texto {
+.button-text {
   min-height: var(--alto-control);
   padding: var(--espacio-2) var(--espacio-3);
   font: inherit;
@@ -508,33 +508,33 @@ input[aria-invalid='true'] {
 }
 
 /* Contenido */
-.pequeno {
+.small-print {
   font-size: var(--texto-pequeno);
   color: var(--color-texto-suave);
 }
 
-.seccion {
+.section {
   margin-bottom: var(--espacio-8);
 }
 
-.datos {
+.data-list {
   margin: 0;
 }
 
-.datos dt {
+.data-list dt {
   font-weight: var(--peso-fuerte);
 }
 
-.datos dd {
+.data-list dd {
   margin: 0 0 var(--espacio-3);
   overflow-wrap: anywhere;
 }
 
-.lectura {
+.prose {
   max-width: var(--ancho-lectura);
 }
 
-.borrador {
+.draft {
   border: var(--borde-grueso) solid var(--color-texto);
   border-radius: var(--radio-m);
   background: var(--color-superficie);
@@ -542,12 +542,12 @@ input[aria-invalid='true'] {
   margin-bottom: var(--espacio-6);
 }
 
-.borrador p {
+.draft p {
   margin: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .boton {
+  .button {
     transition: none;
   }
 }

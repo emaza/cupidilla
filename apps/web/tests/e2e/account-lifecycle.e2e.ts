@@ -2,11 +2,11 @@ import { expect, test } from '@playwright/test';
 import { closeDb, rowsForEmail } from './helpers/db.ts';
 import { login, logout, PASSWORD, registerAdult, uniqueEmail } from './helpers/forms.ts';
 
-// En el proyecto chromium-sin-js estos mismos tests son E-6: todo funciona sin JavaScript.
+// En el proyecto chromium-no-js estos mismos tests son E-6: todo funciona sin JavaScript.
 
 test.afterAll(closeDb);
 
-test('E-1: el registro de una persona adulta lleva a /cuenta con la sesión iniciada', async ({
+test('E-1: el registro de una persona adulta lleva a /account con la sesión iniciada', async ({
   page,
   context,
 }) => {
@@ -30,61 +30,61 @@ test('E-1: el registro de una persona adulta lleva a /cuenta con la sesión inic
   expect(await rowsForEmail(email)).toEqual({ users: 1, sessions: 1, consents: 1 });
 });
 
-test('E-2: salir, volver a la ruta pedida y rechazar un «siguiente» externo', async ({ page }) => {
+test('E-2: salir, volver a la ruta pedida y rechazar un «next» externo', async ({ page }) => {
   const email = await registerAdult(page);
 
   await logout(page);
   await expect(page.getByRole('status')).toHaveText(/Has cerrado sesión\./);
 
-  await page.goto('/cuenta');
-  await expect(page).toHaveURL('/entrar?siguiente=/cuenta');
+  await page.goto('/account');
+  await expect(page).toHaveURL('/login?next=/account');
   await expect(page.getByText('Entra para ver esa página.')).toBeVisible();
   await login(page, email);
-  await expect(page).toHaveURL('/cuenta');
+  await expect(page).toHaveURL('/account');
 
   for (const next of ['https://otro.sitio', '//otro.sitio']) {
     await logout(page);
-    await page.goto(`/entrar?siguiente=${encodeURIComponent(next)}`);
+    await page.goto(`/login?next=${encodeURIComponent(next)}`);
     await login(page, email);
-    await expect(page).toHaveURL('/cuenta');
+    await expect(page).toHaveURL('/account');
   }
 
   await logout(page);
-  await page.goto('/cuenta/eliminar');
-  await expect(page).toHaveURL('/entrar?siguiente=/cuenta/eliminar');
+  await page.goto('/account/delete');
+  await expect(page).toHaveURL('/login?next=/account/delete');
   await login(page, email);
-  await expect(page).toHaveURL('/cuenta/eliminar');
+  await expect(page).toHaveURL('/account/delete');
 });
 
 test('E-3: entrar, y un error de credenciales no dice qué dato falla', async ({ page }) => {
   const email = await registerAdult(page);
   await logout(page);
 
-  await page.goto('/entrar');
+  await page.goto('/login');
   await login(page, email, 'contraseña equivocada');
   await expect(page.getByText('Correo o contraseña incorrectos.')).toBeVisible();
   await expect(page).toHaveTitle('Error: Entrar — Cupidilla');
   await expect(page.getByLabel('Correo electrónico')).toHaveValue(email);
   await expect(page.getByLabel('Contraseña', { exact: true })).toHaveValue('');
-  const wrongPassword = await page.locator('.resumen-errores').innerText();
+  const wrongPassword = await page.locator('.error-summary').innerText();
 
-  await page.goto('/entrar');
+  await page.goto('/login');
   await login(page, uniqueEmail(), PASSWORD);
-  await expect(page.locator('.resumen-errores')).toHaveText(wrongPassword);
+  await expect(page.locator('.error-summary')).toHaveText(wrongPassword);
 
-  await page.goto('/entrar');
+  await page.goto('/login');
   await login(page, email);
-  await expect(page).toHaveURL('/cuenta');
+  await expect(page).toHaveURL('/account');
 });
 
 test('E-4: eliminar la cuenta pide la contraseña y no deja nada', async ({ page }) => {
   const email = await registerAdult(page);
 
   await page.getByRole('link', { name: 'Eliminar mi cuenta' }).click();
-  await expect(page).toHaveURL('/cuenta/eliminar');
+  await expect(page).toHaveURL('/account/delete');
   await page.getByLabel('Contraseña', { exact: true }).fill('contraseña equivocada');
   await page.getByRole('button', { name: 'Eliminar mi cuenta definitivamente' }).click();
-  await expect(page.locator('#error-contrasena')).toContainText(
+  await expect(page.locator('#password-error')).toContainText(
     'La contraseña no es correcta. No hemos borrado nada.',
   );
   await expect(page.getByLabel('Contraseña', { exact: true })).toHaveValue('');
@@ -92,12 +92,12 @@ test('E-4: eliminar la cuenta pide la contraseña y no deja nada', async ({ page
 
   await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Eliminar mi cuenta definitivamente' }).click();
-  await expect(page).toHaveURL('/?aviso=cuenta-eliminada');
+  await expect(page).toHaveURL('/?notice=account-deleted');
   await expect(page.getByRole('status')).toHaveText(
     /Tu cuenta se ha eliminado\. Hemos borrado tus datos y cerrado tu sesión\./,
   );
 
-  await page.goto('/entrar');
+  await page.goto('/login');
   await login(page, email);
   await expect(page.getByText('Correo o contraseña incorrectos.')).toBeVisible();
   expect(await rowsForEmail(email)).toEqual({ users: 0, sessions: 0, consents: 0 });

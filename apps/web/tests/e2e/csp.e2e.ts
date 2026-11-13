@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { registerAdult } from './helpers/forms.ts';
 
-test('E-8: no hay violaciones de CSP en /, /registro ni /cuenta', async ({ page }) => {
+test('E-8: no hay violaciones de CSP en /, /register ni /account', async ({ page }) => {
   const violations: string[] = [];
   page.on('console', (message) => {
     const text = message.text();
@@ -9,7 +9,7 @@ test('E-8: no hay violaciones de CSP en /, /registro ni /cuenta', async ({ page 
   });
   page.on('pageerror', (error) => violations.push(error.message));
 
-  const responses = [await page.goto('/'), await page.goto('/registro')];
+  const responses = [await page.goto('/'), await page.goto('/register')];
   for (const response of responses) {
     expect(response?.headers()['content-security-policy']).toContain("script-src 'self'");
   }

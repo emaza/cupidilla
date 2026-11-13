@@ -50,14 +50,14 @@ const guardRoutes: Handle = async ({ event, resolve }) => {
   const routeId = event.route.id ?? '';
   const { user, sessionUnavailable } = event.locals;
 
-  if (routeId.startsWith('/(privado)') && !user && !sessionUnavailable) {
-    // Al enviar un formulario con la sesión caducada se vuelve a /cuenta (UX §1.7).
+  if (routeId.startsWith('/(private)') && !user && !sessionUnavailable) {
+    // Al enviar un formulario con la sesión caducada se vuelve a /account (UX §1.7).
     const next =
       event.request.method === 'GET' ? safeReturnPath(event.url.pathname) : DEFAULT_RETURN_PATH;
-    redirect(303, `/entrar?siguiente=${next}`);
+    redirect(303, `/login?next=${next}`);
   }
-  if (routeId.startsWith('/(invitado)') && user) {
-    redirect(303, '/cuenta');
+  if (routeId.startsWith('/(guest)') && user) {
+    redirect(303, '/account');
   }
   return resolve(event);
 };

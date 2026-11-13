@@ -27,7 +27,7 @@ test.afterEach(() => {
   proxy.setFault('POST /users/me/deletion', null);
 });
 
-test('[QA-3] registro incierto: el enlace a /entrar lleva rel="noopener", target=_blank y nada en la URL', async ({
+test('[QA-3] registro incierto: el enlace a /login lleva rel="noopener", target=_blank y nada en la URL', async ({
   browser,
   javaScriptEnabled,
 }) => {
@@ -37,7 +37,7 @@ test('[QA-3] registro incierto: el enlace a /entrar lleva rel="noopener", target
   proxy.setFault('POST /auth/register', 'cut');
   await fillRegister(page, { email });
 
-  const link = page.locator('main > .resumen-errores a');
+  const link = page.locator('main > .error-summary a');
   await expect(link).toHaveCount(1);
   await expect(link).toHaveAttribute('target', '_blank');
   const rel = (await link.getAttribute('rel')) ?? '';
@@ -48,7 +48,7 @@ test('[QA-3] registro incierto: el enlace a /entrar lleva rel="noopener", target
   expect(decodeURIComponent(href)).not.toContain(email);
   // El enlace va después del texto, dentro del bloque de alerta.
   const order = await page.evaluate(() => {
-    const block = document.querySelector('main > .resumen-errores');
+    const block = document.querySelector('main > .error-summary');
     const kids = [...(block?.children ?? [])].map(
       (el) => el.tagName + (el.querySelector('a') ? '+a' : ''),
     );
@@ -62,28 +62,28 @@ test('[QA-3] registro incierto: el enlace a /entrar lleva rel="noopener", target
   await context.close();
 });
 
-test('[QA-3] borrado incierto: el enlace a /cuenta es de la misma pestaña, sin target y recarga completa', async ({
+test('[QA-3] borrado incierto: el enlace a /account es de la misma pestaña, sin target y recarga completa', async ({
   browser,
   javaScriptEnabled,
 }) => {
   const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
   const page = await context.newPage();
   await fillRegister(page, { email: uniqueEmail() });
-  await expect(page).toHaveURL('/cuenta');
-  await page.goto('/cuenta/eliminar');
+  await expect(page).toHaveURL('/account');
+  await page.goto('/account/delete');
   proxy.setFault('POST /users/me/deletion', 'cut');
   await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Eliminar mi cuenta definitivamente' }).click();
 
-  const link = page.locator('main > .resumen-errores a');
+  const link = page.locator('main > .error-summary a');
   await expect(link).toHaveCount(1);
   await expect(link).toHaveText('Ir a mi cuenta para comprobarlo');
   await expect(link).not.toHaveAttribute('target', /.+/);
   await expect(link).toHaveAttribute('data-sveltekit-reload', /.*/);
-  // Pasar el ratón por encima no debe dejar datos de /cuenta precargados: se comprueba que, al
-  // pulsar, el servidor ve la petición de /cuenta (la cuenta ya se borró: lleva a /entrar).
+  // Pasar el ratón por encima no debe dejar datos de /account precargados: se comprueba que, al
+  // pulsar, el servidor ve la petición de /account (la cuenta ya se borró: lleva a /login).
   await link.hover();
   await link.click();
-  await expect(page).toHaveURL(/\/entrar/);
+  await expect(page).toHaveURL(/\/login/);
   await context.close();
 });

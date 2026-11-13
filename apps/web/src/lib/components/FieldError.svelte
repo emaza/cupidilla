@@ -12,8 +12,8 @@
   let { id, text, children }: Props = $props();
 </script>
 
-<p {id} class="error-campo">
-  <span class="visualmente-oculto">{t('comun.error.prefijo_oculto')}</span>
-  <span class="icono" aria-hidden="true">⚠</span>
+<p {id} class="field-error">
+  <span class="visually-hidden">{t('comun.error.prefijo_oculto')}</span>
+  <span class="icon" aria-hidden="true">⚠</span>
   {#if children}{@render children()}{:else}{text}{/if}
 </p>

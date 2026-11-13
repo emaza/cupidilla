@@ -10,7 +10,7 @@ describe('W-2: parseBirthDateParts', () => {
     expect(parseBirthDateParts('31', '2', '2000')).toEqual({
       ok: false,
       problem: 'nonexistent',
-      invalidParts: ['dia', 'mes', 'anio'],
+      invalidParts: ['day', 'month', 'year'],
     });
   });
 
@@ -18,7 +18,7 @@ describe('W-2: parseBirthDateParts', () => {
     expect(parseBirthDateParts('0', '5', '1990')).toEqual({
       ok: false,
       problem: 'day',
-      invalidParts: ['dia'],
+      invalidParts: ['day'],
     });
   });
 
@@ -26,7 +26,7 @@ describe('W-2: parseBirthDateParts', () => {
     expect(parseBirthDateParts('12', '13', '1990')).toEqual({
       ok: false,
       problem: 'month',
-      invalidParts: ['mes'],
+      invalidParts: ['month'],
     });
   });
 
@@ -39,7 +39,7 @@ describe('W-2: parseBirthDateParts', () => {
     expect(parseBirthDateParts('', ' ', '')).toEqual({
       ok: false,
       problem: 'empty',
-      invalidParts: ['dia', 'mes', 'anio'],
+      invalidParts: ['day', 'month', 'year'],
     });
   });
 
@@ -47,7 +47,7 @@ describe('W-2: parseBirthDateParts', () => {
     expect(parseBirthDateParts('', 'x', '1990')).toEqual({
       ok: false,
       problem: 'day',
-      invalidParts: ['dia', 'mes'],
+      invalidParts: ['day', 'month'],
     });
   });
 

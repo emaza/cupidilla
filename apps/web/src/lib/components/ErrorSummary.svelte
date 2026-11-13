@@ -10,7 +10,7 @@
 
   interface GeneralLink {
     /** Página de destino, sin «/». */
-    route: 'entrar' | 'cuenta';
+    route: 'login' | 'account';
     text: string;
     /** Se abre en pestaña nueva y lo anuncia con `comun.nueva_pestana`. */
     newTab?: boolean;
@@ -36,13 +36,13 @@
 
 {#if items.length > 0 || general}
   <div
-    class="resumen-errores"
+    class="error-summary"
     tabindex="-1"
     role={general ? 'alert' : undefined}
-    aria-labelledby="resumen-errores-titulo"
-    data-foco-resultado
+    aria-labelledby="error-summary-title"
+    data-result-focus
   >
-    <h2 id="resumen-errores-titulo">{t('comun.error.resumen_titulo')}</h2>
+    <h2 id="error-summary-title">{t('comun.error.resumen_titulo')}</h2>
     {#if items.length > 0}
       <ul>
         {#each items as item (item.target)}

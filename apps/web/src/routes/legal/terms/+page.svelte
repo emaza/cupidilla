@@ -7,4 +7,4 @@
 <!-- El <title>, el aviso de borrador y la versión los pone el propio texto legal. -->
 <Terms />
 
-<p><a class="enlace-bloque" href={resolve('')}>{t('comun.boton.volver_inicio')}</a></p>
+<p><a class="block-link" href={resolve('')}>{t('comun.boton.volver_inicio')}</a></p>

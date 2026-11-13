@@ -33,7 +33,7 @@ export const load: PageServerLoad = async (event) => {
   }
   if (!result || result.status === 401) {
     clearSessionCookie(event.cookies);
-    redirect(303, '/entrar?siguiente=/cuenta');
+    redirect(303, '/login?next=/account');
   }
   // Sin JavaScript, tras un fallo al salir la página se vuelve a pintar: se muestra el aviso
   // de error aunque no se puedan cargar los datos. En una visita normal, página de error.
@@ -42,7 +42,7 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions = {
-  salir: async (event) => {
+  logout: async (event) => {
     const token = event.locals.sessionToken;
     const result = token ? await api.logout(event, token) : null;
 
@@ -51,8 +51,8 @@ export const actions = {
       clearSessionCookie(event.cookies);
       event.locals.user = null;
       event.locals.sessionToken = null;
-      redirect(303, '/?aviso=sesion-cerrada');
+      redirect(303, '/?notice=signed-out');
     }
-    return fail(503, { general: errorMessages.salir[result.error.code] });
+    return fail(503, { general: errorMessages.logout[result.error.code] });
   },
 } satisfies Actions;

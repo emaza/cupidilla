@@ -19,23 +19,23 @@
   });
 
   const describedBy = $derived(
-    [help ? 'ayuda-contrasena' : '', error ? 'error-contrasena' : ''].filter(Boolean).join(' ') ||
+    [help ? 'password-help' : '', error ? 'password-error' : ''].filter(Boolean).join(' ') ||
       undefined,
   );
 </script>
 
-<div class="campo">
-  <label for="contrasena">{label}</label>
+<div class="field">
+  <label for="password">{label}</label>
   {#if help}
-    <p id="ayuda-contrasena" class="ayuda">{help}</p>
+    <p id="password-help" class="help">{help}</p>
   {/if}
   {#if error}
-    <FieldError id="error-contrasena" text={error} />
+    <FieldError id="password-error" text={error} />
   {/if}
-  <div class="control-contrasena">
+  <div class="password-control">
     <input
-      id="contrasena"
-      name="contrasena"
+      id="password"
+      name="password"
       type={visible === true ? 'text' : 'password'}
       {autocomplete}
       autocapitalize="none"
@@ -46,8 +46,8 @@
     {#if visible !== null}
       <button
         type="button"
-        class="boton-texto"
-        aria-controls="contrasena"
+        class="button-text"
+        aria-controls="password"
         onclick={() => (visible = !visible)}
       >
         {visible ? t('comun.contrasena.ocultar') : t('comun.contrasena.mostrar')}
