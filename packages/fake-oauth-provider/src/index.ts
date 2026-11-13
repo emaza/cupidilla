@@ -102,6 +102,16 @@ const escapeHtml = (value: string): string =>
 const isScenario = (value: string): value is FakeScenario =>
   (FAKE_SCENARIOS as readonly string[]).includes(value);
 
+/**
+ * Identificador por defecto: estable para un mismo proveedor y correo, como el `sub` de una
+ * cuenta real; sin correo, uno nuevo cada vez.
+ */
+export function subjectFor(provider: FakeProviderName, email: string): string {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return base64url(randomBytes(9));
+  return `fake-${createHash('sha256').update(`${provider}:${normalized}`).digest('base64url').slice(0, 16)}`;
+}
+
 async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(chunk as Buffer);
@@ -208,7 +218,8 @@ export async function startFakeOAuthProvider(options: FakeProviderOptions): Prom
 <h1>${title}</h1>
 <form method="POST">
 ${hidden}
-<p><label for="sub">Identificador</label> <input id="sub" name="sub" value="${base64url(randomBytes(9))}"></p>
+<p><label for="sub">Identificador</label> <input id="sub" name="sub" aria-describedby="sub-help"></p>
+<p id="sub-help">Vacío: se calcula a partir del correo, así que el mismo correo es siempre la misma cuenta.</p>
 <p><label for="email">Correo</label> <input id="email" name="email" type="email"></p>
 <p><label><input name="email_verified" type="checkbox" checked> Correo verificado</label></p>
 <p><label for="scenario">Escenario</label> <select id="scenario" name="scenario">${options}</select></p>
@@ -259,7 +270,7 @@ ${hidden}
       codeChallenge: params.get('code_challenge') ?? '',
       nonce: params.get('nonce') ?? '',
       identity: {
-        subject: form.get('sub') || base64url(randomBytes(9)),
+        subject: (form.get('sub') ?? '').trim() || subjectFor(provider, form.get('email') ?? ''),
         email: (form.get('email') ?? '').trim(),
         emailVerified: form.get('email_verified') !== null,
       },

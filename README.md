@@ -65,7 +65,7 @@ y arranca el proveedor falso en otra terminal, junto a `npm run dev`:
 npm run oauth:fake            # proveedor falso en http://127.0.0.1:4400
 ```
 
-Al pulsar «Continuar con Google» se abre su formulario: escribe un identificador y un correo, y pulsa «Autorizar» o «Cancelar». Con el mismo identificador se vuelve a entrar en la misma cuenta. El campo «Escenario» simula fallos del proveedor (`token_error`, `slow_token`, `graph_error`…). La API se niega a usar el proveedor falso con `NODE_ENV=production`, y solo lo admite en loopback.
+Al pulsar «Continuar con Google» se abre su formulario: escribe un correo y pulsa «Autorizar» o «Cancelar». Si dejas vacío el identificador, se calcula a partir del correo, así que el mismo correo es siempre la misma cuenta de Google. Para simular otra cuenta del proveedor con el mismo correo, escribe un identificador distinto. El campo «Escenario» simula fallos del proveedor (`token_error`, `slow_token`, `graph_error`…). La API se niega a usar el proveedor falso con `NODE_ENV=production`, y solo lo admite en loopback.
 
 **Con Google y Facebook reales** (solo `localhost`). Crea las apps siguiendo [§15 del diseño técnico](docs/login-terceros-diseno-tecnico.md#15-pasos-del-ceo-en-google-y-meta-solo-localhost), con estas *redirect URI* exactas (sin barra final, con `localhost` y no `127.0.0.1`):
 

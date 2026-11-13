@@ -233,3 +233,21 @@ describe('Facebook: canje y Graph', () => {
     expect((await me(await accessToken('fb@example.com', 'graph_error'))).status).toBe(500);
   });
 });
+
+describe('identificador por defecto', () => {
+  it('vacío: el mismo proveedor y el mismo correo dan siempre el mismo subject', async () => {
+    const subjects: string[] = [];
+    for (const email of ['Admin@Dev.Local', 'admin@dev.local']) {
+      const codeVerifier = verifier();
+      const callback = await completeFakeAuthorization(googleAuthorization(codeVerifier), {
+        subject: '',
+        email,
+      });
+      const response = await googleToken(callback.searchParams.get('code') ?? '', codeVerifier);
+      const body = (await response.json()) as { id_token: string };
+      subjects.push(decodeJwt(body.id_token).sub as string);
+    }
+    expect(subjects[0]).toMatch(/^fake-/);
+    expect(subjects[1]).toBe(subjects[0]);
+  });
+});
