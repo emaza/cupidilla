@@ -311,13 +311,11 @@ describe('/account: reautenticar, añadir y quitar proveedores (fase 5)', () => 
     it('con contraseña → 204; no cierra la sesión', async () => {
       const user = await registerUser(t.app);
       const linked = await runFlow(t.app, { identity: { email: user.email } });
-      const joined = await api(t.app)
-        .post('/auth/oauth/link')
-        .send({
-          pendingToken: linked.response.body.pending.token,
-          email: user.email,
-          password: user.password,
-        });
+      const joined = await api(t.app).post('/auth/oauth/link').send({
+        pendingToken: linked.response.body.pending.token,
+        email: user.email,
+        password: user.password,
+      });
       expect(joined.status).toBe(200);
       const response = await authed(user.token).post('/users/me/identities/google/removal');
       expect(response.status).toBe(204);

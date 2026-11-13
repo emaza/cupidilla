@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { AccountResponse, PublicUser } from '@cupidilla/contracts';
-import { eq } from 'drizzle-orm';
-import { markSessionAuthenticated } from '../auth/recent-auth.js';
+import { and, eq, isNull } from 'drizzle-orm';
+import { assertRecent, markSessionAuthenticated } from '../auth/recent-auth.js';
 import { ApiException } from '../common/errors/api.exception.js';
 import { Clock } from '../common/clock.js';
 import type { ActiveSession } from '../common/decorators/current-session.decorator.js';
@@ -99,6 +99,26 @@ export class UsersService {
       },
       session: { authenticatedAt: session.authenticatedAt.toISOString() },
     };
+  }
+
+  /**
+   * POST /users/me/password (§9.5): crea la contraseña de una cuenta que no tiene. Una sola
+   * sentencia atómica: si ya había contraseña (otra pestaña), 409. No cierra otras sesiones ni
+   * cambia `authenticated_at` (T17).
+   */
+  async createPassword(session: ActiveSession, password: string): Promise<void> {
+    assertRecent(session, this.clock.now());
+    // El hash va fuera de cualquier transacción.
+    const passwordHash = await this.passwords.hash(password);
+    const updated = await this.db
+      .update(users)
+      .set({ passwordHash, updatedAt: this.clock.now() })
+      .where(and(eq(users.id, session.userId), isNull(users.passwordHash)))
+      .returning({ id: users.id });
+    if (updated.length === 0) {
+      throw new ApiException('PASSWORD_ALREADY_SET', 409, undefined, 'Password already set');
+    }
+    this.logger.log({ event: 'password_created' });
   }
 
   /**
