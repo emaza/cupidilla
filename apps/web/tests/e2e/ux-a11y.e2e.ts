@@ -248,6 +248,9 @@ test('C38: registrarse, salir y eliminar la cuenta solo con el teclado, sin tram
     'Saltar al contenido',
     'Cupidilla',
     'Mi cuenta',
+    // «Formas de entrar»: con la sesión recién creada, los botones para añadir un proveedor.
+    'Continuar con Google',
+    'Continuar con Facebook',
     'Cerrar sesión',
     'Eliminar mi cuenta',
     'Condiciones de uso',

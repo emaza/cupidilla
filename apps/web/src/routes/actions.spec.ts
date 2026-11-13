@@ -312,7 +312,7 @@ describe('/account: salir (acuerdo A14)', () => {
 describe('/account/delete', () => {
   const signedIn = { user: { id: 'u', email: 'ana@example.com' }, sessionToken: 'T'.repeat(43) };
   const submit = (password = 'una frase larga') =>
-    run(() => deletePage.actions.default(formEvent({ password }, signedIn)) as Promise<unknown>);
+    run(() => deletePage.actions.password(formEvent({ password }, signedIn)) as Promise<unknown>);
 
   it('contraseña vacía: error de campo y no llama a la API', async () => {
     const { result } = await submit('');

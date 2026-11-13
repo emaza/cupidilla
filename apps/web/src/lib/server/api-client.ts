@@ -10,6 +10,7 @@ import {
   sessionResponseSchema,
   type AccountResponse,
   type AuthResponse,
+  type CreatePasswordRequest,
   type DeleteAccountRequest,
   type FieldError,
   type LoginRequest,
@@ -19,10 +20,12 @@ import {
   type OAuthLinkRequest,
   type OAuthProvider,
   type OAuthProvidersResponse,
+  type OAuthSessionStartRequest,
   type OAuthSignupRequest,
   type OAuthStartRequest,
   type OAuthStartResponse,
   type PendingIdentityResponse,
+  type ReauthenticateRequest,
   type RegisterRequest,
   type SessionResponse,
 } from '@cupidilla/contracts';
@@ -291,6 +294,59 @@ export const api = {
       body,
       schema: oauthAuthResponseSchema,
       nonIdempotent: true,
+    }),
+
+  oauthSessionStart: (
+    event: RequestEvent,
+    token: string,
+    provider: OAuthProvider,
+    body: OAuthSessionStartRequest,
+  ): Promise<ApiResult<OAuthStartResponse>> =>
+    request(event, {
+      method: 'POST',
+      path: `/users/me/oauth/${provider}/authorization`,
+      token,
+      body,
+      schema: oauthStartResponseSchema,
+    }),
+
+  reauthenticate: (
+    event: RequestEvent,
+    token: string,
+    body: ReauthenticateRequest,
+  ): Promise<ApiResult<void>> =>
+    request(event, {
+      method: 'POST',
+      path: '/users/me/reauthentication',
+      token,
+      body,
+      expectStatus: 204,
+    }),
+
+  createPassword: (
+    event: RequestEvent,
+    token: string,
+    body: CreatePasswordRequest,
+  ): Promise<ApiResult<void>> =>
+    request(event, {
+      method: 'POST',
+      path: '/users/me/password',
+      token,
+      body,
+      nonIdempotent: true,
+      expectStatus: 204, // users.controller.ts: @HttpCode(204)
+    }),
+
+  removeIdentity: (
+    event: RequestEvent,
+    token: string,
+    provider: OAuthProvider,
+  ): Promise<ApiResult<void>> =>
+    request(event, {
+      method: 'POST',
+      path: `/users/me/identities/${provider}/removal`,
+      token,
+      expectStatus: 204,
     }),
 };
 

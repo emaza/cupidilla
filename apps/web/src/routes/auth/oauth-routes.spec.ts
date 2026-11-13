@@ -8,6 +8,12 @@ const api = vi.hoisted(() => ({
   oauthCancelPending: vi.fn(),
   oauthSignup: vi.fn(),
   oauthLink: vi.fn(),
+  oauthSessionStart: vi.fn(),
+  removeIdentity: vi.fn(),
+  createPassword: vi.fn(),
+  reauthenticate: vi.fn(),
+  deleteAccount: vi.fn(),
+  account: vi.fn(),
 }));
 vi.mock('#lib/server/api-client.ts', () => ({ api }));
 
@@ -15,6 +21,9 @@ const start = await import('./[provider=provider]/+server.ts');
 const back = await import('./[provider=provider]/callback/+server.ts');
 const complete = await import('../(guest)/register/complete/+page.server.ts');
 const linkPage = await import('../(guest)/login/link/+page.server.ts');
+const accountPage = await import('../(private)/account/+page.server.ts');
+const passwordPage = await import('../(private)/account/password/+page.server.ts');
+const deletePage = await import('../(private)/account/delete/+page.server.ts');
 
 interface CookieJar {
   values: Map<string, string>;
@@ -51,7 +60,10 @@ function event<E>(options: {
     params: { provider: 'google' },
     url: new URL(options.url ?? 'http://localhost/'),
     cookies: options.cookies ?? jar(),
-    locals: { user: options.user ?? null, sessionToken: null },
+    locals: {
+      user: options.user ?? null,
+      sessionToken: options.user ? SESSION : null,
+    },
     request: { method: options.method ?? 'POST', formData: () => Promise.resolve(data) },
     setHeaders: vi.fn(),
     getClientAddress: () => '127.0.0.1',
@@ -141,7 +153,7 @@ describe('POST /auth/{provider}: empezar', () => {
     );
     api.oauthStart.mockResolvedValue(failure(429, 'RATE_LIMITED'));
     expect((await run(() => start.POST(event({ form: { from: 'login' } })))).location).toBe(
-      '/login?error=rate-limited&provider=google',
+      '/login?error=rate-limited',
     );
   });
 
@@ -444,5 +456,136 @@ describe('/login/link', () => {
       '/login?notice=link-cancelled',
     );
     expect(api.oauthCancelPending).toHaveBeenCalledWith(expect.anything(), PENDING);
+  });
+});
+
+describe('/account: formas de entrar (fase 5)', () => {
+  const signedIn = { id: 'u' };
+
+  it('POST /auth/{provider} desde /account: con sesión, pide el flujo con sesión y next', async () => {
+    api.oauthSessionStart.mockResolvedValue(
+      ok(
+        { authorizationUrl: 'https://www.facebook.com/x', flowToken: FLOW, expiresAt: EXPIRES },
+        201,
+      ),
+    );
+    const cookies = jar();
+    const result = await run(() =>
+      start.POST(
+        event({
+          cookies,
+          user: signedIn,
+          form: { from: 'account', intent: 'connect', next: '/account' },
+        }),
+      ),
+    );
+    expect(result.location).toBe('https://www.facebook.com/x');
+    expect(api.oauthSessionStart).toHaveBeenCalledWith(expect.anything(), SESSION, 'google', {
+      purpose: 'connect',
+      returnPath: '/account',
+    });
+    expect(cookies.values.get('cupidilla_oauth')).toBe(FLOW);
+  });
+
+  it('desde /account sin sesión → /login?next; con la sesión envejecida → reauth-required', async () => {
+    expect(
+      (
+        await run(() =>
+          start.POST(
+            event({ form: { from: 'account', intent: 'reauthenticate', next: '/account/delete' } }),
+          ),
+        )
+      ).location,
+    ).toBe('/login?next=/account/delete');
+    api.oauthSessionStart.mockResolvedValue(failure(403, 'REAUTHENTICATION_REQUIRED'));
+    expect(
+      (
+        await run(() =>
+          start.POST(
+            event({
+              user: signedIn,
+              form: { from: 'account', intent: 'connect', next: '/account' },
+            }),
+          ),
+        )
+      ).location,
+    ).toBe('/account?error=reauth-required');
+    await expect(
+      start.POST(event({ user: signedIn, form: { from: 'account', intent: 'otra' } })),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('quitar: 204 → unlinked; 409 → last-method; otro error → error general con el proveedor', async () => {
+    const remove = () =>
+      run(() =>
+        accountPage.actions.removeIdentity(
+          event({ user: signedIn, form: { provider: 'facebook' } }),
+        ),
+      );
+    api.removeIdentity.mockResolvedValue({ ok: true, status: 204, data: undefined });
+    expect((await remove()).location).toBe('/account?notice=unlinked&provider=facebook');
+    api.removeIdentity.mockResolvedValue(failure(409, 'LAST_SIGN_IN_METHOD'));
+    expect((await remove()).location).toBe('/account?error=last-method&provider=facebook');
+    api.removeIdentity.mockResolvedValue(failure(503, 'API_UNAVAILABLE'));
+    expect((await remove()).response).toMatchObject({
+      status: 503,
+      data: { removeFailed: 'facebook' },
+    });
+  });
+
+  it('confirmar con la contraseña en /account: acierto → reauthenticated; error → en el campo', async () => {
+    const confirm = (password: string) =>
+      run(() => accountPage.actions.reauthenticate(event({ user: signedIn, form: { password } })));
+    expect((await confirm('')).response).toMatchObject({
+      data: { reauthenticate: { password: 'verificar.error.contrasena_vacia' } },
+    });
+    api.reauthenticate.mockResolvedValue({ ok: true, status: 204, data: undefined });
+    expect((await confirm('una frase larga')).location).toBe('/account?notice=reauthenticated');
+    api.reauthenticate.mockResolvedValue(failure(403, 'PASSWORD_INCORRECT'));
+    expect((await confirm('una frase mala')).response).toMatchObject({
+      status: 403,
+      data: { reauthenticate: { password: 'verificar.error.contrasena' } },
+    });
+  });
+
+  it('crear contraseña: validación local, éxito, sesión envejecida y ya creada', async () => {
+    const create = (password: string) =>
+      run(() => passwordPage.actions.create(event({ user: signedIn, form: { password } })));
+    expect((await create('corta')).response).toMatchObject({
+      status: 400,
+      data: { errors: { password: 'registro.error.contrasena_corta' } },
+    });
+    expect(api.createPassword).not.toHaveBeenCalled();
+    api.createPassword.mockResolvedValue({ ok: true, status: 204, data: undefined });
+    expect((await create('una frase larga')).location).toBe('/account?notice=password-created');
+    api.createPassword.mockResolvedValue(failure(403, 'REAUTHENTICATION_REQUIRED'));
+    expect((await create('una frase larga')).location).toBe(
+      '/account/password?error=reauth-required',
+    );
+    api.createPassword.mockResolvedValue(failure(409, 'PASSWORD_ALREADY_SET'));
+    expect((await create('una frase larga')).location).toBe('/account');
+    api.createPassword.mockResolvedValue(failure(503, 'OUTCOME_UNKNOWN'));
+    expect((await create('una frase larga')).response).toMatchObject({
+      data: { errors: { general: 'contrasena.error.resultado_incierto' } },
+    });
+  });
+
+  it('borrar sin contraseña: ELIMINAR en cualquier caja; otra palabra no llama a la API', async () => {
+    const confirm = (confirmation: string) =>
+      run(() => deletePage.actions.confirm(event({ user: signedIn, form: { confirmation } })));
+    expect((await confirm('borrar')).response).toMatchObject({
+      status: 400,
+      data: { errors: { fields: { confirmation: 'eliminar.error.confirmacion' } } },
+    });
+    expect(api.deleteAccount).not.toHaveBeenCalled();
+    api.deleteAccount.mockResolvedValue({ ok: true, status: 204, data: undefined });
+    expect((await confirm('  eliminar ')).location).toBe('/?notice=account-deleted');
+    expect(api.deleteAccount).toHaveBeenCalledWith(expect.anything(), SESSION, {});
+    api.deleteAccount.mockResolvedValue(failure(403, 'REAUTHENTICATION_REQUIRED'));
+    expect((await confirm('ELIMINAR')).location).toBe('/account/delete?error=reauth-required');
+    api.deleteAccount.mockResolvedValue(failure(503, 'OUTCOME_UNKNOWN'));
+    expect((await confirm('ELIMINAR')).response).toMatchObject({
+      data: { errors: { general: 'eliminar.error.resultado_incierto_proveedor' } },
+    });
   });
 });

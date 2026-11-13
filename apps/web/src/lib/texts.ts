@@ -219,6 +219,75 @@ export const texts = {
     'No sabemos si se han unido las cuentas: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, entra con {proveedor}: si llegas a tu cuenta, ya están unidas. Si vuelves a enviar este formulario y te dice que ha pasado demasiado tiempo, es que la primera vez sí se unieron.',
   'cuenta.aviso.unida':
     'Hemos unido {proveedor} a tu cuenta. Ya puedes entrar con cualquiera de tus formas de entrar.',
+  'cuenta.acceso.titulo': 'Formas de entrar',
+  'cuenta.acceso.intro': 'Estas son las formas con las que puedes entrar en tu cuenta.',
+  'cuenta.acceso.contrasena': 'Correo y contraseña',
+  'cuenta.acceso.estado_activa': 'Activa',
+  'cuenta.acceso.estado_sin_contrasena': 'No tienes contraseña',
+  'cuenta.acceso.enlace_crear_contrasena': 'Crear contraseña',
+  'cuenta.acceso.estado_unido': 'Unido el {fecha}',
+  'cuenta.acceso.estado_no_unido': 'No unido',
+  'cuenta.acceso.boton_quitar': 'Quitar {proveedor}',
+  'cuenta.acceso.boton_quitando': 'Quitando…',
+  'cuenta.acceso.ultima': 'Es tu única forma de entrar, así que no se puede quitar.',
+  'cuenta.acceso.nota':
+    'Si quitas una forma de entrar, no se borra tu cuenta de Cupidilla ni tu cuenta en ese servicio. Siempre debe quedarte al menos una.',
+  'cuenta.aviso.quitada': 'Hemos quitado {proveedor}. Ya no puedes entrar con él.',
+  'cuenta.error.ultima_forma':
+    'No hemos quitado {proveedor} porque es la única forma que tienes de entrar.',
+  'cuenta.error.quitar_servidor':
+    'Algo ha fallado por nuestra parte y no hemos podido quitar {proveedor}. Inténtalo de nuevo en unos minutos.',
+  'cuenta.error.proveedor_en_uso':
+    'Esa cuenta de {proveedor} ya está unida a otra cuenta de Cupidilla. Si es tuya, entra en esa cuenta y quítala desde allí.',
+  'cuenta.error.ya_unido':
+    'Esa cuenta de {proveedor} ya está unida a tu cuenta. No hemos hecho ningún cambio.',
+  'cuenta.error.proveedor_fallo':
+    '{proveedor} no ha respondido como esperábamos y no hemos podido completar el paso. No hemos hecho ningún cambio. Inténtalo de nuevo en unos minutos.',
+  'verificar.titulo': 'Confirma que eres tú',
+  'verificar.texto':
+    'Por seguridad, para {accion} tienes que haber entrado hace menos de {minutos} minutos. Vuelve a entrar y continuarás en esta página.',
+  'verificar.accion.eliminar': 'eliminar tu cuenta',
+  'verificar.accion.anadir': 'añadir una forma de entrar',
+  'verificar.accion.contrasena': 'crear una contraseña',
+  'verificar.campo.contrasena': 'Contraseña',
+  'verificar.boton.contrasena': 'Confirmar',
+  'verificar.boton.confirmando': 'Confirmando…',
+  'verificar.error.contrasena_vacia': 'Escribe tu contraseña para confirmar.',
+  'verificar.error.contrasena': 'La contraseña no es correcta.',
+  'verificar.aviso.confirmada': 'Listo, hemos confirmado que eres tú.',
+  'verificar.aviso.cancelado':
+    'No has continuado con {proveedor}, así que no hemos confirmado nada ni hemos hecho ningún cambio.',
+  'verificar.error.necesaria':
+    'Han pasado más de {minutos} minutos desde que entraste. Confirma que eres tú para continuar. No hemos hecho ningún cambio.',
+  'verificar.error.otra_cuenta':
+    'Has entrado con una cuenta de {proveedor} distinta de la que tienes unida a Cupidilla. Vuelve a intentarlo con la cuenta correcta.',
+  'contrasena.meta.titulo': 'Crear contraseña',
+  'contrasena.titulo': 'Crea una contraseña',
+  'contrasena.aviso.efecto':
+    'Desde este momento también podrás entrar con tu correo y tu contraseña, además de con {proveedores}. Tu cuenta de {proveedores} no cambia.',
+  'contrasena.campo.correo': 'Tu correo',
+  'contrasena.campo.contrasena': 'Contraseña',
+  'contrasena.boton.enviar': 'Crear contraseña',
+  'contrasena.boton.enviando': 'Creando contraseña…',
+  'contrasena.estado.enviando': 'Creando tu contraseña…',
+  'contrasena.enlace.cancelar': 'Cancelar',
+  'contrasena.aviso.creada':
+    'Hemos creado tu contraseña. Ya puedes entrar con tu correo y tu contraseña.',
+  'contrasena.error.servidor':
+    'Algo ha fallado por nuestra parte y no hemos podido crear tu contraseña. Inténtalo de nuevo en unos minutos.',
+  'contrasena.error.resultado_incierto':
+    'No sabemos si tu contraseña se ha creado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta: si en «Formas de entrar» pone «Correo y contraseña: Activa», ya está creada. Si no, vuelve a intentarlo.',
+  'contrasena.enlace.comprobar': 'Ir a mi cuenta para comprobarlo',
+  'eliminar.texto.alcance_proveedor':
+    'Se borrará de inmediato tu cuenta y todo lo que hemos guardado de ti: correo, fecha de nacimiento, consentimientos y las uniones con {proveedores}. No tocamos nada en tu cuenta de {proveedores}.',
+  'eliminar.texto.alcance_mixta':
+    'Se borrará de inmediato tu cuenta y todo lo que hemos guardado de ti: correo, contraseña, fecha de nacimiento, consentimientos y las uniones con {proveedores}. No tocamos nada en tu cuenta de {proveedores}.',
+  'eliminar.campo.confirmacion': 'Escribe ELIMINAR para confirmar',
+  'eliminar.ayuda.confirmacion':
+    'Como no tienes contraseña, esta es la forma de confirmar. Da igual si lo escribes en mayúsculas o en minúsculas.',
+  'eliminar.error.confirmacion': 'Escribe ELIMINAR para confirmar. No hemos borrado nada.',
+  'eliminar.error.resultado_incierto_proveedor':
+    'No sabemos si tu cuenta se ha eliminado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta. Si la ves, sigue activa y puedes volver a intentarlo. Si te pide entrar, entra con {proveedor}: si entras, la cuenta sigue activa; si Cupidilla te pide fecha de nacimiento y condiciones como si fuera la primera vez, la cuenta ya no existe. Si te dice que hay demasiados intentos o que algo ha fallado, espera unos minutos y vuelve a intentarlo: eso no dice nada sobre tu cuenta.',
 
   // 5.8 Textos para lectores de pantalla
   'a11y.error.prefijo': 'Error:',

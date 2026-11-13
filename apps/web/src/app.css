@@ -636,3 +636,48 @@ input[aria-invalid='true'] {
 .link-button:hover {
   color: var(--color-primario-hover);
 }
+
+/* «Formas de entrar» en /account (UX §3.5): una fila por forma; en móvil, la acción debajo. */
+.access-list {
+  list-style: none;
+  margin: 0 0 var(--espacio-4);
+  padding: 0;
+}
+
+.access-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  padding: var(--espacio-3) 0;
+  border-bottom: var(--borde-fino) solid var(--color-borde-suave);
+}
+
+.access-row .provider-buttons {
+  margin-bottom: 0;
+}
+
+.access-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.access-name {
+  font-weight: var(--peso-fuerte);
+}
+
+.access-state {
+  color: var(--color-texto-suave);
+}
+
+@media (min-width: 48em) {
+  .access-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.confirm-identity {
+  border-top: var(--borde-fino) solid var(--color-borde-suave);
+  padding-top: var(--espacio-4);
+}

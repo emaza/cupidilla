@@ -1,9 +1,30 @@
-import { error, redirect } from '@sveltejs/kit';
+import { error, redirect, type RequestEvent } from '@sveltejs/kit';
+import type { OAuthProvider, OAuthStartResponse } from '@cupidilla/contracts';
 import { textField } from '#lib/forms/form-data.ts';
-import { api } from '#lib/server/api-client.ts';
+import { api, type ApiResult } from '#lib/server/api-client.ts';
 import { setOAuthToken } from '#lib/server/oauth-cookie.ts';
-import { isReturnPath } from '#lib/server/return-path.ts';
+import { isReturnPath, safeReturnPath } from '#lib/server/return-path.ts';
 import type { RequestHandler } from './$types';
+
+/** Guarda el flowToken y va al proveedor; si la API falla, vuelve a `page` con el error. */
+function goToProvider(
+  event: RequestEvent,
+  provider: OAuthProvider,
+  page: string,
+  result: ApiResult<OAuthStartResponse>,
+): never {
+  if (result.ok) {
+    setOAuthToken(event.cookies, result.data.flowToken, result.data.expiresAt);
+    // La URL la construye la API con endpoints de configuración, nunca con la petición (§12.2).
+    redirect(303, result.data.authorizationUrl, { external: true });
+  }
+  if (result.status === 429) redirect(303, `${page}?error=rate-limited`);
+  // La sesión envejeció entre cargar la página y pulsar «añadir» (UX §3.5.2).
+  if (result.error.code === 'REAUTHENTICATION_REQUIRED') {
+    redirect(303, `${page}?error=reauth-required`);
+  }
+  redirect(303, `${page}?error=provider-failed&provider=${provider}`);
+}
 
 /**
  * POST /auth/{provider}: empieza el flujo con el proveedor (técnico §11.1). Es un formulario
@@ -16,19 +37,29 @@ export const POST: RequestHandler = async (event) => {
   const from = textField(data, 'from');
   const next = textField(data, 'next');
 
-  if (from !== 'login' && from !== 'register') error(400, 'Invalid origin page');
-  // Con sesión, los botones de entrar no tienen sentido: a la cuenta.
-  if (event.locals.user) redirect(303, '/account');
-
-  const result = await api.oauthStart(event, provider, {
-    entryPoint: from,
-    ...(isReturnPath(next) ? { returnPath: next } : {}),
-  });
-  if (result.ok) {
-    setOAuthToken(event.cookies, result.data.flowToken, result.data.expiresAt);
-    // La URL la construye la API con endpoints de configuración, nunca con la petición (§12.2).
-    redirect(303, result.data.authorizationUrl, { external: true });
+  if (from === 'login' || from === 'register') {
+    // Con sesión, los botones de entrar no tienen sentido: a la cuenta.
+    if (event.locals.user) redirect(303, '/account');
+    const result = await api.oauthStart(event, provider, {
+      entryPoint: from,
+      ...(isReturnPath(next) ? { returnPath: next } : {}),
+    });
+    goToProvider(event, provider, `/${from}`, result);
   }
-  const value = result.status === 429 ? 'rate-limited' : 'provider-failed';
-  redirect(303, `/${from}?error=${value}&provider=${provider}`);
+
+  if (from === 'account') {
+    const intent = textField(data, 'intent');
+    if (intent !== 'reauthenticate' && intent !== 'connect') error(400, 'Invalid intent');
+    const page = safeReturnPath(next);
+    const token = event.locals.sessionToken;
+    if (!event.locals.user || !token) redirect(303, `/login?next=${page}`);
+    const result = await api.oauthSessionStart(event, token, provider, {
+      purpose: intent,
+      returnPath: page,
+    });
+    if (!result.ok && result.status === 401) redirect(303, `/login?next=${page}`);
+    goToProvider(event, provider, page, result);
+  }
+
+  error(400, 'Invalid origin page');
 };

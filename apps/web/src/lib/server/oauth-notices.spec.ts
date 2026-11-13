@@ -68,3 +68,34 @@ describe('W-O2: /account', () => {
     expect(urlMessage('account', new URLSearchParams('notice=signup-cancelled'))).toBeNull();
   });
 });
+
+describe('W-O2: /account, /account/password y /account/delete (técnico §11.4)', () => {
+  const at = (page: 'account' | 'account-step', query: string) =>
+    urlMessage(page, new URLSearchParams(query));
+
+  it('unlinked exige provider; password-created y reauthenticated son confirmaciones', () => {
+    expect(at('account', 'notice=unlinked&provider=google')).toEqual({
+      kind: 'success',
+      text: 'Hemos quitado Google. Ya no puedes entrar con él.',
+    });
+    expect(at('account', 'notice=unlinked')).toBeNull();
+    expect(at('account', 'notice=password-created')?.kind).toBe('success');
+    expect(at('account-step', 'notice=reauthenticated')?.kind).toBe('success');
+  });
+
+  it('reauth-required lleva los minutos de la sesión reciente', () => {
+    expect(at('account-step', 'error=reauth-required')).toEqual({
+      kind: 'error',
+      text: 'Han pasado más de 10 minutos desde que entraste. Confirma que eres tú para continuar. No hemos hecho ningún cambio.',
+    });
+  });
+
+  it('cada página solo acepta su lista', () => {
+    expect(at('account-step', 'error=last-method&provider=google')).toBeNull();
+    expect(at('account-step', 'notice=password-created')).toBeNull();
+    expect(at('account', 'error=email-missing&provider=google')).toBeNull();
+    expect(at('account', 'error=last-method&provider=facebook')?.text).toBe(
+      'No hemos quitado Facebook porque es la única forma que tienes de entrar.',
+    );
+  });
+});

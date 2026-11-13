@@ -1,6 +1,9 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { enhance } from '$app/forms';
+  import type { OAuthProvider } from '@cupidilla/contracts';
+  import ConfirmIdentity from '#lib/components/ConfirmIdentity.svelte';
+  import ProviderButtons from '#lib/components/ProviderButtons.svelte';
   import SubmitButton from '#lib/components/SubmitButton.svelte';
   import UrlMessage from '#lib/components/UrlMessage.svelte';
   import { createSubmission } from '#lib/forms/submission.svelte.ts';
@@ -10,23 +13,44 @@
   let { data, form }: PageProps = $props();
 
   const submission = createSubmission();
-  const general = $derived(form?.general);
+  const NAMES: Record<OAuthProvider, string> = { google: 'Google', facebook: 'Facebook' };
+
+  /** Errores que vuelven de una acción (no de la URL). */
+  const general = $derived.by((): string | undefined => {
+    if (form && 'general' in form && form.general) return t(form.general);
+    if (form && 'removeFailed' in form && form.removeFailed) {
+      return fill('cuenta.error.quitar_servidor', { proveedor: NAMES[form.removeFailed] });
+    }
+    if (form && 'reauthenticate' in form && form.reauthenticate?.general) {
+      return t(form.reauthenticate.general);
+    }
+    return undefined;
+  });
+  const reauthError = $derived(
+    form && 'reauthenticate' in form && form.reauthenticate?.password
+      ? t(form.reauthenticate.password)
+      : undefined,
+  );
+  const hasErrors = $derived(
+    general !== undefined || reauthError !== undefined || data.message?.kind === 'error',
+  );
+  const signIn = $derived(data.signIn);
+  /** Proveedor en curso de quitar (solo con JavaScript). */
+  let removing = $state<OAuthProvider | null>(null);
 </script>
 
 <svelte:head>
-  <title>{pageTitle('cuenta.meta.titulo', general !== undefined)}</title>
+  <title>{pageTitle('cuenta.meta.titulo', hasErrors)}</title>
 </svelte:head>
 
 {#if general}
   <div class="error-summary" role="alert" tabindex="-1" data-result-focus>
     <p>
       <span class="visually-hidden">{t('comun.error.prefijo_oculto')}</span>
-      {t(general)}
+      {general}
     </p>
   </div>
-{/if}
-
-{#if !general}
+{:else if !form}
   <UrlMessage message={data.message} />
 {/if}
 
@@ -48,6 +72,99 @@
         </dd>
       {/if}
     </dl>
+  </section>
+{/if}
+
+{#if signIn}
+  <section class="section" aria-labelledby="account-access">
+    <h2 id="account-access">{t('cuenta.acceso.titulo')}</h2>
+    <p>{t('cuenta.acceso.intro')}</p>
+    <ul class="access-list">
+      <li class="access-row">
+        <div class="access-info">
+          <span class="access-name">{t('cuenta.acceso.contrasena')}</span>
+          <span class="access-state">
+            {signIn.hasPassword
+              ? t('cuenta.acceso.estado_activa')
+              : t('cuenta.acceso.estado_sin_contrasena')}
+          </span>
+        </div>
+        {#if !signIn.hasPassword}
+          <a class="block-link" href={resolve('account/password')}
+            >{t('cuenta.acceso.enlace_crear_contrasena')}</a
+          >
+        {/if}
+      </li>
+      {#each signIn.linked as item (item.provider)}
+        <li class="access-row">
+          <div class="access-info">
+            <span class="access-name">{NAMES[item.provider]}</span>
+            <span class="access-state"
+              >{fill('cuenta.acceso.estado_unido', { fecha: item.linkedOn })}</span
+            >
+          </div>
+          {#if signIn.methods > 1}
+            <form
+              method="POST"
+              action="?/removeIdentity"
+              use:enhance={({ cancel }) => {
+                // Un segundo envío mientras se quita otro proveedor se ignora.
+                if (removing) {
+                  cancel();
+                  return;
+                }
+                removing = item.provider;
+                return async ({ update }) => {
+                  try {
+                    await update();
+                  } finally {
+                    removing = null;
+                  }
+                };
+              }}
+            >
+              <input type="hidden" name="provider" value={item.provider} />
+              <SubmitButton
+                label={fill('cuenta.acceso.boton_quitar', { proveedor: NAMES[item.provider] })}
+                sendingLabel={t('cuenta.acceso.boton_quitando')}
+                sending={removing === item.provider}
+                variant="danger"
+              />
+            </form>
+          {:else}
+            <p class="help">{t('cuenta.acceso.ultima')}</p>
+          {/if}
+        </li>
+      {/each}
+      {#each signIn.addable as provider (provider)}
+        <li class="access-row">
+          <div class="access-info">
+            <span class="access-name">{NAMES[provider]}</span>
+            <span class="access-state">{t('cuenta.acceso.estado_no_unido')}</span>
+          </div>
+          <!-- Añadir solo con sesión reciente; si no, el bloque de confirmar (UX §3.5.1). -->
+          {#if signIn.recent}
+            <ProviderButtons
+              providers={[provider]}
+              from="account"
+              intent="connect"
+              next="/account"
+            />
+          {/if}
+        </li>
+      {/each}
+    </ul>
+    <p class="help">{t('cuenta.acceso.nota')}</p>
+
+    {#if !signIn.recent && signIn.addable.length > 0}
+      <ConfirmIdentity
+        action="verificar.accion.anadir"
+        providers={signIn.linked.map((item) => item.provider)}
+        hasPassword={signIn.hasPassword}
+        next="/account"
+        passwordError={reauthError}
+      />
+    {/if}
   </section>
 {/if}
 

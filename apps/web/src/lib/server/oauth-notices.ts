@@ -1,4 +1,8 @@
-import { OAUTH_PROVIDERS, type OAuthProvider } from '@cupidilla/contracts';
+import {
+  OAUTH_PROVIDERS,
+  RECENT_AUTH_MAX_AGE_MINUTES,
+  type OAuthProvider,
+} from '@cupidilla/contracts';
 import { fill, texts, type TextKey } from '#lib/texts.ts';
 
 /** Nombre del proveedor tal como aparece en los textos. */
@@ -22,7 +26,7 @@ export interface UrlMessage {
 }
 
 /** Páginas con listas cerradas de avisos (técnico §11.4). */
-export type MessagePage = 'entry' | 'account';
+export type MessagePage = 'entry' | 'account' | 'account-step';
 
 interface Entry {
   key: TextKey;
@@ -51,12 +55,38 @@ const LISTS: Record<MessagePage, { notice: Record<string, Entry>; error: Record<
         'rate-limited': { key: 'comun.error.limite' },
       },
     },
-    // /account (se completa con la fase 5)
+    // /account
     account: {
       notice: {
         linked: { key: 'cuenta.aviso.unida', needsProvider: true, success: true },
+        unlinked: { key: 'cuenta.aviso.quitada', needsProvider: true, success: true },
+        'password-created': { key: 'contrasena.aviso.creada', success: true },
+        reauthenticated: { key: 'verificar.aviso.confirmada', success: true },
+        'provider-cancelled': { key: 'verificar.aviso.cancelado' },
       },
-      error: {},
+      error: {
+        'provider-failed': { key: 'cuenta.error.proveedor_fallo' },
+        'identity-in-use': { key: 'cuenta.error.proveedor_en_uso' },
+        'already-linked': { key: 'cuenta.error.ya_unido' },
+        'identity-mismatch': { key: 'verificar.error.otra_cuenta' },
+        'last-method': { key: 'cuenta.error.ultima_forma' },
+        'reauth-required': { key: 'verificar.error.necesaria' },
+        'rate-limited': { key: 'comun.error.limite' },
+      },
+    },
+    // /account/password y /account/delete
+    'account-step': {
+      notice: {
+        reauthenticated: { key: 'verificar.aviso.confirmada', success: true },
+        'provider-cancelled': { key: 'verificar.aviso.cancelado' },
+        linked: { key: 'cuenta.aviso.unida', needsProvider: true, success: true },
+      },
+      error: {
+        'provider-failed': { key: 'cuenta.error.proveedor_fallo' },
+        'identity-mismatch': { key: 'verificar.error.otra_cuenta' },
+        'reauth-required': { key: 'verificar.error.necesaria' },
+        'rate-limited': { key: 'comun.error.limite' },
+      },
     },
   };
 
@@ -66,9 +96,10 @@ function resolve(entry: Entry | undefined, provider: string | null): string | nu
   const usesProvider = text.includes('{proveedor}');
   // Sin un proveedor válido no se muestra nada: ni el aviso que lo exige ni un «{proveedor}» suelto.
   if ((entry.needsProvider || usesProvider) && !isProvider(provider)) return null;
-  return usesProvider && isProvider(provider)
-    ? fill(entry.key, { proveedor: PROVIDER_NAMES[provider] })
-    : text;
+  return fill(entry.key, {
+    proveedor: isProvider(provider) ? PROVIDER_NAMES[provider] : '',
+    minutos: String(RECENT_AUTH_MAX_AGE_MINUTES),
+  });
 }
 
 /**
