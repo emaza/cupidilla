@@ -72,10 +72,10 @@ describe('Entrada con Google: inicio, vuelta y alta pendiente (fase 2)', () => {
     return { identity: flow.identity, token: flow.response.body.pending.token as string };
   }
 
-  it('GET /auth/oauth/providers: solo los proveedores con cliente (Google en la fase 2)', async () => {
+  it('GET /auth/oauth/providers: los configurados, en el orden de la interfaz', async () => {
     const response = await api(t.app).get('/auth/oauth/providers');
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ providers: ['google'] });
+    expect(response.body).toEqual({ providers: ['google', 'facebook'] });
   });
 
   it('O-1: la URL lleva lo exigido y la fila dura 10 minutos; la caducada de otro flujo se limpia', async () => {

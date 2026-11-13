@@ -183,8 +183,9 @@ test('C38/C40: orden de tabulación de /register y «Saltar al contenido»', asy
     'Cupidilla',
     'Entrar',
     'Crear cuenta',
-    // Botones de proveedor encima del formulario (UX terceros §3.1.1); en los e2e, solo Google.
+    // Botones de proveedor encima del formulario (UX terceros §3.1.1), en orden alfabético.
     'Continuar con Google',
+    'Continuar con Facebook',
     '#email',
     '#password',
     ...(javaScriptEnabled ? ['Mostrar contraseña'] : []),

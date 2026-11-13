@@ -1,4 +1,5 @@
 import type { OAuthProvider } from '@cupidilla/contracts';
+import { FacebookClient } from './facebook.client.js';
 import { GoogleClient } from './google.client.js';
 import type { ProviderClient } from './provider-client.js';
 import { providerSettings, type ProviderSettings } from './provider-config.js';
@@ -10,6 +11,7 @@ export type ProviderClients = ReadonlyMap<OAuthProvider, ProviderClient>;
 
 const FACTORIES: Partial<Record<OAuthProvider, (settings: ProviderSettings) => ProviderClient>> = {
   google: (settings) => new GoogleClient(settings),
+  facebook: (settings) => new FacebookClient(settings),
 };
 
 /** Un cliente por proveedor con credenciales completas (§10.1). Sin ellas, el proveedor no existe. */
