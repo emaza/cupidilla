@@ -89,10 +89,11 @@ describe('GoogleClient con el proveedor falso', () => {
       nonce: 'n',
       code_challenge: 'c',
       code_challenge_method: 'S256',
+      prompt: 'select_account',
     });
   });
 
-  it('con reautenticación añade prompt=select_account y login_hint', () => {
+  it('con reautenticación añade login_hint (prompt=select_account va siempre)', () => {
     const url = client.authorizationUrl({
       state: 's',
       nonce: 'n',

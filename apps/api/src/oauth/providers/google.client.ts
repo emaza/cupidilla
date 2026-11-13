@@ -76,11 +76,11 @@ export class GoogleClient implements ProviderClient {
       nonce,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
+      // Siempre la pantalla de elegir cuenta: salir de Cupidilla no cierra la sesión de Google,
+      // y sin esto Google entraría con la cuenta que tenga abierta el navegador sin preguntar.
+      prompt: 'select_account',
     };
-    if (reauthenticate) {
-      parameters.prompt = 'select_account';
-      if (loginHint) parameters.login_hint = loginHint;
-    }
+    if (reauthenticate && loginHint) parameters.login_hint = loginHint;
     return buildAuthorizationUrl(this.config, parameters);
   }
 

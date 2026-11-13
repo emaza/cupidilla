@@ -176,7 +176,8 @@ sequenceDiagram
 | `scope` | `openid email` | `email` (`public_profile` va implícito) |
 | Comprobaciones | `state`, PKCE S256, `nonce`, `iss` (RFC 9207), `aud`, `exp`, `iat`, `azp` | `state`, PKCE S256 (ver R2), secreto de cliente; `appsecret_proof` = HMAC-SHA256 del *access token* con el secreto |
 | Autenticación del cliente | `client_secret_post` | `client_secret_post` |
-| Reautenticación (§9.1) | `prompt=select_account` y `login_hint` con el correo de la identidad | `auth_type=reauthenticate` |
+| Elegir cuenta | `prompt=select_account` **siempre**: salir de Cupidilla no cierra la sesión de Google, y sin él Google entraría con la cuenta abierta en el navegador sin preguntar (visto en la fase 7.2) | Facebook no tiene selector: usa la cuenta abierta en facebook.com |
+| Reautenticación (§9.1) | Además, `login_hint` con el correo de la identidad | `auth_type=reauthenticate` |
 | `response_mode` | `query` (nunca `form_post`: sería un POST entre sitios y la cookie `Lax` no viajaría) | `query` |
 
 Los *endpoints* no se descubren al arrancar (`discovery`): se escriben como metadatos estáticos con `new Configuration(...)`. Así la API no depende de Google para arrancar y el proveedor falso usa las mismas rutas (§16.1). Google declara `authorization_response_iss_parameter_supported: true` en su documento de descubrimiento (comprobado hoy), así que se pone en los metadatos y `openid-client` exige el `iss` de vuelta.
