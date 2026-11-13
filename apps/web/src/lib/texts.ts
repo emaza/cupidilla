@@ -1,5 +1,6 @@
 /**
- * Textos de interfaz, copiados palabra por palabra de la tabla de §5 del diseño UX.
+ * Textos de interfaz, copiados palabra por palabra de la tabla de §5 del diseño UX de H0 y de la
+ * del diseño UX de la entrada con terceros.
  * Las claves son las de esa tabla. `{x}` es un valor variable (ver `fill`).
  * El texto de /legal/terms (§5.9) vive en `legal/terms-2026-11-borrador.svelte`.
  */
@@ -149,6 +150,54 @@ export const texts = {
   'error500.titulo': 'Algo ha fallado',
   'error500.texto': 'Ha sido cosa nuestra. Inténtalo de nuevo en unos minutos.',
   'error.boton.inicio': 'Ir al inicio',
+
+  // Entrada con Google y Facebook (login-terceros-diseno-ux.md §5)
+  'proveedor.grupo.etiqueta': 'Continuar con otro servicio',
+  'proveedor.boton.google': 'Continuar con Google',
+  'proveedor.boton.facebook': 'Continuar con Facebook',
+  'proveedor.estado.conectando': 'Conectando con {proveedor}…',
+  'proveedor.separador.entrar': 'O entra con tu correo y contraseña',
+  'proveedor.separador.registro': 'O crea tu cuenta con tu correo',
+  'proveedor.ayuda.registro':
+    'Si es la primera vez, te pediremos tu fecha de nacimiento y que aceptes las condiciones antes de crear tu cuenta. De Google o Facebook solo guardamos tu correo y un identificador.',
+  'proveedor.aviso.cancelado':
+    'No has continuado con {proveedor}, así que no hemos hecho ningún cambio. Puedes volver a intentarlo o seguir con tu correo.',
+  'proveedor.error.fallo':
+    '{proveedor} no ha respondido como esperábamos y no hemos podido completar el proceso. No hemos hecho ningún cambio. Inténtalo de nuevo en unos minutos o sigue con tu correo.',
+  'proveedor.error.sin_correo':
+    '{proveedor} no nos ha enviado tu correo y lo necesitamos para crear tu cuenta. Comprueba en {proveedor} que tu cuenta tiene un correo y que has dado permiso para compartirlo, e inténtalo de nuevo. También puedes seguir con tu correo en Cupidilla.',
+  'proveedor.error.correo_sin_verificar':
+    'El correo de tu cuenta de {proveedor} todavía no está verificado y no podemos usarlo. Verifícalo en {proveedor} e inténtalo de nuevo, o sigue con tu correo en Cupidilla.',
+  'proveedor.error.caducado':
+    'Ha pasado demasiado tiempo o has vuelto atrás, y por seguridad hemos cancelado el proceso. Pulsa de nuevo el botón del servicio que quieras usar.',
+  'proveedor.error.cuenta_con_otro':
+    'Ya existe una cuenta con ese correo, pero se creó con {proveedor}. Entra con {proveedor} y, desde Tu cuenta, añade la otra forma de entrar.',
+  'entrar.ayuda.proveedor': 'Si creaste tu cuenta con Google o Facebook, usa esos botones.',
+  'alta.meta.titulo': 'Termina de crear tu cuenta',
+  'alta.titulo': 'Termina de crear tu cuenta',
+  'alta.texto.intro':
+    'Has entrado con {proveedor}. Antes de crear tu cuenta de Cupidilla necesitamos dos cosas más.',
+  'alta.campo.correo': 'Correo de {proveedor}',
+  'alta.ayuda.correo':
+    'Este será el correo de tu cuenta. Viene de {proveedor} y no se puede cambiar aquí.',
+  'alta.texto.acceso': 'Entrarás siempre con {proveedor}: no te pedimos contraseña.',
+  'alta.boton.enviar': 'Crear mi cuenta',
+  'alta.boton.enviando': 'Creando cuenta…',
+  'alta.estado.enviando': 'Creando tu cuenta…',
+  'alta.boton.cancelar': 'Cancelar',
+  'alta.aviso.cancelada': 'Has cancelado. No hemos creado ninguna cuenta ni guardado tus datos.',
+  'alta.texto.caducidad':
+    'Por seguridad, tienes {minutos} minutos para terminar. Si se acaba el tiempo, tendrás que empezar de nuevo.',
+  'alta.menor.texto3': 'No hemos guardado nada de tu cuenta de {proveedor}.',
+  'alta.error.servidor':
+    'Algo ha fallado por nuestra parte y no hemos podido crear tu cuenta. Inténtalo de nuevo en unos minutos.',
+  'alta.error.resultado_incierto':
+    'No sabemos si tu cuenta se ha creado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, entra con {proveedor}: si llegas a tu cuenta, ya está creada. Si Cupidilla te vuelve a pedir la fecha de nacimiento, no se ha creado y puedes completarla otra vez. Si vuelves a enviar este formulario y te dice que ha pasado demasiado tiempo, es que la primera vez sí se creó: entra con {proveedor}.',
+  'alta.enlace.comprobar': 'Probar a entrar con {proveedor}',
+  'union.aviso.cancelada':
+    'No hemos unido las cuentas. Puedes entrar con tu correo y tu contraseña.',
+  'union.error.limite':
+    'Has fallado varias veces. Por seguridad hemos cancelado la unión. Para volver a intentarlo, empieza de nuevo con tu cuenta de Google o Facebook.',
 
   // 5.8 Textos para lectores de pantalla
   'a11y.error.prefijo': 'Error:',

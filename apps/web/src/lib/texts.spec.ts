@@ -9,15 +9,16 @@ import { texts } from './texts.ts';
  */
 const REPO_ROOT = resolve(import.meta.dirname, '../../../..');
 const uxDoc = readFileSync(resolve(REPO_ROOT, 'docs/h0-diseno-ux.md'), 'utf8');
+const oauthUxDoc = readFileSync(resolve(REPO_ROOT, 'docs/login-terceros-diseno-ux.md'), 'utf8');
 
 /** Filas `| `clave` | texto |` de la sección 5. Un texto entre acentos graves se toma literal (con sus espacios). */
-function tableOfSection5(): Map<string, string> {
-  const start = uxDoc.indexOf('## 5. Textos de interfaz');
-  const end = uxDoc.indexOf('## 6. Accesibilidad');
+function tableOfSection5(doc = uxDoc, endHeading = '## 6. Accesibilidad'): Map<string, string> {
+  const start = doc.indexOf('## 5. Textos de interfaz');
+  const end = doc.indexOf(endHeading);
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
   const rows = new Map<string, string>();
-  for (const line of uxDoc.slice(start, end).split('\n')) {
+  for (const line of doc.slice(start, end).split('\n')) {
     const match = /^\| `([a-z0-9_.]+)` \| (.*) \|$/.exec(line);
     if (!match) continue;
     const [, key, cell] = match as unknown as [string, string, string];
@@ -28,25 +29,36 @@ function tableOfSection5(): Map<string, string> {
 }
 
 const table = tableOfSection5();
+/** Tabla del diseño UX de la entrada con Google y Facebook (sus §5.1 a §5.8). */
+const oauthTable = tableOfSection5(oauthUxDoc, '## 6. Responsive y accesibilidad');
 
 describe('Textos de interfaz = tabla de UX §5 (criterio 49)', () => {
   it('se ha leído la tabla entera (no pasa por no encontrar nada)', () => {
     expect(table.size).toBeGreaterThan(100);
     expect(table.get('registro.boton.enviar')).toBe('Crear cuenta');
+    expect(oauthTable.size).toBeGreaterThan(100);
+    expect(oauthTable.get('proveedor.boton.google')).toBe('Continuar con Google');
   });
 
-  it('cada clave de texts.ts existe en la tabla con exactamente el mismo texto', () => {
+  it('las dos tablas no se contradicen: una clave repetida tiene el mismo texto', () => {
+    // Salvo las condiciones de uso: la versión nueva cambia esas secciones a propósito (§5.9).
+    const conflicts = [...oauthTable].filter(
+      ([key, text]) => !key.startsWith('condiciones.') && table.has(key) && table.get(key) !== text,
+    );
+    expect(conflicts).toEqual([]);
+  });
+
+  it('cada clave de texts.ts existe en una de las tablas con exactamente el mismo texto', () => {
     const different: string[] = [];
     for (const [key, text] of Object.entries(texts)) {
-      if (!table.has(key)) different.push(`${key}: no está en la tabla de UX §5`);
-      else if (table.get(key) !== text) {
-        different.push(`${key}: «${text}» ≠ «${table.get(key)}»`);
-      }
+      const expected = table.get(key) ?? oauthTable.get(key);
+      if (expected === undefined) different.push(`${key}: no está en ninguna tabla de UX §5`);
+      else if (expected !== text) different.push(`${key}: «${text}» ≠ «${expected}»`);
     }
     expect(different).toEqual([]);
   });
 
-  it('cada clave de la tabla (salvo /legal/terms) está en texts.ts: no falta ningún texto', () => {
+  it('cada clave de la tabla de H0 (salvo /legal/terms) está en texts.ts: no falta ningún texto', () => {
     const missing = [...table.keys()].filter(
       (key) => !key.startsWith('condiciones.') && !(key in texts),
     );

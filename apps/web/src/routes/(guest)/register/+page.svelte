@@ -1,18 +1,20 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { SERVICE_TERMS_VERSION } from '@cupidilla/contracts';
   import { enhance } from '$app/forms';
   import EmailField from '#lib/components/EmailField.svelte';
   import ErrorSummary from '#lib/components/ErrorSummary.svelte';
-  import FieldError from '#lib/components/FieldError.svelte';
+  import BirthDateFieldset from '#lib/components/BirthDateFieldset.svelte';
   import PasswordField from '#lib/components/PasswordField.svelte';
+  import ProviderButtons from '#lib/components/ProviderButtons.svelte';
+  import TermsCheckbox from '#lib/components/TermsCheckbox.svelte';
+  import UrlMessage from '#lib/components/UrlMessage.svelte';
   import SubmitButton from '#lib/components/SubmitButton.svelte';
   import type { DatePart } from '#lib/forms/birth-date.ts';
   import { createSubmission } from '#lib/forms/submission.svelte.ts';
-  import { fill, pageTitle, t } from '#lib/texts.ts';
+  import { pageTitle, t } from '#lib/texts.ts';
   import type { PageProps } from './$types';
 
-  let { form }: PageProps = $props();
+  let { data, form }: PageProps = $props();
 
   const submission = createSubmission();
 
@@ -20,24 +22,15 @@
   const fields = $derived(form?.errors?.fields ?? {});
   const general = $derived(form?.errors?.general);
   const invalidParts = $derived<DatePart[]>(form?.errors?.dateParts ?? []);
-  const hasErrors = $derived(Object.keys(fields).length > 0 || general !== undefined);
+  const hasErrors = $derived(
+    Object.keys(fields).length > 0 || general !== undefined || data.message?.kind === 'error',
+  );
   // La pantalla de menor no lleva «Error:»: no es un error que se pueda corregir.
   const title = $derived(
     form?.underage
       ? pageTitle('registro.menor.meta.titulo')
       : pageTitle('registro.meta.titulo', hasErrors),
   );
-
-  const dateParts: {
-    id: DatePart;
-    label: string;
-    maxlength: number;
-    autocomplete: 'bday-day' | 'bday-month' | 'bday-year';
-  }[] = [
-    { id: 'day', label: t('registro.campo.dia'), maxlength: 2, autocomplete: 'bday-day' },
-    { id: 'month', label: t('registro.campo.mes'), maxlength: 2, autocomplete: 'bday-month' },
-    { id: 'year', label: t('registro.campo.anio'), maxlength: 4, autocomplete: 'bday-year' },
-  ];
 
   const summary = $derived(
     [
@@ -83,8 +76,19 @@
       : undefined}
   />
 
+  {#if !form}
+    <UrlMessage message={data.message} />
+  {/if}
+
   <div class="card">
     <h1>{t('registro.titulo')}</h1>
+
+    {#if data.providers.length > 0}
+      <ProviderButtons providers={data.providers} from="register" />
+      <p class="help">{t('proveedor.ayuda.registro')}</p>
+      <p class="provider-separator">{t('proveedor.separador.registro')}</p>
+    {/if}
+
     <p>{t('comun.campos_obligatorios')}</p>
 
     {#key form}
@@ -103,63 +107,16 @@
           error={fields.password ? t(fields.password) : undefined}
         />
 
-        <fieldset
-          class="birth-date"
-          aria-describedby={fields.birthDate
-            ? 'birth-date-help birth-date-error'
-            : 'birth-date-help'}
-        >
-          <legend>{t('registro.campo.nacimiento')}</legend>
-          <p id="birth-date-help" class="help">{t('registro.ayuda.nacimiento')}</p>
-          {#if fields.birthDate}
-            <FieldError id="birth-date-error" text={t(fields.birthDate)} />
-          {/if}
-          <div class="birth-date-parts">
-            {#each dateParts as part (part.id)}
-              {@const invalid = fields.birthDate !== undefined && invalidParts.includes(part.id)}
-              <div class="date-part" class:date-part-year={part.id === 'year'}>
-                <label for={part.id}>{part.label}</label>
-                <input
-                  id={part.id}
-                  name={part.id}
-                  type="text"
-                  inputmode="numeric"
-                  maxlength={part.maxlength}
-                  autocomplete={part.autocomplete}
-                  defaultValue={values?.[part.id] ?? ''}
-                  aria-describedby={invalid ? 'birth-date-error' : undefined}
-                  aria-invalid={invalid ? 'true' : undefined}
-                />
-              </div>
-            {/each}
-          </div>
-        </fieldset>
+        <BirthDateFieldset
+          {values}
+          error={fields.birthDate ? t(fields.birthDate) : undefined}
+          {invalidParts}
+        />
 
-        <div class="checkbox-block">
-          {#if fields.acceptTerms}
-            <FieldError id="accept-terms-error" text={t(fields.acceptTerms)} />
-          {/if}
-          <label class="checkbox">
-            <input
-              type="checkbox"
-              id="acceptTerms"
-              name="acceptTerms"
-              defaultChecked={values?.acceptTerms ?? false}
-              aria-describedby={fields.acceptTerms
-                ? 'accept-terms-help accept-terms-error'
-                : 'accept-terms-help'}
-              aria-invalid={fields.acceptTerms ? 'true' : undefined}
-            />
-            <span>{fill('registro.campo.condiciones', { version: SERVICE_TERMS_VERSION })}</span>
-          </label>
-          <a class="block-link" href={resolve('legal/terms')} target="_blank" rel="noopener">
-            {t('registro.enlace.condiciones')}
-            {t('comun.nueva_pestana')}
-          </a>
-          <p id="accept-terms-help" class="help">{t('registro.ayuda.condiciones')}</p>
-        </div>
-
-        <input type="hidden" name="termsVersion" value={SERVICE_TERMS_VERSION} />
+        <TermsCheckbox
+          checked={values?.acceptTerms ?? false}
+          error={fields.acceptTerms ? t(fields.acceptTerms) : undefined}
+        />
 
         <div class="actions">
           <SubmitButton

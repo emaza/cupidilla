@@ -2,12 +2,26 @@ import {
   accountResponseSchema,
   apiErrorSchema,
   authResponseSchema,
+  oauthAuthResponseSchema,
+  oauthCallbackResponseSchema,
+  oauthProvidersResponseSchema,
+  oauthStartResponseSchema,
+  pendingIdentityResponseSchema,
   sessionResponseSchema,
   type AccountResponse,
   type AuthResponse,
   type DeleteAccountRequest,
   type FieldError,
   type LoginRequest,
+  type OAuthAuthResponse,
+  type OAuthCallbackRequest,
+  type OAuthCallbackResponse,
+  type OAuthProvider,
+  type OAuthProvidersResponse,
+  type OAuthSignupRequest,
+  type OAuthStartRequest,
+  type OAuthStartResponse,
+  type PendingIdentityResponse,
   type RegisterRequest,
   type SessionResponse,
 } from '@cupidilla/contracts';
@@ -85,7 +99,17 @@ interface RequestOptions<T> {
    * petición es `nonIdempotent`, `API_UNAVAILABLE` (502) si no.
    */
   expectStatus?: number;
+  /** Tiempo máximo de la petición. Por defecto, 5 s. */
+  timeoutMs?: number;
+  /** Cabeceras propias de la ruta (p. ej. el token pendiente de OAuth). */
+  headers?: Record<string, string>;
 }
+
+/**
+ * La vuelta del proveedor hace hasta dos peticiones al proveedor (2 × OAUTH_HTTP_TIMEOUT_MS,
+ * como mucho 8 s) más la base de datos (técnico §11.1).
+ */
+export const OAUTH_CALLBACK_TIMEOUT_MS = 12_000;
 
 /**
  * Única puerta a la API. Añade la clave interna, la IP del cliente y, si hay sesión, el token.
@@ -93,9 +117,20 @@ interface RequestOptions<T> {
  */
 async function request<T>(
   event: RequestEvent,
-  { method, path, token, body, schema, nonIdempotent = false, expectStatus }: RequestOptions<T>,
+  {
+    method,
+    path,
+    token,
+    body,
+    schema,
+    nonIdempotent = false,
+    expectStatus,
+    timeoutMs = TIMEOUT_MS,
+    headers: extraHeaders,
+  }: RequestOptions<T>,
 ): Promise<ApiResult<T>> {
   const headers: Record<string, string> = {
+    ...extraHeaders,
     Accept: 'application/json',
     'X-Internal-Api-Key': INTERNAL_API_KEY,
     'X-Client-Ip': event.getClientAddress(),
@@ -109,7 +144,7 @@ async function request<T>(
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
     // Tiempo agotado (TimeoutError) o conexión cortada tras enviar (ECONNRESET, UND_ERR_SOCKET…).
@@ -180,4 +215,80 @@ export const api = {
       nonIdempotent: true,
       expectStatus: 204, // users.controller.ts: @HttpCode(204)
     }),
+
+  // Entrada con Google y Facebook (técnico §11.1).
+
+  oauthProviders: (event: RequestEvent): Promise<ApiResult<OAuthProvidersResponse>> =>
+    request(event, {
+      method: 'GET',
+      path: '/auth/oauth/providers',
+      schema: oauthProvidersResponseSchema,
+    }),
+
+  oauthStart: (
+    event: RequestEvent,
+    provider: OAuthProvider,
+    body: OAuthStartRequest,
+  ): Promise<ApiResult<OAuthStartResponse>> =>
+    request(event, {
+      method: 'POST',
+      path: `/auth/oauth/${provider}/authorization`,
+      body,
+      schema: oauthStartResponseSchema,
+    }),
+
+  oauthCallback: (
+    event: RequestEvent,
+    provider: OAuthProvider,
+    body: OAuthCallbackRequest,
+    sessionToken?: string,
+  ): Promise<ApiResult<OAuthCallbackResponse>> =>
+    request(event, {
+      method: 'POST',
+      path: `/auth/oauth/${provider}/callback`,
+      token: sessionToken,
+      body,
+      schema: oauthCallbackResponseSchema,
+      timeoutMs: OAUTH_CALLBACK_TIMEOUT_MS,
+    }),
+
+  oauthPending: (
+    event: RequestEvent,
+    pendingToken: string,
+  ): Promise<ApiResult<PendingIdentityResponse>> =>
+    request(event, {
+      method: 'GET',
+      path: '/auth/oauth/pending',
+      headers: { 'X-Oauth-Pending-Token': pendingToken },
+      schema: pendingIdentityResponseSchema,
+    }),
+
+  oauthCancelPending: (event: RequestEvent, pendingToken: string): Promise<ApiResult<void>> =>
+    request(event, {
+      method: 'POST',
+      path: '/auth/oauth/pending/cancellation',
+      body: { pendingToken },
+      expectStatus: 204,
+    }),
+
+  oauthSignup: (
+    event: RequestEvent,
+    body: OAuthSignupRequest,
+  ): Promise<ApiResult<OAuthAuthResponse>> =>
+    request(event, {
+      method: 'POST',
+      path: '/auth/oauth/signup',
+      body,
+      schema: oauthAuthResponseSchema,
+      nonIdempotent: true,
+    }),
 };
+
+/**
+ * Proveedores con credenciales en la API. Si la API no responde, ninguno: la página sigue
+ * funcionando con correo y contraseña (UX §3.1.3).
+ */
+export async function configuredProviders(event: RequestEvent): Promise<OAuthProvider[]> {
+  const result = await api.oauthProviders(event);
+  return result.ok ? result.data.providers : [];
+}
