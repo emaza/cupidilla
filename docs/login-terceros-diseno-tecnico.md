@@ -990,7 +990,11 @@ Necesita que el CEO haya hecho §15.
 
 Estado al terminar las fases 1 a 6 y la 7.1 (13 de noviembre de 2026).
 
-1. **Fase 7.2**: el recorrido con Google y Facebook reales. Necesita las apps de §15 y sus credenciales en el `.env`; el inicio de sesión en los proveedores lo hace una persona. Con él quedan resueltos R2 (PKCE y canje por POST en Facebook) y R3 (redirecciones de Meta en móvil y `form-action`). Contra el proveedor falso, el canje de Facebook por POST con PKCE funciona.
+1. **Fase 7.2, hecha en parte el 13 de noviembre de 2026** con las apps de §15 en `localhost`, en Chrome de escritorio:
+   - **Funciona con Google y Facebook reales:** alta con Google; entrada con Google y con Facebook; unión de Facebook a una cuenta con contraseña; añadir y quitar proveedores; crear una contraseña en una cuenta solo de Google y entrar con ella; «ya está unida a otra cuenta» (`identity_in_use`). Sin violaciones de CSP en la consola.
+   - **R2, resuelto:** Facebook acepta PKCE S256 y el canje por POST.
+   - **Encontrado y corregido:** salir de Cupidilla no cierra la sesión de Google, y Google entraba sin preguntar con la cuenta abierta en el navegador. Ahora va siempre `prompt=select_account` (§3.3). Facebook no tiene selector: usa la sesión abierta en facebook.com.
+   - **Queda:** borrar una cuenta sin contraseña y la reautenticación con proveedores reales (cubiertas con el proveedor falso), y **R3**: las redirecciones de Facebook en móvil y `form-action`.
 2. **Legal**: si el texto de las condiciones sobre proveedores exige volver a pedir la aceptación a las cuentas existentes (R12).
 3. **Producción**: apps de Google y Meta para el dominio definitivo, cuando se cierre «Marca y dominio». Antes de publicar, contrastar los logos (`apps/web/static/logos`) con los archivos oficiales de Google y Meta.
 4. **Hueco de UX**: si el alta choca con una cuenta sin contraseña creada entre medias (`ACCOUNT_USES_OTHER_PROVIDER`, §7), la web va a `/login?error=other-provider` sin `provider`, como dice §7. Pero §11.4 exige `provider` para ese aviso, así que no se muestra nada. Es un caso de carrera muy raro; si se quiere un texto, la API tendría que devolver la lista de proveedores en ese 409.
