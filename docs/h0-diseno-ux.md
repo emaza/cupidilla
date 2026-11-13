@@ -653,7 +653,7 @@ Reglas: el texto de los mensajes de error y de éxito se escribe en `--color-tex
 
 ### 8.2 Para el CTO (los puede cerrar él)
 
-**Cerrados el 11 de noviembre de 2026.** Las respuestas están en los acuerdos A1 a A14 de [el diseño técnico](h0-diseno-tecnico.md#1-bis-acuerdos-entre-este-diseño-y-el-de-ux) y en sus secciones 8 a 10. En resumen: se guarda la fecha de nacimiento completa; el aviso va en `?aviso=`; se sale con `POST /cuenta?/salir`; el borrado es una sola operación atómica. La lista original se conserva como referencia.
+**Cerrados el 11 de noviembre de 2026.** Las respuestas están en los acuerdos A1 a A14 de [el diseño técnico](h0-diseno-tecnico.md#1-bis-acuerdos-entre-este-diseño-y-el-de-ux) y en sus secciones 8 a 10. En resumen: se guarda la fecha de nacimiento completa; el aviso va en `?notice=`; se sale con `POST /account?/logout`; el borrado es una sola operación atómica. La lista original de preguntas se conserva abajo como referencia histórica: usa los nombres en español anteriores a la decisión 18 (`?aviso=`, `/cuenta`, `?/salir`), que ya no existen.
 
 1. Duración y caducidad de la sesión; cookie `HttpOnly`, `SameSite=Lax`, `Secure`; `Cache-Control: no-store` en rutas privadas.
 2. Límite de intentos: valores concretos por IP y por correo para registro, entrada y eliminación, y uso de `comun.error.limite`. Que el tiempo de respuesta del inicio de sesión no distinga correo inexistente de contraseña errónea.
