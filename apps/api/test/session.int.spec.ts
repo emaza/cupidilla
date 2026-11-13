@@ -1,3 +1,4 @@
+import { SERVICE_TERMS_VERSION } from '@cupidilla/contracts';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { generateOpaqueToken, hashOpaqueToken } from '../src/common/crypto/opaque-token.js';
@@ -112,7 +113,7 @@ describe('Sesión', () => {
       consents: [
         {
           purpose: 'service_use',
-          policyVersion: '2026-11-borrador',
+          policyVersion: SERVICE_TERMS_VERSION,
           grantedAt: TEST_NOW,
           revokedAt: null,
         },

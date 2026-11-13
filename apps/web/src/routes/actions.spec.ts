@@ -1,4 +1,4 @@
-import { latestAdultBirthDate, referenceToday } from '@cupidilla/contracts';
+import { latestAdultBirthDate, referenceToday, SERVICE_TERMS_VERSION } from '@cupidilla/contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // La puerta a la API y la cookie se sustituyen: aquí se prueba qué hace cada acción con cada respuesta.
@@ -24,7 +24,7 @@ const loginPage = await import('./(guest)/login/+page.server.ts');
 const accountPage = await import('./(private)/account/+page.server.ts');
 const deletePage = await import('./(private)/account/delete/+page.server.ts');
 
-const TERMS = '2026-11-borrador';
+const TERMS = SERVICE_TERMS_VERSION;
 
 /** Evento de SvelteKit mínimo con un formulario. `E` lo fija el tipo que espera cada acción. */
 function formEvent<E>(fields: Record<string, string>, locals: Record<string, unknown> = {}): E {

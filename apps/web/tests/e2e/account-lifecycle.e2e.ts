@@ -1,3 +1,4 @@
+import { SERVICE_TERMS_VERSION } from '@cupidilla/contracts';
 import { expect, test } from '@playwright/test';
 import { closeDb, rowsForEmail } from './helpers/db.ts';
 import { login, logout, PASSWORD, registerAdult, uniqueEmail } from './helpers/forms.ts';
@@ -20,7 +21,7 @@ test('E-1: el registro de una persona adulta lleva a /account con la sesión ini
     year: 'numeric',
     timeZone: 'Europe/Madrid',
   }).format(new Date());
-  await expect(page.getByText(`versión 2026-11-borrador, el ${accepted}`)).toBeVisible();
+  await expect(page.getByText(`versión ${SERVICE_TERMS_VERSION}, el ${accepted}`)).toBeVisible();
 
   const cookie = (await context.cookies()).find((c) => c.name === 'cupidilla_session');
   expect(cookie).toMatchObject({ httpOnly: true, sameSite: 'Lax', secure: true });

@@ -1,4 +1,4 @@
-import { latestAdultBirthDate, referenceToday } from '@cupidilla/contracts';
+import { latestAdultBirthDate, referenceToday, SERVICE_TERMS_VERSION } from '@cupidilla/contracts';
 import { expect, test } from '@playwright/test';
 import { closeDb, rowsForEmail } from './helpers/db.ts';
 import { fillRegister, login, logout, registerAdult, uniqueEmail } from './helpers/forms.ts';
@@ -225,7 +225,7 @@ test('C17: el consentimiento guarda la versión vigente y la fecha del registro'
   const email = await registerAdult(page);
   await expect(page.locator('dl.data-list')).toContainText('Condiciones aceptadas');
   await expect(page.locator('dl.data-list')).toContainText(
-    /versión 2026-11-borrador, el \d{1,2} de [a-zé]+ de \d{4}/,
+    new RegExp(`versión ${SERVICE_TERMS_VERSION}, el \\d{1,2} de [a-zé]+ de \\d{4}`),
   );
   expect((await rowsForEmail(email)).consents).toBe(1);
 });
@@ -240,7 +240,7 @@ test('C52: /legal/terms es pública, enseña el borrador, la versión y los [PEN
       'Borrador pendiente de revisión jurídica. No es el texto definitivo y puede cambiar.',
     ),
   ).toBeVisible();
-  await expect(page.getByText('Versión 2026-11-borrador', { exact: true })).toBeVisible();
+  await expect(page.getByText(`Versión ${SERVICE_TERMS_VERSION}`, { exact: true })).toBeVisible();
   await expect(page.locator('main')).toContainText(
     '[PENDIENTE: jurisdicción, ley aplicable y vías de reclamación.]',
   );

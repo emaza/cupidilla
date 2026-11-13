@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { SERVICE_TERMS_VERSION } from '@cupidilla/contracts';
 import { texts } from './texts.ts';
 
 /**
@@ -66,21 +67,34 @@ describe('Textos de interfaz = tabla de UX §5 (criterio 49)', () => {
   });
 });
 
-describe('Condiciones de uso = UX §5.9', () => {
-  const terms = readFileSync(
-    resolve(REPO_ROOT, 'apps/web/src/lib/legal/terms-2026-11-borrador.svelte'),
-    'utf8',
-  );
-  /** Una sola línea, sin etiquetas ni saltos: así se compara el texto aunque Prettier lo reparta. */
-  const flat = (value: string): string =>
-    value
-      .replace(/<!--[\s\S]*?-->/g, ' ')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  const page = flat(terms);
+/** Una sola línea, sin etiquetas ni saltos: así se compara el texto aunque Prettier lo reparta. */
+const flat = (value: string): string =>
+  value
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
-  const keys = [...table.keys()].filter((key) => key.startsWith('condiciones.'));
+const legal = (file: string): string =>
+  readFileSync(resolve(REPO_ROOT, `apps/web/src/lib/legal/${file}`), 'utf8');
+
+/**
+ * Cada versión de las condiciones coincide con su tabla: la de H0 (`2026-11-borrador`, que se
+ * conserva como registro de lo aceptado) y la de H0 con las secciones que cambia la entrada con
+ * terceros (`2026-11-borrador-2`, vigente).
+ */
+const versions = [
+  { file: 'terms-2026-11-borrador.svelte', rows: table },
+  {
+    file: 'terms-2026-11-borrador-2.svelte',
+    rows: new Map([...table, ...[...oauthTable].filter(([key]) => key.startsWith('condiciones.'))]),
+  },
+];
+
+describe.each(versions)('Condiciones de uso: $file = UX §5.9', ({ file, rows }) => {
+  const terms = legal(file);
+  const page = flat(terms);
+  const keys = [...rows.keys()].filter((key) => key.startsWith('condiciones.'));
 
   it('hay textos de §5.9 que comprobar', () => {
     expect(keys.length).toBeGreaterThanOrEqual(21);
@@ -89,11 +103,24 @@ describe('Condiciones de uso = UX §5.9', () => {
   it.each(
     keys.filter((key) => !['condiciones.meta.titulo', 'condiciones.enlace.volver'].includes(key)),
   )('%s aparece tal cual en el texto legal', (key) => {
-    expect(page).toContain(flat(table.get(key) ?? '«falta»'));
+    expect(page).toContain(flat(rows.get(key) ?? '«falta»'));
   });
 
   it('el <title> es el de condiciones.meta.titulo con el sufijo de marca', () => {
     const title = /<title>([^<]*)<\/title>/.exec(terms)?.[1];
-    expect(title).toBe(`${table.get('condiciones.meta.titulo')}${texts['comun.meta.sufijo']}`);
+    expect(title).toBe(`${rows.get('condiciones.meta.titulo')}${texts['comun.meta.sufijo']}`);
+  });
+});
+
+describe('/legal/terms muestra la versión vigente', () => {
+  it('la página importa el archivo de SERVICE_TERMS_VERSION', () => {
+    const route = readFileSync(
+      resolve(REPO_ROOT, 'apps/web/src/routes/legal/terms/+page.svelte'),
+      'utf8',
+    );
+    expect(route).toContain(`terms-${SERVICE_TERMS_VERSION}.svelte`);
+    expect(flat(legal(`terms-${SERVICE_TERMS_VERSION}.svelte`))).toContain(
+      `Versión ${SERVICE_TERMS_VERSION}`,
+    );
   });
 });
