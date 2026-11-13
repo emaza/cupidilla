@@ -28,6 +28,25 @@ export async function rowsForEmail(
   };
 }
 
+/** Filas de la entrada con proveedor asociadas a un correo (ya normalizado), en cualquier tabla. */
+export async function oauthRowsForEmail(
+  email: string,
+): Promise<{ users: number; identities: number; pending: number }> {
+  const { rows } = await getPool().query<{ users: string; identities: string; pending: string }>(
+    `select
+       (select count(*) from users where email = $1)::text as users,
+       (select count(*) from identities where provider_email = $1)::text as identities,
+       (select count(*) from pending_identities where provider_email = $1)::text as pending`,
+    [email],
+  );
+  const row = rows[0];
+  return {
+    users: Number(row?.users),
+    identities: Number(row?.identities),
+    pending: Number(row?.pending),
+  };
+}
+
 /** Revoca todas las sesiones de un correo (ya normalizado), como si hubieran caducado. */
 export async function revokeSessionsForEmail(email: string): Promise<number> {
   const { rowCount } = await getPool().query(
