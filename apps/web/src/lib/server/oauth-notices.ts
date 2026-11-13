@@ -13,16 +13,21 @@ export function isProvider(value: unknown): value is OAuthProvider {
 
 /** Aviso o error que llega en la URL, ya resuelto a texto. */
 export interface UrlMessage {
-  /** `notice`: informativo, sin «Error:» (cancelar no es un error). `error`: patrón de H0 §2.2. */
-  kind: 'notice' | 'error';
+  /**
+   * `notice`: informativo, sin «Error:» (cancelar no es un error). `success`: confirmación.
+   * `error`: patrón de H0 §2.2.
+   */
+  kind: 'notice' | 'success' | 'error';
   text: string;
 }
 
 /** Páginas con listas cerradas de avisos (técnico §11.4). */
-export type MessagePage = 'entry';
+export type MessagePage = 'entry' | 'account';
 
 interface Entry {
   key: TextKey;
+  /** Confirmación de algo hecho (✓), no un simple aviso. */
+  success?: boolean;
   /** El valor exige `&provider=` válido (marcado con * en §11.4). */
   needsProvider?: boolean;
 }
@@ -45,6 +50,13 @@ const LISTS: Record<MessagePage, { notice: Record<string, Entry>; error: Record<
         'link-limit': { key: 'union.error.limite' },
         'rate-limited': { key: 'comun.error.limite' },
       },
+    },
+    // /account (se completa con la fase 5)
+    account: {
+      notice: {
+        linked: { key: 'cuenta.aviso.unida', needsProvider: true, success: true },
+      },
+      error: {},
     },
   };
 
@@ -70,6 +82,8 @@ export function urlMessage(page: MessagePage, params: URLSearchParams): UrlMessa
   const errorText = errorValue === null ? null : resolve(list.error[errorValue], provider);
   if (errorText) return { kind: 'error', text: errorText };
   const noticeValue = params.get('notice');
-  const noticeText = noticeValue === null ? null : resolve(list.notice[noticeValue], provider);
-  return noticeText ? { kind: 'notice', text: noticeText } : null;
+  const notice = noticeValue === null ? undefined : list.notice[noticeValue];
+  const noticeText = resolve(notice, provider);
+  if (!noticeText) return null;
+  return { kind: notice?.success ? 'success' : 'notice', text: noticeText };
 }

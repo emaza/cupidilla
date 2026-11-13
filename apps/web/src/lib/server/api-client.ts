@@ -16,6 +16,7 @@ import {
   type OAuthAuthResponse,
   type OAuthCallbackRequest,
   type OAuthCallbackResponse,
+  type OAuthLinkRequest,
   type OAuthProvider,
   type OAuthProvidersResponse,
   type OAuthSignupRequest,
@@ -278,6 +279,15 @@ export const api = {
     request(event, {
       method: 'POST',
       path: '/auth/oauth/signup',
+      body,
+      schema: oauthAuthResponseSchema,
+      nonIdempotent: true,
+    }),
+
+  oauthLink: (event: RequestEvent, body: OAuthLinkRequest): Promise<ApiResult<OAuthAuthResponse>> =>
+    request(event, {
+      method: 'POST',
+      path: '/auth/oauth/link',
       body,
       schema: oauthAuthResponseSchema,
       nonIdempotent: true,

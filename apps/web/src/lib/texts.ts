@@ -198,6 +198,27 @@ export const texts = {
     'No hemos unido las cuentas. Puedes entrar con tu correo y tu contraseña.',
   'union.error.limite':
     'Has fallado varias veces. Por seguridad hemos cancelado la unión. Para volver a intentarlo, empieza de nuevo con tu cuenta de Google o Facebook.',
+  'union.meta.titulo': 'Unir tus cuentas',
+  'union.titulo': 'Ya tienes una cuenta con este correo',
+  'union.texto.intro':
+    'Con el correo de tu cuenta de {proveedor} ya hay una cuenta de Cupidilla con correo y contraseña. Escribe tu contraseña para unirlas. Después podrás entrar con {proveedor} o con tu contraseña.',
+  'union.campo.correo': 'Correo de la cuenta',
+  'union.campo.contrasena': 'Contraseña',
+  'union.ayuda.contrasena': 'Es la que elegiste al crear tu cuenta. Solo te la pedimos esta vez.',
+  'union.ayuda.olvido':
+    'Si no la recuerdas, de momento no podemos recuperarla y no podrás unir las cuentas. Podrás hacerlo cuando haya recuperación de contraseña por correo.',
+  'union.boton.enviar': 'Unir cuentas',
+  'union.boton.enviando': 'Uniendo cuentas…',
+  'union.estado.enviando': 'Uniendo tus cuentas…',
+  'union.boton.cancelar': 'Cancelar',
+  'union.error.contrasena_vacia': 'Escribe tu contraseña para unir las cuentas.',
+  'union.error.contrasena': 'La contraseña no es correcta. No hemos unido las cuentas.',
+  'union.error.servidor':
+    'Algo ha fallado por nuestra parte y no hemos podido unir tus cuentas. Inténtalo de nuevo en unos minutos.',
+  'union.error.resultado_incierto':
+    'No sabemos si se han unido las cuentas: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, entra con {proveedor}: si llegas a tu cuenta, ya están unidas. Si vuelves a enviar este formulario y te dice que ha pasado demasiado tiempo, es que la primera vez sí se unieron.',
+  'cuenta.aviso.unida':
+    'Hemos unido {proveedor} a tu cuenta. Ya puedes entrar con cualquiera de tus formas de entrar.',
 
   // 5.8 Textos para lectores de pantalla
   'a11y.error.prefijo': 'Error:',

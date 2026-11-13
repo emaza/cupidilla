@@ -7,12 +7,14 @@ const api = vi.hoisted(() => ({
   oauthPending: vi.fn(),
   oauthCancelPending: vi.fn(),
   oauthSignup: vi.fn(),
+  oauthLink: vi.fn(),
 }));
 vi.mock('#lib/server/api-client.ts', () => ({ api }));
 
 const start = await import('./[provider=provider]/+server.ts');
 const back = await import('./[provider=provider]/callback/+server.ts');
 const complete = await import('../(guest)/register/complete/+page.server.ts');
+const linkPage = await import('../(guest)/login/link/+page.server.ts');
 
 interface CookieJar {
   values: Map<string, string>;
@@ -90,6 +92,14 @@ const failure = (status: number, code: string, fields?: unknown) => ({
 beforeEach(() => {
   vi.clearAllMocks();
 });
+
+const pendingData = {
+  kind: 'signup',
+  provider: 'google',
+  email: 'ana@example.com',
+  entryPoint: 'register',
+  expiresAt: EXPIRES,
+};
 
 describe('POST /auth/{provider}: empezar', () => {
   it('pide la URL a la API, guarda el flowToken y redirige al proveedor; next pasa por la lista cerrada', async () => {
@@ -251,13 +261,6 @@ describe('/register/complete', () => {
     acceptTerms: 'on',
     termsVersion: '2026-11-borrador',
   };
-  const pendingData = {
-    kind: 'signup',
-    provider: 'google',
-    email: 'ana@example.com',
-    entryPoint: 'register',
-    expiresAt: EXPIRES,
-  };
   const pendingLookup = ok(pendingData);
 
   it('load: sin cookie → provider-expired; con un pendiente de unión → /login/link', async () => {
@@ -341,5 +344,105 @@ describe('/register/complete', () => {
     );
     expect(api.oauthCancelPending).toHaveBeenCalledWith(expect.anything(), PENDING);
     expect(cookies.values.has('cupidilla_oauth')).toBe(false);
+  });
+});
+
+describe('/login/link', () => {
+  const linkPending = ok({
+    kind: 'link',
+    provider: 'facebook',
+    email: 'ana@example.com',
+    entryPoint: 'login',
+    expiresAt: EXPIRES,
+  });
+  const submit = (cookies: CookieJar, password = 'una frase larga') =>
+    run(() => linkPage.actions.link(event({ cookies, form: { password } })));
+
+  it('envía el correo que dio la API y, si acierta, va a returnPath con el aviso «unidas»', async () => {
+    api.oauthPending.mockResolvedValue(linkPending);
+    api.oauthLink.mockResolvedValue(
+      ok({
+        user: {},
+        session: { token: SESSION, expiresAt: EXPIRES },
+        returnPath: '/account/delete',
+      }),
+    );
+    const cookies = jar({ cupidilla_oauth: PENDING });
+    expect((await submit(cookies)).location).toBe(
+      '/account/delete?notice=linked&provider=facebook',
+    );
+    expect(api.oauthLink).toHaveBeenCalledWith(expect.anything(), {
+      pendingToken: PENDING,
+      email: 'ana@example.com',
+      password: 'una frase larga',
+    });
+    expect(cookies.values.get('cupidilla_session')).toBe(SESSION);
+    expect(cookies.values.has('cupidilla_oauth')).toBe(false);
+  });
+
+  it('contraseña vacía: error en el campo sin llamar a la API', async () => {
+    const result = await submit(jar({ cupidilla_oauth: PENDING }), '');
+    expect(result.response).toMatchObject({
+      status: 400,
+      data: { errors: { fields: { password: 'union.error.contrasena_vacia' } } },
+    });
+    expect(api.oauthLink).not.toHaveBeenCalled();
+  });
+
+  it('contraseña incorrecta: error en el campo y el estado sigue', async () => {
+    api.oauthPending.mockResolvedValue(linkPending);
+    api.oauthLink.mockResolvedValue(failure(403, 'PASSWORD_INCORRECT'));
+    const cookies = jar({ cupidilla_oauth: PENDING });
+    expect((await submit(cookies)).response).toMatchObject({
+      status: 403,
+      data: { errors: { fields: { password: 'union.error.contrasena' } } },
+    });
+    expect(cookies.values.get('cupidilla_oauth')).toBe(PENDING);
+  });
+
+  it.each([
+    [failure(403, 'LINK_ATTEMPTS_EXCEEDED'), '/login?error=link-limit'],
+    [failure(400, 'OAUTH_FLOW_INVALID'), '/login?error=provider-expired'],
+  ])('%j → %s y borra la cookie', async (response, location) => {
+    api.oauthPending.mockResolvedValue(linkPending);
+    api.oauthLink.mockResolvedValue(response);
+    const cookies = jar({ cupidilla_oauth: PENDING });
+    expect((await submit(cookies)).location).toBe(location);
+    expect(cookies.values.has('cupidilla_oauth')).toBe(false);
+  });
+
+  it('resultado incierto y límite: error general', async () => {
+    api.oauthPending.mockResolvedValue(linkPending);
+    api.oauthLink.mockResolvedValue(failure(503, 'OUTCOME_UNKNOWN'));
+    expect((await submit(jar({ cupidilla_oauth: PENDING }))).response).toMatchObject({
+      data: { errors: { general: 'union.error.resultado_incierto' } },
+    });
+    api.oauthLink.mockResolvedValue(failure(429, 'RATE_LIMITED'));
+    expect((await submit(jar({ cupidilla_oauth: PENDING }))).response).toMatchObject({
+      status: 429,
+      data: { errors: { general: 'comun.error.limite' } },
+    });
+  });
+
+  it('load: con un pendiente de alta → /register/complete; sin cookie → provider-expired', async () => {
+    api.oauthPending.mockResolvedValue(ok({ ...pendingData, kind: 'signup' }));
+    expect(
+      (
+        await run(() =>
+          linkPage.load(event({ method: 'GET', cookies: jar({ cupidilla_oauth: PENDING }) })),
+        )
+      ).location,
+    ).toBe('/register/complete');
+    expect((await run(() => linkPage.load(event({ method: 'GET' })))).location).toBe(
+      '/login?error=provider-expired',
+    );
+  });
+
+  it('cancelar: borra el pendiente y vuelve a /login con link-cancelled', async () => {
+    const cookies = jar({ cupidilla_oauth: PENDING });
+    expect((await run(() => linkPage.actions.cancel(event({ cookies })))).location).toBe(
+      '/login?notice=link-cancelled',
+    );
+    expect(api.oauthCancelPending).toHaveBeenCalledWith(expect.anything(), PENDING);
   });
 });

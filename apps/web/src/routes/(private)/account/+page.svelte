@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths';
   import { enhance } from '$app/forms';
   import SubmitButton from '#lib/components/SubmitButton.svelte';
+  import UrlMessage from '#lib/components/UrlMessage.svelte';
   import { createSubmission } from '#lib/forms/submission.svelte.ts';
   import { fill, pageTitle, t } from '#lib/texts.ts';
   import type { PageProps } from './$types';
@@ -23,6 +24,10 @@
       {t(general)}
     </p>
   </div>
+{/if}
+
+{#if !general}
+  <UrlMessage message={data.message} />
 {/if}
 
 <h1>{t('cuenta.titulo')}</h1>

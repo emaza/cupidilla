@@ -56,3 +56,15 @@ describe('W-O2: avisos y errores de la URL en /login y /register (técnico §11.
     );
   });
 });
+
+describe('W-O2: /account', () => {
+  it('linked exige provider y es una confirmación', () => {
+    expect(urlMessage('account', new URLSearchParams('notice=linked&provider=facebook'))).toEqual({
+      kind: 'success',
+      text: 'Hemos unido Facebook a tu cuenta. Ya puedes entrar con cualquiera de tus formas de entrar.',
+    });
+    expect(urlMessage('account', new URLSearchParams('notice=linked'))).toBeNull();
+    // Los avisos de /login no valen en /account.
+    expect(urlMessage('account', new URLSearchParams('notice=signup-cancelled'))).toBeNull();
+  });
+});

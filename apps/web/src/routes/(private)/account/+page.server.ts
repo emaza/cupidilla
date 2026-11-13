@@ -1,6 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { errorMessages } from '#lib/errors/messages.ts';
 import { api } from '#lib/server/api-client.ts';
+import { urlMessage } from '#lib/server/oauth-notices.ts';
 import { clearSessionCookie } from '#lib/server/session-cookie.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -20,6 +21,7 @@ export const load: PageServerLoad = async (event) => {
       (item) => item.purpose === 'service_use' && item.revokedAt === null,
     );
     return {
+      message: urlMessage('account', event.url.searchParams),
       account: {
         email: result.data.user.email,
         terms: consent
@@ -37,7 +39,7 @@ export const load: PageServerLoad = async (event) => {
   }
   // Sin JavaScript, tras un fallo al salir la página se vuelve a pintar: se muestra el aviso
   // de error aunque no se puedan cargar los datos. En una visita normal, página de error.
-  if (event.request.method === 'POST') return { account: null };
+  if (event.request.method === 'POST') return { account: null, message: null };
   error(503, 'API unavailable');
 };
 
