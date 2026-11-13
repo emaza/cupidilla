@@ -82,10 +82,10 @@ Este documento manda en código, datos, API y seguridad; el de UX manda en panta
 |---|---|---|---|
 | U1 | Borrado sin contraseña solo con «ELIMINAR» | «ELIMINAR» + sesión reciente o reautenticación | **Resuelto**: decisión del CTO |
 | U2 | Añadir proveedor sin pedir nada, «porque ya hay sesión» | Exige una sesión reciente | **Resuelto**: decisión del CEO |
-| U3 | `alta.error.resultado_incierto` y `union.error.resultado_incierto` dicen «se puede reintentar sin riesgo» | Reintentar es inocuo, pero si la primera petición se hizo, el reintento da «caducado» (T4) | Pendiente: UX ajusta el texto |
-| U4 | A la unión solo se llega si el proveedor asegura que el correo está verificado | Con Facebook, el correo se da por verificado por política nuestra; Meta no lo indica | Pendiente: UX ajusta §1.4 |
+| U3 | `alta.error.resultado_incierto` y `union.error.resultado_incierto` dicen «se puede reintentar sin riesgo» | Reintentar es inocuo, pero si la primera petición se hizo, el reintento da «caducado» (T4) | **Resuelto**: los textos de UX §5.3 y §5.4 ya lo explican |
+| U4 | A la unión solo se llega si el proveedor asegura que el correo está verificado | Con Facebook, el correo se da por verificado por política nuestra; Meta no lo indica | **Resuelto**: UX §1.4 ya lo dice |
 | U5 | Que «atrás» no repita el aviso | El aviso va en la URL y puede repetirse | Aceptado por UX («se identifica por la URL») |
-| U6 | `from` con los valores `login`, `register`, `account` y `account_delete` | `from` solo vale `login`, `register` o `account`; la pantalla a la que se vuelve sale de `next` (T13). `account_delete` no hace falta | Diferencia menor: UX ajusta §2.1 |
+| U6 | `from` con los valores `login`, `register`, `account` y `account_delete` | `from` solo vale `login`, `register` o `account`; la pantalla a la que se vuelve sale de `next` (T13). `account_delete` no hace falta | **Resuelto**: UX §2.1 ya lo dice |
 
 ---
 
@@ -987,12 +987,21 @@ Necesita que el CEO haya hecho §15.
 
 ## Pendiente
 
-Ninguna de estas cosas bloquea las fases 1 a 5.
+Estado al terminar las fases 1 a 6 y la 7.1 (13 de noviembre de 2026).
 
-1. **`decisiones.md`**: anotar en «Antes de la beta» el riesgo aceptado R4. Lo hace el CTO; yo no lo he tocado.
-2. **Cruce con UX**: las listas de §11.4 ya cubren UX §5.8 (T14). Quedan:
-   - los textos de U3 y U4 (§1.3);
-   - el valor de `from` (U6);
-   - el texto de la versión nueva de las condiciones (fase 6, UX §5.9).
-3. **Legal**: si el texto de las condiciones sobre proveedores exige volver a pedir la aceptación a las cuentas existentes (R12).
-4. **Producción**: apps de Google y Meta para el dominio definitivo, cuando se cierre «Marca y dominio».
+1. **Fase 7.2**: el recorrido con Google y Facebook reales. Necesita las apps de §15 y sus credenciales en el `.env`; el inicio de sesión en los proveedores lo hace una persona. Con él quedan resueltos R2 (PKCE y canje por POST en Facebook) y R3 (redirecciones de Meta en móvil y `form-action`). Contra el proveedor falso, el canje de Facebook por POST con PKCE funciona.
+2. **Legal**: si el texto de las condiciones sobre proveedores exige volver a pedir la aceptación a las cuentas existentes (R12).
+3. **Producción**: apps de Google y Meta para el dominio definitivo, cuando se cierre «Marca y dominio». Antes de publicar, contrastar los logos (`apps/web/static/logos`) con los archivos oficiales de Google y Meta.
+4. **Hueco de UX**: si el alta choca con una cuenta sin contraseña creada entre medias (`ACCOUNT_USES_OTHER_PROVIDER`, §7), la web va a `/login?error=other-provider` sin `provider`, como dice §7. Pero §11.4 exige `provider` para ese aviso, así que no se muestra nada. Es un caso de carrera muy raro; si se quiere un texto, la API tendría que devolver la lista de proveedores en ese 409.
+
+R4 ya figura en «Antes de la beta» de `decisiones.md`. U3, U4 y U6 están resueltos (§1.3).
+
+## Notas de la implementación
+
+Decisiones tomadas al implementar que este documento no fijaba:
+
+- **Conjunto `session` del *throttler*.** §10.3 pide límites por sesión propios para empezar un flujo con sesión (5 cada 15 min) y para quitar un proveedor (10 cada 15 min). El cubo compartido de §12.5 es solo para el borrado, la reautenticación y crear contraseña. Para no mezclarlos, hay un tercer conjunto, `session`, con un cubo por ruta. El conjunto `account` usa `accountKey`: la clave depende solo del *tracker*, así que el cubo es el mismo en todas las rutas que lo declaran.
+- **`NODE_ENV=test` en la API de los e2e.** La API se niega a usar el proveedor falso con `NODE_ENV=production` (§10.4). En la API, `NODE_ENV` no cambia nada más.
+- **Acciones con nombre.** SvelteKit no admite una acción `default` junto a otras con nombre: `/register/complete` usa `signup` y `cancel`, `/login/link` usa `link` y `cancel`, y `/account/delete` usa `password` (H0) y `confirm` (ELIMINAR).
+- **Matchers de parámetros.** SvelteKit 3 los declara en un único `src/params.ts` con `defineParams`.
+- **Proveedor falso en `npm run dev`.** `npm run oauth:fake` lo arranca con el `.env` de la raíz. Con `OAUTH_FAKE_PROVIDER_URL` en el `.env`, `vite dev` lo añade a `form-action`.
