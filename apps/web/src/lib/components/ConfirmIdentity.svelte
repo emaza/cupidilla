@@ -1,29 +1,20 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
   import { RECENT_AUTH_MAX_AGE_MINUTES, type OAuthProvider } from '@cupidilla/contracts';
-  import { createSubmission } from '#lib/forms/submission.svelte.ts';
   import { fill, t, type TextKey } from '#lib/texts.ts';
-  import PasswordField from './PasswordField.svelte';
   import ProviderButtons from './ProviderButtons.svelte';
-  import SubmitButton from './SubmitButton.svelte';
 
   /**
-   * Bloque «Confirma que eres tú» (UX §3.5.2): con la sesión antigua, en lugar de la acción
-   * protegida. Un botón por cada proveedor unido y, si la cuenta tiene contraseña y ningún
-   * proveedor, la contraseña (acción `?/reauthenticate` de la misma página).
+   * Bloque «Confirma que eres tú» (UX §3.5.2): solo para cuentas sin contraseña (decisión 20),
+   * con la sesión antigua, en lugar de la acción protegida. Un botón por cada proveedor unido.
    */
   interface Props {
     action: TextKey;
     providers: readonly OAuthProvider[];
-    hasPassword: boolean;
     /** Página a la que volver tras confirmar. */
-    next: '/account' | '/account/password' | '/account/delete';
-    passwordError?: string;
+    next: '/account' | '/account/password';
   }
 
-  let { action, providers, hasPassword, next, passwordError }: Props = $props();
-
-  const submission = createSubmission();
+  let { action, providers, next }: Props = $props();
 </script>
 
 <section class="section confirm-identity" aria-labelledby="confirm-identity-title">
@@ -34,23 +25,5 @@
       minutos: String(RECENT_AUTH_MAX_AGE_MINUTES),
     })}
   </p>
-
-  {#if providers.length > 0}
-    <ProviderButtons {providers} from="account" intent="reauthenticate" {next} />
-  {:else if hasPassword}
-    <form method="POST" action="?/reauthenticate" novalidate use:enhance={submission.submit}>
-      <PasswordField
-        label={t('verificar.campo.contrasena')}
-        autocomplete="current-password"
-        error={passwordError}
-      />
-      <div class="actions">
-        <SubmitButton
-          label={t('verificar.boton.contrasena')}
-          sendingLabel={t('verificar.boton.confirmando')}
-          sending={submission.sending}
-        />
-      </div>
-    </form>
-  {/if}
+  <ProviderButtons {providers} from="account" intent="reauthenticate" {next} />
 </section>

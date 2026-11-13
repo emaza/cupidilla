@@ -81,7 +81,6 @@
     <ConfirmIdentity
       action="verificar.accion.contrasena"
       providers={data.signIn.linked.map((item) => item.provider)}
-      hasPassword={false}
       next="/account/password"
     />
     <p><a class="block-link" href={resolve('account')}>{t('contrasena.enlace.cancelar')}</a></p>

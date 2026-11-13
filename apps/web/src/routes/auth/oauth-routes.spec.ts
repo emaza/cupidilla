@@ -11,7 +11,6 @@ const api = vi.hoisted(() => ({
   oauthSessionStart: vi.fn(),
   removeIdentity: vi.fn(),
   createPassword: vi.fn(),
-  reauthenticate: vi.fn(),
   deleteAccount: vi.fn(),
   account: vi.fn(),
 }));
@@ -524,6 +523,8 @@ describe('/account: formas de entrar (fase 5)', () => {
       );
     api.removeIdentity.mockResolvedValue({ ok: true, status: 204, data: undefined });
     expect((await remove()).location).toBe('/account?notice=unlinked&provider=facebook');
+    // Sin contraseña en la cuenta no se envía ninguna.
+    expect(api.removeIdentity).toHaveBeenLastCalledWith(expect.anything(), SESSION, 'facebook', {});
     api.removeIdentity.mockResolvedValue(failure(409, 'LAST_SIGN_IN_METHOD'));
     expect((await remove()).location).toBe('/account?error=last-method&provider=facebook');
     api.removeIdentity.mockResolvedValue(failure(503, 'API_UNAVAILABLE'));
@@ -533,18 +534,63 @@ describe('/account: formas de entrar (fase 5)', () => {
     });
   });
 
-  it('confirmar con la contraseña en /account: acierto → reauthenticated; error → en el campo', async () => {
-    const confirm = (password: string) =>
-      run(() => accountPage.actions.reauthenticate(event({ user: signedIn, form: { password } })));
-    expect((await confirm('')).response).toMatchObject({
-      data: { reauthenticate: { password: 'verificar.error.contrasena_vacia' } },
+  it('quitar con contraseña en la cuenta: vacía no llama a la API; errónea, en el campo (decisión 20)', async () => {
+    const remove = (password: string) =>
+      run(() =>
+        accountPage.actions.removeIdentity(
+          event({ user: signedIn, form: { provider: 'google', withPassword: '1', password } }),
+        ),
+      );
+    expect((await remove('')).response).toMatchObject({
+      status: 400,
+      data: { removeError: { provider: 'google', password: 'cuenta.error.contrasena_vacia' } },
     });
-    api.reauthenticate.mockResolvedValue({ ok: true, status: 204, data: undefined });
-    expect((await confirm('una frase larga')).location).toBe('/account?notice=reauthenticated');
-    api.reauthenticate.mockResolvedValue(failure(403, 'PASSWORD_INCORRECT'));
-    expect((await confirm('una frase mala')).response).toMatchObject({
+    expect(api.removeIdentity).not.toHaveBeenCalled();
+    api.removeIdentity.mockResolvedValue(failure(403, 'PASSWORD_INCORRECT'));
+    expect((await remove('una frase mala')).response).toMatchObject({
       status: 403,
-      data: { reauthenticate: { password: 'verificar.error.contrasena' } },
+      data: { removeError: { provider: 'google', password: 'cuenta.error.contrasena' } },
+    });
+    api.removeIdentity.mockResolvedValue({ ok: true, status: 204, data: undefined });
+    expect((await remove('una frase larga')).location).toBe(
+      '/account?notice=unlinked&provider=google',
+    );
+    expect(api.removeIdentity).toHaveBeenLastCalledWith(expect.anything(), SESSION, 'google', {
+      password: 'una frase larga',
+    });
+  });
+
+  it('añadir con contraseña en la cuenta: la reenvía; vacía o errónea vuelve sin ir al proveedor', async () => {
+    const add = (password: string) =>
+      run(() =>
+        start.POST(
+          event({
+            user: signedIn,
+            form: {
+              from: 'account',
+              intent: 'connect',
+              next: '/account',
+              withPassword: '1',
+              password,
+            },
+          }),
+        ),
+      );
+    expect((await add('')).location).toBe('/account?error=password-required');
+    expect(api.oauthSessionStart).not.toHaveBeenCalled();
+    api.oauthSessionStart.mockResolvedValue(failure(403, 'PASSWORD_INCORRECT'));
+    expect((await add('una frase mala')).location).toBe('/account?error=password-incorrect');
+    api.oauthSessionStart.mockResolvedValue(
+      ok(
+        { authorizationUrl: 'https://www.facebook.com/x', flowToken: FLOW, expiresAt: EXPIRES },
+        201,
+      ),
+    );
+    expect((await add('una frase larga')).location).toBe('https://www.facebook.com/x');
+    expect(api.oauthSessionStart).toHaveBeenLastCalledWith(expect.anything(), SESSION, 'google', {
+      purpose: 'connect',
+      returnPath: '/account',
+      password: 'una frase larga',
     });
   });
 

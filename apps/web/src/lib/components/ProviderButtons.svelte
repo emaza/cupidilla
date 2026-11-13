@@ -11,9 +11,14 @@
     intent?: 'reauthenticate' | 'connect';
     /** Pantalla a la que volver; la web la pasa por la lista cerrada. */
     next?: string | null;
+    /**
+     * Añadir en una cuenta con contraseña (decisión 20): cada formulario lleva antes del botón el
+     * campo `cuenta.acceso.campo_anadir`.
+     */
+    withPassword?: boolean;
   }
 
-  let { providers, from, intent, next }: Props = $props();
+  let { providers, from, intent, next, withPassword = false }: Props = $props();
 
   const NAMES: Record<OAuthProvider, string> = { google: 'Google', facebook: 'Facebook' };
   const LABELS = {
@@ -47,6 +52,22 @@
         <input type="hidden" name="from" value={from} />
         {#if intent}<input type="hidden" name="intent" value={intent} />{/if}
         {#if next}<input type="hidden" name="next" value={next} />{/if}
+        {#if withPassword}
+          <input type="hidden" name="withPassword" value="1" />
+          <div class="field">
+            <label for="password-add-{provider}">
+              {fill('cuenta.acceso.campo_anadir', { proveedor: NAMES[provider] })}
+            </label>
+            <input
+              id="password-add-{provider}"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              autocapitalize="none"
+              spellcheck="false"
+            />
+          </div>
+        {/if}
         <button
           type="submit"
           class="button-provider"

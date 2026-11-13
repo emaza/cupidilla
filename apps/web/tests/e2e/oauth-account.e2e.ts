@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { closeDb, oauthRowsForEmail } from './helpers/db.ts';
-import { login, logout, uniqueEmail } from './helpers/forms.ts';
+import { login, logout, PASSWORD, registerAdult, uniqueEmail } from './helpers/forms.ts';
 import { completeSignup, continueWith } from './helpers/oauth.ts';
 
 test.afterAll(closeDb);
@@ -122,4 +122,52 @@ test('E-O9: sin violaciones de CSP en /account y /account/password', async ({ pa
   await page.goto('/account/password');
   await page.goto('/account/delete');
   expect(violations).toEqual([]);
+});
+
+test('decisión 20: con contraseña, añadir y quitar un proveedor la piden en el mismo formulario', async ({
+  page,
+}) => {
+  const email = await registerAdult(page);
+  await expect(page).toHaveURL('/account');
+  // Sin bloque de confirmar: el botón de añadir está siempre, con su campo de contraseña.
+  await expect(page.getByRole('heading', { name: 'Confirma que eres tú' })).toHaveCount(0);
+  const facebook = accessRow(page, 'Facebook');
+  await expect(facebook.getByLabel('Tu contraseña, para añadir Facebook')).toBeVisible();
+
+  // Vacía: vuelve con el error y sin ir al proveedor.
+  await facebook.getByRole('button', { name: 'Continuar con Facebook' }).click();
+  await expect(page).toHaveURL('/account?error=password-required');
+  await expect(page.getByRole('alert')).toContainText(
+    'Escribe tu contraseña para confirmar el cambio.',
+  );
+
+  // Errónea.
+  await accessRow(page, 'Facebook')
+    .getByLabel('Tu contraseña, para añadir Facebook')
+    .fill('otra frase mala');
+  await accessRow(page, 'Facebook').getByRole('button', { name: 'Continuar con Facebook' }).click();
+  await expect(page).toHaveURL('/account?error=password-incorrect');
+  await expect(page.getByRole('alert')).toContainText('La contraseña no es correcta.');
+
+  // Correcta: al proveedor y de vuelta, unido.
+  await accessRow(page, 'Facebook')
+    .getByLabel('Tu contraseña, para añadir Facebook')
+    .fill(PASSWORD);
+  await continueWith(page, 'Facebook', { email });
+  await expect(page).toHaveURL('/account?notice=linked&provider=facebook');
+
+  // Quitar: con la contraseña errónea no quita nada; con la correcta, sí.
+  const linked = accessRow(page, 'Facebook');
+  await linked.getByLabel('Tu contraseña, para quitar Facebook').fill('otra frase mala');
+  await linked.getByRole('button', { name: 'Quitar Facebook' }).click();
+  await expect(
+    page.getByText('La contraseña no es correcta. No hemos hecho ningún cambio.').first(),
+  ).toBeVisible();
+  await expect(accessRow(page, 'Facebook')).toContainText('Unido el');
+  await accessRow(page, 'Facebook')
+    .getByLabel('Tu contraseña, para quitar Facebook')
+    .fill(PASSWORD);
+  await accessRow(page, 'Facebook').getByRole('button', { name: 'Quitar Facebook' }).click();
+  await expect(page).toHaveURL('/account?notice=unlinked&provider=facebook');
+  expect(await oauthRowsForEmail(email)).toMatchObject({ identities: 0 });
 });

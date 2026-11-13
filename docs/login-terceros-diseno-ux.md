@@ -20,7 +20,7 @@ Principios (añaden a los de H0):
 3. **Sin sorpresas con el correo.** El correo del proveedor se muestra, no se edita y no se pide otra vez.
 4. **Salida siempre a la vista.** Toda pantalla intermedia tiene «Cancelar».
 5. **Nunca sin forma de entrar.** La interfaz y el servidor impiden quitar la última.
-6. **Lo delicado pide una sesión reciente.** Borrar la cuenta sin contraseña, añadir un proveedor y crear una contraseña exigen haber entrado hace menos de 10 minutos; si no, un paso claro de «Confirma que eres tú» (§3.5.2). Quien acaba de entrar no ve ningún paso de más.
+6. **Los cambios se confirman** (decisión 20). Con contraseña, se escribe en el mismo formulario para añadir o quitar un proveedor y para borrar la cuenta. Sin contraseña, crear una contraseña y añadir un proveedor exigen haber entrado hace menos de 10 minutos; si no, un paso claro de «Confirma que eres tú» (§3.5.2). Quien acaba de entrar no ve ningún paso de más. Sin contraseña, quitar un proveedor no pide nada y borrar pide escribir ELIMINAR.
 
 ## 1. Flujos
 
@@ -332,39 +332,37 @@ Va entre «Tus datos» y «Cupidilla». Lista `<ul>`, una fila por forma, con no
 | Forma | Estado |
 |---|---|
 | Correo y contraseña | «Activa» si hay contraseña; «No tienes contraseña» y el enlace «Crear contraseña» si no la hay |
-| Proveedor unido | «Unido el {fecha}» (en español) y «Quitar {proveedor}» |
-| Proveedor no unido | «No unido» y, con sesión reciente, el botón de marca para añadirlo |
+| Proveedor unido | «Unido el {fecha}» (en español) y «Quitar {proveedor}». Con contraseña en la cuenta, el formulario lleva antes el campo `cuenta.acceso.campo_quitar` |
+| Proveedor no unido | «No unido» y el botón de marca para añadirlo: con contraseña en la cuenta, siempre, con el campo `cuenta.acceso.campo_anadir` antes del botón; sin contraseña, solo con sesión reciente |
 
 **Desvincular: sí, con un límite estricto: nunca puede quedar la cuenta sin forma de entrar.**
 
 - Una forma = la contraseña (si existe) + cada proveedor unido. Se puede quitar un proveedor solo si, sin él, queda al menos una.
 - Si es la única, **no se dibuja el botón**: aparece `cuenta.acceso.ultima` («Es tu única forma de entrar, así que no se puede quitar»). Sin botón no hay nada desactivado que explicar. Quien quiera quitar el único proveedor debe antes crear una contraseña o añadir el otro proveedor.
 - El servidor lo comprueba y bloquea la fila: si falla, `?error=last-method` → `cuenta.error.ultima_forma`. Dos pestañas no pueden quitar las dos últimas formas.
-- **Sin contraseña de confirmación y sin `confirm()`**: no destruye datos y se puede deshacer añadiendo de nuevo. Es `<button type="submit">` en un `<form method="POST">` por proveedor, con nombre visible «Quitar Google» (único por fila). Tras quitarlo: 303 a `/account?notice=unlinked&provider=…` → `cuenta.aviso.quitada`; foco con JavaScript al aviso.
+- **Con contraseña en la cuenta, se escribe en el mismo formulario** (decisión 20): campo `type="password"` con la etiqueta `cuenta.acceso.campo_quitar` (única por fila). Vacía: `cuenta.error.contrasena_vacia`; errónea: `cuenta.error.contrasena`, en el campo y en el resumen. **Sin contraseña, no se pide nada**: no destruye datos y se puede deshacer añadiendo de nuevo. Nunca `confirm()`. Es `<button type="submit">` en un `<form method="POST">` por proveedor, con nombre visible «Quitar Google» (único por fila). Tras quitarlo: 303 a `/account?notice=unlinked&provider=…` → `cuenta.aviso.quitada`; foco con JavaScript al aviso.
 - No cierra la sesión actual ni revoca nada en el proveedor.
 
 #### 3.5.1 Añadir un proveedor
 
-- Se muestra solo si la sesión es de menos de 10 minutos. Es el botón de marca («f Continuar con Facebook»), **sin** «Añadir»: las guías de marca solo permiten sus textos. El contexto lo da la fila («Facebook, No unido»).
+- **Con contraseña en la cuenta**, se muestra siempre, con el campo `cuenta.acceso.campo_anadir` antes del botón en el mismo formulario. Vacía: `?error=password-required` → `cuenta.error.contrasena_vacia`; errónea: `?error=password-incorrect` → `cuenta.error.contrasena`. **Sin contraseña**, solo si la sesión es de menos de 10 minutos. Es el botón de marca («f Continuar con Facebook»), **sin** «Añadir»: las guías de marca solo permiten sus textos. El contexto lo da la fila («Facebook, No unido»).
 - Es el formulario `POST /auth/facebook` con `from=account`. Si va bien: 303 a `/account?notice=linked&provider=facebook` → `cuenta.aviso.unida`. El correo del proveedor puede ser distinto del de la cuenta.
 - Si la identidad ya es de otra cuenta: `?error=identity-in-use` → `cuenta.error.proveedor_en_uso`. Si ya estaba unida a esta misma cuenta (otra pestaña): `?error=already-linked` → `cuenta.error.ya_unido`.
 - Errores del proveedor: §3.4, en `/account`.
-- Con la sesión antigua no se dibuja el botón: se muestra el bloque de §3.5.2 en su lugar.
+- Sin contraseña y con la sesión antigua no se dibuja el botón: se muestra el bloque de §3.5.2 en su lugar.
 
 #### 3.5.2 Bloque «Confirma que eres tú» (sesión antigua)
 
-Se usa en `/account` (para añadir), `/account/password` y `/account/delete`. Es el mismo componente con distinto texto de acción.
+Solo para cuentas **sin** contraseña (decisión 20): en `/account` (para añadir) y en `/account/password`. Es el mismo componente con distinto texto de acción.
 
 ```
 <h2> Confirma que eres tú                 (en /account/delete y /account/password: dentro de la página, tras el h1)
 <p>  Por seguridad, para añadir una forma de entrar tienes que haber entrado hace menos de 10 minutos.
      Vuelve a entrar y continuarás en esta página.
-  si hay proveedor unido:  [ G  Continuar con Google ]  [ f  Continuar con Facebook ]   (solo los unidos)
-  si la cuenta tiene contraseña y ningún proveedor:  Contraseña [ ______ ] [Confirmar]
+  [ G  Continuar con Google ]  [ f  Continuar con Facebook ]   (solo los unidos)
 ```
 
 - Un botón de marca por cada proveedor unido (el que se use debe ser una identidad de esa cuenta; si no, `?error=identity-mismatch`). Es el formulario `POST /auth/{proveedor}` con `from=account` y `next` igual a la pantalla actual.
-- Solo si la cuenta tiene contraseña y ningún proveedor, la confirmación es con la contraseña (formulario propio, mismos errores que H0). Requiere un endpoint que el técnico aún no tiene (T16).
 - Mientras la sesión es antigua, la acción protegida (formulario, campo ELIMINAR, botón de añadir) **no se dibuja**: no hay botón que falle después.
 - Al volver con éxito: misma página, con `?notice=reauthenticated` → `verificar.aviso.confirmada` (`role="status"`) y la acción ya disponible.
 - Cancelar en el proveedor: `?notice=provider-cancelled` → `verificar.aviso.cancelado`. Otra cuenta del proveedor: `?error=identity-mismatch` → `verificar.error.otra_cuenta`. Falla: `?error=provider-failed` → `cuenta.error.proveedor_fallo`.
@@ -385,10 +383,9 @@ Tres casos según la cuenta:
 | Cuenta | Qué se pide |
 |---|---|
 | Tiene contraseña (con o sin proveedores) | Contraseña, exactamente como H0 §3.5. No hay bloque de §3.5.2 |
-| Sin contraseña, sesión de menos de 10 minutos | Escribir ELIMINAR (abajo) |
-| Sin contraseña, sesión antigua | Bloque «Confirma que eres tú» (§3.5.2) en lugar del campo; tras volver, el campo ELIMINAR |
+| Sin contraseña | Escribir ELIMINAR (abajo), sin pedir sesión reciente (decisión 20) |
 
-Por qué la palabra: se entiende al primer vistazo, funciona sin JavaScript, y es coherente con H0 §1.6. Confirma la intención; la identidad la prueba la sesión reciente o la reautenticación. (Decidido, D8; el técnico lo llama opción C.)
+Por qué la palabra: se entiende al primer vistazo, funciona sin JavaScript, y es coherente con H0 §1.6. Confirma la intención. (Decidido, D8; la decisión 20 quita además la sesión reciente.)
 
 ```
 <h1> Eliminar tu cuenta
@@ -402,13 +399,12 @@ Escribe ELIMINAR para confirmar     [ ________ ]
 Cancelar
 ```
 
-Con sesión antigua, en lugar del campo y del botón de eliminar: el bloque de §3.5.2 con la acción «eliminar tu cuenta» y «Cancelar» debajo. Los dos párrafos de alcance se muestran siempre, antes de pedir nada.
+Los dos párrafos de alcance se muestran siempre, antes de pedir nada.
 
 - `<input type="text" name="confirmation" autocomplete="off" autocapitalize="none" spellcheck="false">`. «ELIMINAR» va escrito en la etiqueta (texto seleccionable y copiable) y **se permite pegar** (3.3.8). Se compara sin distinguir mayúsculas y sin espacios en los extremos. La valida la web.
 - Error (vacío o distinto): `eliminar.error.confirmacion`; no se borra nada.
 - Mismos botones y estados que H0 §3.5.
 - Resultado incierto (503): `eliminar.error.resultado_incierto_proveedor`. Aquí hay una señal clara, a diferencia de H0: si al entrar con el proveedor Cupidilla pide fecha de nacimiento y condiciones como a una persona nueva, la cuenta ya no existe.
-- Si la sesión envejece entre cargar y enviar: `?error=reauth-required` (§3.5.2).
 - Con contraseña: el resultado incierto de H0, sin cambios.
 
 ### 3.7 `/account/password`: crear contraseña
@@ -558,6 +554,10 @@ Se reutilizan de H0 §5.3 sin cambios: `registro.campo.nacimiento`, `registro.ay
 | `cuenta.acceso.boton_quitar` | Quitar {proveedor} |
 | `cuenta.acceso.boton_quitando` | Quitando… |
 | `cuenta.acceso.ultima` | Es tu única forma de entrar, así que no se puede quitar. |
+| `cuenta.acceso.campo_quitar` | Tu contraseña, para quitar {proveedor} |
+| `cuenta.acceso.campo_anadir` | Tu contraseña, para añadir {proveedor} |
+| `cuenta.error.contrasena_vacia` | Escribe tu contraseña para confirmar el cambio. No hemos hecho ningún cambio. |
+| `cuenta.error.contrasena` | La contraseña no es correcta. No hemos hecho ningún cambio. |
 | `cuenta.acceso.nota` | Si quitas una forma de entrar, no se borra tu cuenta de Cupidilla ni tu cuenta en ese servicio. Siempre debe quedarte al menos una. |
 | `cuenta.aviso.unida` | Hemos unido {proveedor} a tu cuenta. Ya puedes entrar con cualquiera de tus formas de entrar. |
 | `cuenta.aviso.quitada` | Hemos quitado {proveedor}. Ya no puedes entrar con él. |
@@ -575,14 +575,8 @@ Se reutilizan de H0 §5.3 sin cambios: `registro.campo.nacimiento`, `registro.ay
 |---|---|
 | `verificar.titulo` | Confirma que eres tú |
 | `verificar.texto` | Por seguridad, para {accion} tienes que haber entrado hace menos de {minutos} minutos. Vuelve a entrar y continuarás en esta página. |
-| `verificar.accion.eliminar` | eliminar tu cuenta |
 | `verificar.accion.anadir` | añadir una forma de entrar |
 | `verificar.accion.contrasena` | crear una contraseña |
-| `verificar.campo.contrasena` | Contraseña |
-| `verificar.boton.contrasena` | Confirmar |
-| `verificar.boton.confirmando` | Confirmando… |
-| `verificar.error.contrasena_vacia` | Escribe tu contraseña para confirmar. |
-| `verificar.error.contrasena` | La contraseña no es correcta. |
 | `verificar.aviso.confirmada` | Listo, hemos confirmado que eres tú. |
 | `verificar.aviso.cancelado` | No has continuado con {proveedor}, así que no hemos confirmado nada ni hemos hecho ningún cambio. |
 | `verificar.error.necesaria` | Han pasado más de {minutos} minutos desde que entraste. Confirma que eres tú para continuar. No hemos hecho ningún cambio. |
@@ -643,6 +637,8 @@ Coincide con las listas cerradas del técnico (§11.4). `*` marca los valores qu
 | | `error=identity-mismatch` | `verificar.error.otra_cuenta` |
 | | `error=last-method` | `cuenta.error.ultima_forma` |
 | | `error=reauth-required` | `verificar.error.necesaria` |
+| | `error=password-required` | `cuenta.error.contrasena_vacia` |
+| | `error=password-incorrect` | `cuenta.error.contrasena` |
 | | `error=rate-limited` | `comun.error.limite` |
 | `/account/password` y `/account/delete` | `notice=reauthenticated` | `verificar.aviso.confirmada` |
 | | `notice=provider-cancelled` | `verificar.aviso.cancelado` |
@@ -666,7 +662,7 @@ Decidido (D6): se **sube la versión** del texto para las altas nuevas; quien ya
 | `condiciones.s5.titulo` | 5. Qué datos pedimos y para qué |
 | `condiciones.s5.texto` | Para crear la cuenta pedimos tu correo, tu fecha de nacimiento y, si te registras con correo, una contraseña. Los usamos para que puedas entrar y para comprobar que eres mayor de edad. Si entras con Google o Facebook, recibimos de ellos solo un identificador tuyo en ese servicio y tu correo. No usamos tu nombre, tu foto ni tus contactos y no guardamos ningún acceso a tu cuenta en ese servicio. Guardamos también que has aceptado estas condiciones: qué versión y cuándo. [PENDIENTE: base jurídica, plazos de conservación, encargados del tratamiento, derechos y cómo ejercerlos. Irá en la política de privacidad, cuyo enlace piden Google y Facebook.] |
 | `condiciones.s7.titulo` | 7. Eliminar tu cuenta |
-| `condiciones.s7.texto` | Puedes eliminar tu cuenta cuando quieras desde «Tu cuenta». Es inmediato y no se puede deshacer, y borra también las uniones con Google o Facebook; no toca nada en tu cuenta de esos servicios. Si no tienes contraseña, te pediremos que hayas entrado hace poco y que escribas una palabra de confirmación. [PENDIENTE: confirmar si debe conservarse alguna prueba del consentimiento tras el borrado y por cuánto tiempo; si se conserva, este párrafo y el de la pantalla de eliminar deben decirlo. PENDIENTE: instrucciones de eliminación de datos que exige Facebook.] |
+| `condiciones.s7.texto` | Puedes eliminar tu cuenta cuando quieras desde «Tu cuenta». Es inmediato y no se puede deshacer, y borra también las uniones con Google o Facebook; no toca nada en tu cuenta de esos servicios. Si no tienes contraseña, te pediremos que escribas una palabra de confirmación. [PENDIENTE: confirmar si debe conservarse alguna prueba del consentimiento tras el borrado y por cuánto tiempo; si se conserva, este párrafo y el de la pantalla de eliminar deben decirlo. PENDIENTE: instrucciones de eliminación de datos que exige Facebook.] |
 | `condiciones.s9.titulo` | 9. Cambios |
 | `condiciones.s9.texto` | Si cambiamos estas condiciones publicaremos una nueva versión. Si el cambio te afecta de forma importante, te avisaremos y te pediremos que la aceptes antes de seguir usando el servicio; en los demás casos, sigue valiendo la versión que aceptaste. [PENDIENTE: revisión jurídica de este criterio.] |
 
@@ -767,16 +763,16 @@ Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con l
 ### `/account`
 
 44. `/account` muestra «Formas de entrar» con una fila por forma: contraseña (activa o no) y cada proveedor (unido con fecha en español o no unido).
-45. Cada proveedor unido tiene «Quitar {proveedor}» en un formulario POST (cuando queda otra forma); al pulsarlo se elimina la unión, se va a `/account?notice=unlinked&provider=…` con `cuenta.aviso.quitada` y la sesión sigue.
+45. (revisado, decisión 20) Cada proveedor unido tiene «Quitar {proveedor}» en un formulario POST (cuando queda otra forma). Con contraseña en la cuenta, el formulario lleva `cuenta.acceso.campo_quitar`: vacía, `cuenta.error.contrasena_vacia`; errónea, `cuenta.error.contrasena`, sin quitar nada. Sin contraseña, no pide nada. Al quitar se va a `/account?notice=unlinked&provider=…` con `cuenta.aviso.quitada` y la sesión sigue.
 46. Tras quitar un proveedor no se puede entrar con él (va al flujo de alta o unión) y el resto sigue intacto.
 47. Si solo queda una forma no hay botón de quitar y se muestra `cuenta.acceso.ultima`.
 48. Un POST de quitar la última forma o dos peticiones simultáneas para quitar las dos últimas: queda al menos una; la primera da `?error=last-method`.
-49. (revisado) Con sesión reciente, cada proveedor no unido muestra su botón de marca; al volver con éxito, `/account?notice=linked&provider=…` con `cuenta.aviso.unida`. El correo del proveedor puede ser distinto del de la cuenta. Si esa identidad es de otra cuenta, `?error=identity-in-use`; si ya es de esta, `?error=already-linked`.
+49. (revisado, decisión 20) Con contraseña en la cuenta, cada proveedor no unido muestra siempre su botón de marca con `cuenta.acceso.campo_anadir` antes; sin contraseña, solo con sesión reciente. Contraseña vacía o errónea: `?error=password-required` o `?error=password-incorrect`, sin salir al proveedor. Al volver con éxito, `/account?notice=linked&provider=…` con `cuenta.aviso.unida`. El correo del proveedor puede ser distinto del de la cuenta. Si esa identidad es de otra cuenta, `?error=identity-in-use`; si ya es de esta, `?error=already-linked`.
 
 ### Eliminar sin contraseña (revisado)
 
 50. Cuenta con contraseña (con o sin proveedores): `/account/delete` pide la contraseña como H0, sin bloque de confirmar ni campo ELIMINAR.
-51. Cuenta sin contraseña con sesión de menos de 10 minutos: muestra `eliminar.campo.confirmacion`, sin campo de contraseña, con `eliminar.texto.alcance_proveedor` (dice «inmediato», «no se puede deshacer» y no menciona contraseña).
+51. (revisado, decisión 20) Cuenta sin contraseña: muestra siempre `eliminar.campo.confirmacion`, haga lo que haga que entró, sin campo de contraseña, con `eliminar.texto.alcance_proveedor` (dice «inmediato», «no se puede deshacer» y no menciona contraseña).
 52. Con la palabra correcta (cualquier mayúscula o minúscula, con espacios alrededor, pegada) se elimina la cuenta y sus uniones, se cierra la sesión y se va a `/` con `portada.aviso.cuenta_eliminada`.
 53. Con el campo vacío o distinto: `eliminar.error.confirmacion`, no se borra nada y la sesión sigue.
 54. Tras eliminar, entrar con el mismo proveedor lleva a `/register/complete` como a una persona nueva.
@@ -793,14 +789,14 @@ Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con l
 
 ### Sesión reciente y «Confirma que eres tú» (nuevos)
 
-62. «Sesión reciente» es haber demostrado la identidad hace menos de 10 minutos (entrar con cualquier forma, o reautenticarse). Entrar con el proveedor y pulsar enseguida «Eliminar mi cuenta» no muestra ningún bloque de confirmar.
-63. Cuenta sin contraseña con sesión de 10 minutos o más: `/account/delete` muestra los textos de alcance, el bloque `verificar.*` con la acción `verificar.accion.eliminar`, un botón de marca por cada proveedor unido, «Cancelar», y **no** el campo ELIMINAR ni el botón de eliminar. Un POST directo no borra nada y devuelve a la pantalla con `?error=reauth-required`.
-64. Al volver del proveedor con una identidad de esa cuenta: misma página con `verificar.aviso.confirmada` y el campo ELIMINAR disponible; la sesión cuenta como reciente.
+62. «Sesión reciente» es haber demostrado la identidad hace menos de 10 minutos (entrar con cualquier forma, o reautenticarse). Desde la decisión 20 solo la piden, en cuentas sin contraseña, crear una contraseña y añadir un proveedor.
+63. (sustituido por la decisión 20) Borrar una cuenta sin contraseña ya no pide sesión reciente: ver 51.
+64. Al volver del proveedor con una identidad de esa cuenta: misma página con `verificar.aviso.confirmada` y la acción disponible; la sesión cuenta como reciente.
 65. Si vuelve con una cuenta del proveedor distinta de la unida: `verificar.error.otra_cuenta` (`identity-mismatch`), el bloque sigue y no cambia nada.
-66. Si cancela en el proveedor desde `/account`, `/account/password` o `/account/delete`: `verificar.aviso.cancelado` como aviso informativo, sin cambios.
+66. Si cancela en el proveedor desde `/account` o `/account/password`: `verificar.aviso.cancelado` como aviso informativo, sin cambios.
 67. Si la sesión envejece entre cargar y enviar: vuelve a la misma pantalla con `verificar.error.necesaria`, sin ejecutar nada; los campos de contraseña quedan vacíos.
-68. Una cuenta con contraseña y sin proveedores con sesión antigua que quiere añadir un proveedor ve el bloque con campo de contraseña (`verificar.campo.contrasena`); con contraseña incorrecta, `verificar.error.contrasena`; con la correcta, la sesión pasa a reciente y vuelve a la misma pantalla.
-69. Con sesión antigua, `/account` no dibuja los botones de añadir proveedor; los sustituye el bloque de confirmar. Con sesión reciente, el bloque no aparece.
+68. (sustituido por la decisión 20) Una cuenta con contraseña no ve nunca el bloque de confirmar: escribe la contraseña en el propio cambio (45, 49).
+69. Cuenta sin contraseña con sesión antigua: `/account` no dibuja los botones de añadir proveedor; los sustituye el bloque de confirmar. Con sesión reciente, el bloque no aparece.
 
 ### Crear contraseña (nuevos)
 

@@ -71,6 +71,8 @@ const LISTS: Record<MessagePage, { notice: Record<string, Entry>; error: Record<
         'identity-mismatch': { key: 'verificar.error.otra_cuenta' },
         'last-method': { key: 'cuenta.error.ultima_forma' },
         'reauth-required': { key: 'verificar.error.necesaria' },
+        'password-required': { key: 'cuenta.error.contrasena_vacia' },
+        'password-incorrect': { key: 'cuenta.error.contrasena' },
         'rate-limited': { key: 'comun.error.limite' },
       },
     },

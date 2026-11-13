@@ -4,12 +4,6 @@ import {
   type AccountResponse,
   type OAuthProvider,
 } from '@cupidilla/contracts';
-import { fail, redirect, type RequestEvent } from '@sveltejs/kit';
-import { passwordInputSchema } from '@cupidilla/contracts';
-import { textField } from '#lib/forms/form-data.ts';
-import type { TextKey } from '#lib/texts.ts';
-import { api } from './api-client.ts';
-import type { ReturnPath } from './return-path.ts';
 
 const linkedOn = new Intl.DateTimeFormat('es-ES', {
   day: 'numeric',
@@ -51,37 +45,4 @@ export function signInMethodsView(
     methods: linked.length + (password ? 1 : 0),
     recent: age < RECENT_AUTH_MAX_AGE_MINUTES * 60_000,
   };
-}
-
-/** Errores de la confirmación con contraseña: en el campo o generales. */
-export interface ReauthenticateErrors {
-  password?: TextKey;
-  general?: TextKey;
-}
-
-/**
- * Acción `reauthenticate` de las páginas privadas: confirmar con la contraseña (UX §3.5.2,
- * técnico T16). Si acierta, vuelve a la misma página con `?notice=reauthenticated`.
- */
-export async function reauthenticateWithPassword(event: RequestEvent, page: ReturnPath) {
-  const password = textField(await event.request.formData(), 'password');
-  const token = event.locals.sessionToken;
-  if (!token) redirect(303, `/login?next=${page}`);
-  const failure = (status: number, errors: ReauthenticateErrors) =>
-    fail(status, { reauthenticate: errors });
-  const fieldError = (key: TextKey, status = 400) => failure(status, { password: key });
-  if (!passwordInputSchema.safeParse(password).success) {
-    return fieldError(
-      password === '' ? 'verificar.error.contrasena_vacia' : 'verificar.error.contrasena',
-    );
-  }
-  const result = await api.reauthenticate(event, token, { password });
-  if (result.ok) redirect(303, `${page}?notice=reauthenticated`);
-  if (result.status === 401) redirect(303, `/login?next=${page}`);
-  if (result.status === 429) redirect(303, `${page}?error=rate-limited`);
-  if (result.error.code === 'PASSWORD_INCORRECT') {
-    return fieldError('verificar.error.contrasena', 403);
-  }
-  // No hay texto propio en UX: el general de «algo ha fallado».
-  return failure(result.status, { general: 'error500.texto' });
 }

@@ -99,3 +99,16 @@ describe('W-O2: /account, /account/password y /account/delete (técnico §11.4)'
     );
   });
 });
+
+describe('W-O2: errores de contraseña en /account (decisión 20)', () => {
+  it('password-required y password-incorrect solo en /account', () => {
+    const at = (page: 'account' | 'account-step', query: string) =>
+      urlMessage(page, new URLSearchParams(query));
+    expect(at('account', 'error=password-incorrect')).toEqual({
+      kind: 'error',
+      text: 'La contraseña no es correcta. No hemos hecho ningún cambio.',
+    });
+    expect(at('account', 'error=password-required')?.kind).toBe('error');
+    expect(at('account-step', 'error=password-incorrect')).toBeNull();
+  });
+});

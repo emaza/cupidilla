@@ -1,7 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { enhance } from '$app/forms';
-  import ConfirmIdentity from '#lib/components/ConfirmIdentity.svelte';
   import ErrorSummary from '#lib/components/ErrorSummary.svelte';
   import FieldError from '#lib/components/FieldError.svelte';
   import PasswordField from '#lib/components/PasswordField.svelte';
@@ -98,7 +97,7 @@
         </div>
       </form>
     {/key}
-  {:else if signIn?.recent}
+  {:else if signIn}
     {#key form}
       <form method="POST" action="?/confirm" novalidate use:enhance={submission.submit}>
         <div class="field">
@@ -133,13 +132,5 @@
         </div>
       </form>
     {/key}
-  {:else if signIn}
-    <ConfirmIdentity
-      action="verificar.accion.eliminar"
-      providers={signIn.linked.map((item) => item.provider)}
-      hasPassword={false}
-      next="/account/delete"
-    />
-    <p><a class="block-link" href={resolve('account')}>{t('eliminar.enlace.cancelar')}</a></p>
   {/if}
 </div>

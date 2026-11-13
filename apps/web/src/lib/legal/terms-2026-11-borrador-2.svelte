@@ -67,10 +67,10 @@
   <p>
     Puedes eliminar tu cuenta cuando quieras desde «Tu cuenta». Es inmediato y no se puede deshacer,
     y borra también las uniones con Google o Facebook; no toca nada en tu cuenta de esos servicios.
-    Si no tienes contraseña, te pediremos que hayas entrado hace poco y que escribas una palabra de
-    confirmación. [PENDIENTE: confirmar si debe conservarse alguna prueba del consentimiento tras el
-    borrado y por cuánto tiempo; si se conserva, este párrafo y el de la pantalla de eliminar deben
-    decirlo. PENDIENTE: instrucciones de eliminación de datos que exige Facebook.]
+    Si no tienes contraseña, te pediremos que escribas una palabra de confirmación. [PENDIENTE:
+    confirmar si debe conservarse alguna prueba del consentimiento tras el borrado y por cuánto
+    tiempo; si se conserva, este párrafo y el de la pantalla de eliminar deben decirlo. PENDIENTE:
+    instrucciones de eliminación de datos que exige Facebook.]
   </p>
 
   <h2>8. Cómo esperamos que te comportes</h2>

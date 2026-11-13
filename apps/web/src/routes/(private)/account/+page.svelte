@@ -3,6 +3,8 @@
   import { enhance } from '$app/forms';
   import type { OAuthProvider } from '@cupidilla/contracts';
   import ConfirmIdentity from '#lib/components/ConfirmIdentity.svelte';
+  import ErrorSummary from '#lib/components/ErrorSummary.svelte';
+  import FieldError from '#lib/components/FieldError.svelte';
   import ProviderButtons from '#lib/components/ProviderButtons.svelte';
   import SubmitButton from '#lib/components/SubmitButton.svelte';
   import UrlMessage from '#lib/components/UrlMessage.svelte';
@@ -21,18 +23,14 @@
     if (form && 'removeFailed' in form && form.removeFailed) {
       return fill('cuenta.error.quitar_servidor', { proveedor: NAMES[form.removeFailed] });
     }
-    if (form && 'reauthenticate' in form && form.reauthenticate?.general) {
-      return t(form.reauthenticate.general);
-    }
     return undefined;
   });
-  const reauthError = $derived(
-    form && 'reauthenticate' in form && form.reauthenticate?.password
-      ? t(form.reauthenticate.password)
-      : undefined,
+  /** Contraseña vacía o errónea al quitar un proveedor (decisión 20). */
+  const removeError = $derived(
+    form && 'removeError' in form && form.removeError ? form.removeError : undefined,
   );
   const hasErrors = $derived(
-    general !== undefined || reauthError !== undefined || data.message?.kind === 'error',
+    general !== undefined || removeError !== undefined || data.message?.kind === 'error',
   );
   const signIn = $derived(data.signIn);
   /** Proveedor en curso de quitar (solo con JavaScript). */
@@ -50,6 +48,10 @@
       {general}
     </p>
   </div>
+{:else if removeError}
+  <ErrorSummary
+    items={[{ target: `password-remove-${removeError.provider}`, text: t(removeError.password) }]}
+  />
 {:else if !form}
   <UrlMessage message={data.message} />
 {/if}
@@ -124,6 +126,30 @@
               }}
             >
               <input type="hidden" name="provider" value={item.provider} />
+              {#if signIn.hasPassword}
+                {@const fieldId = `password-remove-${item.provider}`}
+                {@const fieldError =
+                  removeError?.provider === item.provider ? t(removeError.password) : undefined}
+                <input type="hidden" name="withPassword" value="1" />
+                <div class="field">
+                  <label for={fieldId}>
+                    {fill('cuenta.acceso.campo_quitar', { proveedor: NAMES[item.provider] })}
+                  </label>
+                  {#if fieldError}
+                    <FieldError id="{fieldId}-error" text={fieldError} />
+                  {/if}
+                  <input
+                    id={fieldId}
+                    name="password"
+                    type="password"
+                    autocomplete="current-password"
+                    autocapitalize="none"
+                    spellcheck="false"
+                    aria-describedby={fieldError ? `${fieldId}-error` : undefined}
+                    aria-invalid={fieldError ? 'true' : undefined}
+                  />
+                </div>
+              {/if}
               <SubmitButton
                 label={fill('cuenta.acceso.boton_quitar', { proveedor: NAMES[item.provider] })}
                 sendingLabel={t('cuenta.acceso.boton_quitando')}
@@ -142,8 +168,17 @@
             <span class="access-name">{NAMES[provider]}</span>
             <span class="access-state">{t('cuenta.acceso.estado_no_unido')}</span>
           </div>
-          <!-- Añadir solo con sesión reciente; si no, el bloque de confirmar (UX §3.5.1). -->
-          {#if signIn.recent}
+          <!-- Con contraseña, siempre y escribiéndola; sin ella, solo con sesión reciente
+               (decisión 20, UX §3.5.1). -->
+          {#if signIn.hasPassword}
+            <ProviderButtons
+              providers={[provider]}
+              from="account"
+              intent="connect"
+              next="/account"
+              withPassword
+            />
+          {:else if signIn.recent}
             <ProviderButtons
               providers={[provider]}
               from="account"
@@ -156,13 +191,11 @@
     </ul>
     <p class="help">{t('cuenta.acceso.nota')}</p>
 
-    {#if !signIn.recent && signIn.addable.length > 0}
+    {#if !signIn.hasPassword && !signIn.recent && signIn.addable.length > 0}
       <ConfirmIdentity
         action="verificar.accion.anadir"
         providers={signIn.linked.map((item) => item.provider)}
-        hasPassword={signIn.hasPassword}
         next="/account"
-        passwordError={reauthError}
       />
     {/if}
   </section>

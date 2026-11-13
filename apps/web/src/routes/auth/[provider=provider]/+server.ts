@@ -53,11 +53,25 @@ export const POST: RequestHandler = async (event) => {
     const page = safeReturnPath(next);
     const token = event.locals.sessionToken;
     if (!event.locals.user || !token) redirect(303, `/login?next=${page}`);
+    // Añadir en una cuenta con contraseña: se escribe en el mismo formulario (decisión 20).
+    const withPassword = textField(data, 'withPassword') === '1';
+    const password = textField(data, 'password');
+    if (withPassword && password === '') redirect(303, `${page}?error=password-required`);
     const result = await api.oauthSessionStart(event, token, provider, {
       purpose: intent,
       returnPath: page,
+      ...(withPassword ? { password } : {}),
     });
-    if (!result.ok && result.status === 401) redirect(303, `/login?next=${page}`);
+    if (!result.ok) {
+      if (result.status === 401) redirect(303, `/login?next=${page}`);
+      // La contraseña no sale de la web: vuelve sin ir al proveedor.
+      if (result.error.code === 'PASSWORD_INCORRECT') {
+        redirect(303, `${page}?error=password-incorrect`);
+      }
+      if (result.error.code === 'VALIDATION_FAILED') {
+        redirect(303, `${page}?error=password-required`);
+      }
+    }
     goToProvider(event, provider, page, result);
   }
 

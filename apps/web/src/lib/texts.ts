@@ -230,6 +230,11 @@ export const texts = {
   'cuenta.acceso.boton_quitar': 'Quitar {proveedor}',
   'cuenta.acceso.boton_quitando': 'Quitando…',
   'cuenta.acceso.ultima': 'Es tu única forma de entrar, así que no se puede quitar.',
+  'cuenta.acceso.campo_quitar': 'Tu contraseña, para quitar {proveedor}',
+  'cuenta.acceso.campo_anadir': 'Tu contraseña, para añadir {proveedor}',
+  'cuenta.error.contrasena_vacia':
+    'Escribe tu contraseña para confirmar el cambio. No hemos hecho ningún cambio.',
+  'cuenta.error.contrasena': 'La contraseña no es correcta. No hemos hecho ningún cambio.',
   'cuenta.acceso.nota':
     'Si quitas una forma de entrar, no se borra tu cuenta de Cupidilla ni tu cuenta en ese servicio. Siempre debe quedarte al menos una.',
   'cuenta.aviso.quitada': 'Hemos quitado {proveedor}. Ya no puedes entrar con él.',
@@ -246,14 +251,8 @@ export const texts = {
   'verificar.titulo': 'Confirma que eres tú',
   'verificar.texto':
     'Por seguridad, para {accion} tienes que haber entrado hace menos de {minutos} minutos. Vuelve a entrar y continuarás en esta página.',
-  'verificar.accion.eliminar': 'eliminar tu cuenta',
   'verificar.accion.anadir': 'añadir una forma de entrar',
   'verificar.accion.contrasena': 'crear una contraseña',
-  'verificar.campo.contrasena': 'Contraseña',
-  'verificar.boton.contrasena': 'Confirmar',
-  'verificar.boton.confirmando': 'Confirmando…',
-  'verificar.error.contrasena_vacia': 'Escribe tu contraseña para confirmar.',
-  'verificar.error.contrasena': 'La contraseña no es correcta.',
   'verificar.aviso.confirmada': 'Listo, hemos confirmado que eres tú.',
   'verificar.aviso.cancelado':
     'No has continuado con {proveedor}, así que no hemos confirmado nada ni hemos hecho ningún cambio.',

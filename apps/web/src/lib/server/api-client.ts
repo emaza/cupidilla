@@ -27,6 +27,7 @@ import {
   type PendingIdentityResponse,
   type ReauthenticateRequest,
   type RegisterRequest,
+  type RemoveIdentityRequest,
   type SessionResponse,
 } from '@cupidilla/contracts';
 import type { RequestEvent } from '@sveltejs/kit';
@@ -341,11 +342,13 @@ export const api = {
     event: RequestEvent,
     token: string,
     provider: OAuthProvider,
+    body: RemoveIdentityRequest,
   ): Promise<ApiResult<void>> =>
     request(event, {
       method: 'POST',
       path: `/users/me/identities/${provider}/removal`,
       token,
+      body,
       expectStatus: 204,
     }),
 };
