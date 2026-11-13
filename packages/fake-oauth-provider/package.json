@@ -1,0 +1,21 @@
+{
+  "name": "@cupidilla/fake-oauth-provider",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Proveedor OAuth falso (Google y Facebook) para las pruebas. Solo fuente TypeScript, sin compilar.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "6.0.3",
+    "vite": "8.3.8",
+    "vitest": "5.1.0"
+  }
+}
