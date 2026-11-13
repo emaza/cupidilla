@@ -35,18 +35,18 @@ Por qué así: es la arquitectura mínima que cumple `docs/arquitectura.md`, con
 
 ## 1 bis. Acuerdos entre este diseño y el de UX
 
-Resueltos por el CTO el 11 de noviembre de 2026, al cruzar este documento con [el diseño UX](h0-diseno-ux.md). **Reparto**: este documento manda en código, datos, API y seguridad; el de UX manda en pantallas, marcado HTML, textos y flujo visible. Las secciones afectadas de ambos ya están corregidas; esta tabla deja constancia del acuerdo y de su porqué.
+Resueltos por el CTO el 11 de noviembre de 2026, al cruzar este documento con [el diseño UX](h0-diseno-ux.md). **Reparto**: este documento manda en código, datos, API y seguridad; el de UX manda en pantallas, marcado HTML, textos y flujo visible. Las secciones afectadas de ambos ya están corregidas; esta tabla deja constancia del acuerdo y de su porqué. El 13 de noviembre de 2026 se actualizaron A1, A6, A7 y A8: las URL, los parámetros, las acciones y los nombres de campo de la web pasan a inglés (decisión 18; equivalencias exactas en [rutas-en-ingles-equivalencias.md](rutas-en-ingles-equivalencias.md)).
 
 | # | Tema | Acuerdo | Por qué |
 |---|---|---|---|
-| A1 | Nombres de los campos | Los `name` e `id` del HTML van en español, como en UX: `correo`, `contrasena`, `dia`, `mes`, `anio`, `condiciones`, `siguiente`. La acción de SvelteKit los convierte al contrato en inglés (`email`, `password`, `birthDate`, `acceptTerms`, `termsVersion`) | Son interfaz: aparecen en los enlaces del resumen de errores. El contrato sigue en inglés |
+| A1 | Nombres de los campos | Los `name` e `id` del HTML van en inglés y usan los nombres del contrato: `email`, `password`, `day`, `month`, `year`, `acceptTerms`, `termsVersion` (campo oculto) y `next` (campo oculto de `/login`). La acción de SvelteKit compone `birthDate` con `day`, `month` y `year`, y convierte la casilla (`on`) en `acceptTerms: true` | Un solo vocabulario en el código y en el contrato (decisión 18). Lo que ve la persona sigue en español; los `id` solo asoman en los enlaces del resumen de errores (`#email`) |
 | A2 | Fecha de nacimiento | Tres campos de texto (UX §3.2). `apps/web/src/lib/forms/birth-date.ts` los valida por partes y compone `YYYY-MM-DD`: devuelve la fecha o el error de la parte que falla. Después se aplican `birthDateSchema` y `checkBirthDate` de `contracts` | El contrato no cambia; los errores por parte son de presentación |
 | A3 | Orden de validación en la web | El de UX §1.2: si los tres campos componen una fecha real y es de un menor, se muestra la pantalla de menor aunque haya otros errores. La API mantiene su orden (esquema → edad) y sigue siendo quien garantiza que no se crea nada | Un menor no recibe de vuelta un formulario con sus datos |
 | A4 | Menor de edad | La acción responde `fail(422, { underage: true })` **sin ningún valor** (ni correo ni fecha) y la página pinta la pantalla de cierre de UX §3.2.2 en la misma ruta. El código es 422, no 403 | 422 es el que ya devuelve la API |
 | A5 | Valores tras un error | Se devuelven correo, día, mes, año y el estado de la casilla; nunca la contraseña | WCAG 3.3.7: no obligar a reescribir. La fecha solo vuelve a quien la acaba de escribir |
-| A6 | Volver a la ruta pedida | Sí hay `siguiente`, con lista cerrada y comparación exacta: `/cuenta` y `/cuenta/eliminar`. Cualquier otro valor se ignora y se va a `/cuenta` | H1 añadirá rutas privadas y lo necesitará; con lista cerrada no hay redirección abierta |
-| A7 | Avisos tras redirigir | `/?aviso=sesion-cerrada` y `/?aviso=cuenta-eliminada`, lista cerrada; un valor desconocido no muestra nada | Sin estado en el servidor ni cookie adicional |
-| A8 | Cerrar sesión | `POST /cuenta?/salir`, y el botón está **solo** en `/cuenta`, no en la cabecera | Una única forma de salir, la que UX ha diseñado |
+| A6 | Volver a la ruta pedida | Sí hay `next`, con lista cerrada y comparación exacta: `/account` y `/account/delete`. Cualquier otro valor se ignora y se va a `/account` | H1 añadirá rutas privadas y lo necesitará; con lista cerrada no hay redirección abierta |
+| A7 | Avisos tras redirigir | `/?notice=signed-out` y `/?notice=account-deleted`, lista cerrada; un valor desconocido no muestra nada | Sin estado en el servidor ni cookie adicional |
+| A8 | Cerrar sesión | `POST /account?/logout`, y el botón está **solo** en `/account`, no en la cabecera | Una única forma de salir, la que UX ha diseñado |
 | A9 | Eliminar la cuenta | Solo se pide la contraseña; **sin casilla** de confirmación | Volver a escribir la contraseña ya es la confirmación |
 | A10 | Correo mal escrito al entrar | La web muestra el mensaje genérico de credenciales y no llama a la API. Solo un campo vacío da error por campo | Un único mensaje para todo lo que no sea entrar |
 | A11 | Versión de condiciones caducada | `TERMS_VERSION_OUTDATED` vuelve a pintar el formulario con la casilla desmarcada y el texto `registro.error.condiciones_version` | Faltaba ese texto en UX; ya está añadido |
@@ -263,11 +263,11 @@ cupidilla/
 │     │     ├─ +layout.server.ts
 │     │     ├─ +error.svelte
 │     │     ├─ +page.svelte                          # /
-│     │     ├─ (invitado)/registro/+page.svelte|+page.server.ts
-│     │     ├─ (invitado)/entrar/+page.svelte|+page.server.ts
-│     │     ├─ (privado)/cuenta/+page.svelte|+page.server.ts        # acción «salir»
-│     │     ├─ (privado)/cuenta/eliminar/+page.svelte|+page.server.ts
-│     │     └─ legal/condiciones/+page.svelte
+│     │     ├─ (guest)/register/+page.svelte|+page.server.ts
+│     │     ├─ (guest)/login/+page.svelte|+page.server.ts
+│     │     ├─ (private)/account/+page.svelte|+page.server.ts        # acción «logout»
+│     │     ├─ (private)/account/delete/+page.svelte|+page.server.ts
+│     │     └─ legal/terms/+page.svelte
 │     └─ tests/e2e/
 │        ├─ helpers/db.ts         # consulta E2E_DATABASE_URL con pg
 │        ├─ account-lifecycle.e2e.ts
@@ -276,7 +276,7 @@ cupidilla/
 │        └─ csrf.e2e.ts
 ```
 
-Los grupos de rutas `(invitado)` y `(privado)` no cambian las URL: siguen siendo `/registro`, `/entrar`, `/cuenta` y `/cuenta/eliminar`. Sirven para que la guardia de `hooks.server.ts` decida por el prefijo de `route.id` y siga funcionando cuando H1 añada rutas privadas.
+Los grupos de rutas `(guest)` y `(private)` no cambian las URL: son `/register`, `/login`, `/account` y `/account/delete`. Sirven para que la guardia de `hooks.server.ts` decida por el prefijo de `route.id` y siga funcionando cuando H1 añada rutas privadas.
 
 ### 3.1 Workspaces (`package.json` raíz)
 
@@ -532,7 +532,7 @@ export const PASSWORD_MIN = 10;          // puntos de código
 export const PASSWORD_MAX = 128;         // puntos de código
 export const EMAIL_MAX = 254;
 export const CONSENT_PURPOSES = ['service_use'] as const;
-export const SERVICE_TERMS_VERSION = '2026-11-borrador';   // texto vigente de /legal/condiciones
+export const SERVICE_TERMS_VERSION = '2026-11-borrador';   // texto vigente de /legal/terms
 ```
 
 ### 6.2 Esquemas
@@ -614,7 +614,7 @@ export const FIELD_ISSUES = [
 La web añade un código propio que la API nunca emite (`WEB_ERROR_CODES` en `messages.ts`), y usa además `OUTCOME_UNKNOWN` en un segundo caso:
 
 - `API_UNAVAILABLE`: la petición no llegó a la API (conexión rechazada), o la respuesta no sirve (un 5xx sin el cuerpo de error de la API, un 2xx inesperado). Solo significa «no se hizo nada» cuando se sabe que la petición no salió. En las lecturas, `login` y `logout` es también lo que da cualquier otro fallo de red, tiempo agotado o respuesta inservible: ahí no importa, porque no son escrituras que la persona tenga que comprobar. En el registro y el borrado, todo lo que pudo llegar a la API da `OUTCOME_UNKNOWN` (§8.4).
-- `OUTCOME_UNKNOWN` (HTTP 503 en la acción): lo emite la API (arriba), o lo genera la web cuando una escritura no idempotente (registro, borrado de la cuenta) se envió y no llegó respuesta. No sabemos si se hizo. En `/entrar` y al cerrar sesión, `messages.ts` lo traduce a su texto de servidor (UX, criterio 65). La web muestra `registro.error.resultado_incierto` o `eliminar.error.resultado_incierto` con su enlace de comprobación (UX §3.2, §3.5 y criterios 60 a 65), y nunca un texto que afirme que no se hizo nada.
+- `OUTCOME_UNKNOWN` (HTTP 503 en la acción): lo emite la API (arriba), o lo genera la web cuando una escritura no idempotente (registro, borrado de la cuenta) se envió y no llegó respuesta. No sabemos si se hizo. En `/login` y al cerrar sesión, `messages.ts` lo traduce a su texto de servidor (UX, criterio 65). La web muestra `registro.error.resultado_incierto` o `eliminar.error.resultado_incierto` con su enlace de comprobación (UX §3.2, §3.5 y criterios 60 a 65), y nunca un texto que afirme que no se hizo nada.
 
 `apps/web/src/lib/errors/messages.ts` es un `Record<ErrorCode | WebErrorCode, string>` y un mapa `(campo, issue) → texto`, en español. Un test comprueba que cubre **todos** los códigos. Los textos son los de la tabla de [UX §5](h0-diseno-ux.md#5-textos-de-interfaz), palabra por palabra (acuerdo A12).
 
@@ -773,7 +773,7 @@ sequenceDiagram
   participant W as SvelteKit (servidor)
   participant A as API NestJS
   participant D as PostgreSQL
-  B->>W: GET /cuenta (cookie cupidilla_session)
+  B->>W: GET /account (cookie cupidilla_session)
   W->>A: GET /auth/session<br/>Authorization: Bearer token<br/>X-Internal-Api-Key, X-Client-Ip
   A->>D: SELECT sesión + usuario por sha256(token)
   D-->>A: fila (o nada)
@@ -781,17 +781,17 @@ sequenceDiagram
   W->>W: locals.user; si renewed, reescribe la cookie; si 401, borra la cookie
   W->>A: GET /users/me (Bearer)
   A-->>W: 200 AccountResponse
-  W-->>B: HTML de /cuenta (Cache-Control: private, no-store)
+  W-->>B: HTML de /account (Cache-Control: private, no-store)
 ```
 
 `hooks.server.ts` encadena tres pasos con `sequence`:
 
 1. **`authenticate`**: si hay cookie, llama a `GET /auth/session` y rellena `event.locals.user` (`{ id, email }`) y `event.locals.sessionToken`. Con 401, borra la cookie y deja `user = null`. Con `API_UNAVAILABLE`, deja `user = null` sin borrar la cookie, y las páginas privadas muestran el error.
 2. **`guardRoutes`**:
-   - Si `route.id` empieza por `/(privado)` y no hay usuario → `redirect(303, '/entrar?siguiente=' + safeReturnPath(url.pathname))`. Lo mismo cuando una acción de una ruta privada recibe 401 de la API (sesión caducada): `redirect(303, '/entrar?siguiente=/cuenta')`.
-   - Si empieza por `/(invitado)` y hay usuario → `redirect(303, '/cuenta')`.
+   - Si `route.id` empieza por `/(private)` y no hay usuario → `redirect(303, '/login?next=' + safeReturnPath(url.pathname))`. Lo mismo cuando una acción de una ruta privada recibe 401 de la API (sesión caducada): `redirect(303, '/login?next=/account')`.
+   - Si empieza por `/(guest)` y hay usuario → `redirect(303, '/account')`.
    - Se decide por `route.id` y nunca por `url.pathname` (recomendación de la [documentación de auth](https://svelte.dev/docs/kit/auth)).
-   - `siguiente` (acuerdo A6): `#lib/server/return-path.ts` exporta la lista cerrada `RETURN_PATHS` (`/cuenta`, `/cuenta/eliminar`) y `safeReturnPath(valor)`, que devuelve el valor solo si coincide exactamente con una entrada y `/cuenta` en cualquier otro caso (`https://…`, `//…`, rutas desconocidas). `/entrar` lo lleva en un campo oculto y la acción lo vuelve a pasar por `safeReturnPath`. Así no hay redirecciones abiertas.
+   - `next` (acuerdo A6): `#lib/server/return-path.ts` exporta la lista cerrada `RETURN_PATHS` (`/account`, `/account/delete`) y `safeReturnPath(valor)`, que devuelve el valor solo si coincide exactamente con una entrada y `/account` en cualquier otro caso (`https://…`, `//…`, rutas desconocidas, también las antiguas en español). `/login` lo lleva en un campo oculto (`name="next"`) y la acción lo vuelve a pasar por `safeReturnPath`. Así no hay redirecciones abiertas.
 3. **`securityHeaders`** (§8.7).
 
 Todas las llamadas pasan por `#lib/server/api-client.ts`:
@@ -809,7 +809,7 @@ Todas las llamadas pasan por `#lib/server/api-client.ts`:
   - Cualquier otro fallo (tiempo agotado `TimeoutError`, conexión cortada tras enviar: `ECONNRESET`, `UND_ERR_SOCKET` «other side closed»…) → `OUTCOME_UNKNOWN`, **solo** si la petición lleva la opción `nonIdempotent`, que activan `register` y `deleteAccount`. En las demás (`login`, `logout`, los GET) sigue siendo `API_UNAVAILABLE`.
   - Un 2xx cuyo cuerpo no se puede leer (cortado a mitad) o no cumple el esquema → `OUTCOME_UNKNOWN` en las peticiones `nonIdempotent`: la API ha confirmado la operación, pero sin el cuerpo no hay token y no se puede iniciar la sesión, así que lo correcto es pedir que se compruebe. En las demás, `API_UNAVAILABLE` (502).
   - Limitaciones aceptadas: un tiempo agotado se trata como incierto aunque la conexión no llegara a establecerse (la API colgada en el `connect`), y una conexión *keep-alive* que el servidor cerró justo antes de reutilizarla también. En los dos casos el texto pide comprobar, lo que es prudente, aunque nada se hiciera.
-- Las páginas de registro y de eliminación muestran el enlace de comprobación dentro del bloque de error general (`ErrorSummary`, prop `generalLink`). El de `/cuenta` lleva `data-sveltekit-reload`: así no se usan datos de `/cuenta` precargados (`data-sveltekit-preload-data="hover"`) antes de que terminara el borrado.
+- Las páginas de registro y de eliminación muestran el enlace de comprobación dentro del bloque de error general (`ErrorSummary`, prop `generalLink`). El de `/account` lleva `data-sveltekit-reload`: así no se usan datos de `/account` precargados (`data-sveltekit-preload-data="hover"`) antes de que terminara el borrado.
 
 El token **nunca** se devuelve en `data` de un `load`, ni en `form` de una acción.
 
@@ -818,10 +818,10 @@ El token **nunca** se devuelve en `data` de un `load`, ni en `form` de una acci�
 ```mermaid
 sequenceDiagram
   participant B as Navegador
-  participant W as SvelteKit /registro (acción)
+  participant W as SvelteKit /register (acción)
   participant A as API /auth/register
   participant D as PostgreSQL
-  B->>W: POST formulario (correo, contrasena, dia, mes, anio, condiciones, version_condiciones)
+  B->>W: POST formulario (email, password, day, month, year, acceptTerms, termsVersion)
   W->>W: fecha por partes → checkBirthDate(hoy Madrid) → registerRequestSchema.safeParse
   alt menor
     W-->>B: fail(422, {underage: true}) sin valores y sin llamar a la API
@@ -837,26 +837,26 @@ sequenceDiagram
       A->>D: BEGIN; INSERT users; INSERT consents; INSERT sessions; COMMIT
       A-->>W: 201 {user, session:{token, expiresAt}} (o 409 EMAIL_TAKEN)
       W->>W: cookies.set(...)
-      W-->>B: 303 → /cuenta
+      W-->>B: 303 → /account
     end
   end
 ```
 
 - Orden en la acción (acuerdos A2 a A5):
-  1. `parseBirthDateParts(dia, mes, anio)` valida las tres partes y compone la fecha.
+  1. `parseBirthDateParts(day, month, year)` valida las tres partes y compone la fecha.
   2. Si componen una fecha real y `checkBirthDate` dice `UNDERAGE` → `fail(422, { underage: true })`, **sin ningún valor**, y la página pinta la pantalla de menor de edad, aunque haya otros campos mal.
   3. El resto de errores, incluidos los de la fecha y `IN_FUTURE`, se devuelven juntos con `fail(400, { values, errors })`.
 - `values` lleva el correo, el día, el mes, el año y el estado de la casilla tal como se escribieron. **Nunca la contraseña.**
 - Si la API responde 422 `UNDERAGE` (por ejemplo, relojes distintos entre web y API), se trata igual que el paso 2. Con `TERMS_VERSION_OUTDATED`, el formulario vuelve con la casilla desmarcada (acuerdo A11).
-- Los `name` del formulario van en español (acuerdo A1): `correo`, `contrasena`, `dia`, `mes`, `anio`, `condiciones` (casilla; `value="on"` → `acceptTerms: true`) y `version_condiciones` (campo oculto con `SERVICE_TERMS_VERSION` → `termsVersion`). `#lib/forms/` hace la conversión al contrato.
+- Los `name` del formulario van en inglés, con los nombres del contrato (acuerdo A1): `email`, `password`, `day`, `month`, `year`, `acceptTerms` (casilla; `value="on"` → `acceptTerms: true`) y `termsVersion` (campo oculto con `SERVICE_TERMS_VERSION`). `#lib/forms/` compone `birthDate` con las tres partes y hace la conversión al contrato.
 
-Login: la acción de `/entrar` valida con `loginRequestSchema`, llama a `POST /auth/login`, pone la cookie y redirige con 303 a `safeReturnPath(siguiente)`, que por defecto es `/cuenta`. Un campo vacío da error por campo; un correo con formato inválido **no** llama a la API y se muestra como `INVALID_CREDENTIALS` (acuerdo A10). La API busca por correo:
+Login: la acción de `/login` valida con `loginRequestSchema`, llama a `POST /auth/login`, pone la cookie y redirige con 303 a `safeReturnPath(next)`, que por defecto es `/account`. Un campo vacío da error por campo; un correo con formato inválido **no** llama a la API y se muestra como `INVALID_CREDENTIALS` (acuerdo A10). La API busca por correo:
 
 - Si no existe → `verifyDummy` y 401 `INVALID_CREDENTIALS`.
 - Si existe y la contraseña no coincide → 401 `INVALID_CREDENTIALS`.
 - Si es correcta → rehash si toca, crea sesión, 200.
 
-Salir: `<form method="POST" action="/cuenta?/salir">`, solo en `/cuenta` (acuerdo A8). La acción `salir` llama a `POST /auth/logout`. Con 204 o 401 borra la cookie, pone `locals.user = null` y redirige con 303 a `/?aviso=sesion-cerrada` (acuerdo A7). Si la API no responde o da 5xx, **no** borra la cookie y devuelve `fail(503)` con `cuenta.error.servidor` (acuerdo A14).
+Salir: `<form method="POST" action="/account?/logout">`, solo en `/account` (acuerdo A8). La acción `logout` llama a `POST /auth/logout`. Con 204 o 401 borra la cookie, pone `locals.user = null` y redirige con 303 a `/?notice=signed-out` (acuerdo A7). Si la API no responde o da 5xx, **no** borra la cookie y devuelve `fail(503)` con `cuenta.error.servidor` (acuerdo A14).
 
 ### 8.6 CSRF y CSP
 
@@ -981,7 +981,7 @@ edad = añoHoy − añoNac − ((mesHoy, díaHoy) < (mesNac, díaEfectivo) ? 1 :
 
 Secuencia exacta:
 
-1. `/cuenta/eliminar` muestra un formulario con la contraseña y nada más: no hay casilla de confirmación (acuerdo A9).
+1. `/account/delete` muestra un formulario con la contraseña y nada más: no hay casilla de confirmación (acuerdo A9).
 2. La acción valida `deleteAccountRequestSchema` y llama a `POST /users/me/deletion` con `Bearer`.
 3. La API pasa la clave interna, el throttler (`account` = hash del token) y el `SessionGuard`.
 4. `UsersService.deleteAccount(userId, password)`:
@@ -990,7 +990,7 @@ Secuencia exacta:
    3. `DELETE FROM users WHERE id = $1`. Es **una sola sentencia y atómica**: `ON DELETE CASCADE` borra en la misma operación **todas** las sesiones del usuario (también las de otros dispositivos) y todos sus consentimientos.
    4. Registra el evento `account_deleted`, **sin** ningún identificador.
 5. La API responde 204.
-6. La web borra la cookie, pone `locals.user = null` y hace `redirect(303, '/?aviso=cuenta-eliminada')`. La portada muestra el aviso de cuenta eliminada.
+6. La web borra la cookie, pone `locals.user = null` y hace `redirect(303, '/?notice=account-deleted')`. La portada muestra el aviso de cuenta eliminada.
 
 **Qué queda en la base de datos: nada.** No quedan filas en `users`, `sessions` ni `consents` con ese `user_id`, ni el correo en ninguna tabla. El correo queda libre para un registro nuevo. Un test lo demuestra recorriendo **todas** las tablas que tienen una FK hacia `users`, consultadas en `information_schema`, para que la comprobación siga valiendo cuando H1 añada tablas.
 
@@ -1168,7 +1168,7 @@ Tests: con `npm run db:up` hecho, `npm test`. La primera vez, `npm run e2e:insta
     - Web: `npm run build -w @cupidilla/web && npm run preview -w @cupidilla/web`, con `API_URL=http://127.0.0.1:3101`, y `url: http://localhost:4173`.
   - `reuseExistingServer: false`.
   - `use.baseURL: 'http://localhost:4173'`.
-  - Dos proyectos: `chromium` y `chromium-sin-js` (`javaScriptEnabled: false`).
+  - Dos proyectos: `chromium` y `chromium-no-js` (`javaScriptEnabled: false`).
 - La web lleva `pg` como `devDependency` solo para `tests/e2e/helpers/db.ts`.
 
 ### 12.3 Casos mínimos que demuestran el criterio de hecho
@@ -1213,21 +1213,21 @@ Tests: con `npm run db:up` hecho, `npm test`. La primera vez, `npm run e2e:insta
 
 - W-1. `messages.ts` tiene texto para cada `ErrorCode`, para `API_UNAVAILABLE` y `OUTCOME_UNKNOWN` y para cada `FieldIssue` de los campos de los formularios. `OUTCOME_UNKNOWN` solo tiene texto propio en registro y eliminación.
 - W-2. `parseBirthDateParts`: `5`, `05` y `5 ` valen como día y como mes; `31/2/2000` → fecha inexistente; `0/5/1990` → error de día; `12/13/1990` → error de mes; un año de tres cifras → error de año; los tres vacíos → fecha vacía.
-- W-3. `safeReturnPath`: devuelve `/cuenta` y `/cuenta/eliminar` tal cual; `https://otro.sitio`, `//otro.sitio`, `/otra` y vacío → `/cuenta`.
+- W-3. `safeReturnPath`: devuelve `/account` y `/account/delete` tal cual; `https://otro.sitio`, `//otro.sitio`, `/otra` y vacío → `/account`.
 - W-4. `api-client` contra un servidor TCP falso (`api-client.spec.ts`): conexión rechazada → `API_UNAVAILABLE` en todas las peticiones; tiempo agotado y conexión cortada tras enviar (cierre y RST) → `OUTCOME_UNKNOWN` en `register` y `deleteAccount`, con una sola petición recibida; `login` en los mismos casos → `API_UNAVAILABLE`. Un 201 con el cuerpo truncado o fuera del esquema → `OUTCOME_UNKNOWN` en `register` y `API_UNAVAILABLE` (502) en `login`. En el borrado, un 204 es éxito y un 200 → `OUTCOME_UNKNOWN`. Un 502 sin cuerpo → `OUTCOME_UNKNOWN` en `register` y `API_UNAVAILABLE` en `login`. `api-url.spec.ts`: `https:` siempre vale; `http:` solo en loopback o con `API_URL_ALLOW_HTTP=true`.
 - W-5. Acciones (`routes/actions.spec.ts`): con `OUTCOME_UNKNOWN`, el registro da 503 con `registro.error.resultado_incierto`, los valores sin la contraseña y sin cookie; el borrado da 503 con `eliminar.error.resultado_incierto` y no borra la cookie.
 
 **E2E (Playwright)**
 
-- E-1. Registro de una persona adulta → aterriza en `/cuenta` y ve su correo y las condiciones aceptadas con su versión y su fecha (textos de UX §5.5). La cookie `cupidilla_session` es `httpOnly`, `SameSite=Lax` y `Secure`.
-- E-2. Salir → `/` con el aviso de sesión cerrada. Visitar `/cuenta` → redirige a `/entrar?siguiente=/cuenta`, y tras entrar se vuelve a `/cuenta`. Con `?siguiente=https://otro.sitio` o `//otro.sitio` → `/cuenta`.
-- E-3. Entrar → `/cuenta`. Entrar con una contraseña errónea → mensaje en español, sin decir cuál de los dos datos falla.
+- E-1. Registro de una persona adulta → aterriza en `/account` y ve su correo y las condiciones aceptadas con su versión y su fecha (textos de UX §5.5). La cookie `cupidilla_session` es `httpOnly`, `SameSite=Lax` y `Secure`.
+- E-2. Salir → `/` con el aviso de sesión cerrada. Visitar `/account` → redirige a `/login?next=/account`, y tras entrar se vuelve a `/account`. Con `?next=https://otro.sitio` o `//otro.sitio` → `/account`.
+- E-3. Entrar → `/account`. Entrar con una contraseña errónea → mensaje en español, sin decir cuál de los dos datos falla.
 - E-4. Eliminar con una contraseña errónea → mensaje de error y la cuenta sigue. Con la contraseña correcta → `/` con el aviso de cuenta eliminada; entrar de nuevo falla; en `cupidilla_e2e` no hay ninguna fila con ese correo.
-- E-5. **Menor** (fecha = `latestAdultBirthDate(hoy)` + 1 día) → se queda en `/registro` con la pantalla de menor de edad (sin formulario y sin valores), también cuando además hay otros campos mal, y en la base de datos no hay ningún usuario con ese correo.
-- E-6. El proyecto `chromium-sin-js` repite E-1 a E-4: los formularios funcionan sin JavaScript.
-- E-7. **CSRF**: un `POST` a `/entrar` con `Origin: https://evil.example` y `Content-Type: application/x-www-form-urlencoded` → 403.
-- E-8. La consola del navegador no muestra violaciones de CSP en `/`, `/registro` ni `/cuenta`.
-- E-9. **Resultado incierto** (`outcome-unknown.e2e.ts`, criterios de UX 60 a 65, con y sin JavaScript). La web habla con su propia API (`helpers/stack.ts`, opción `webApiUrl`) a través de un proxy (`helpers/api-proxy.ts`) que, en la ruta elegida, no responde nunca (`hang`) o pasa la petición a la API y corta sin devolver la respuesta (`cut`). Se comprueba: estado 503, bloque `role="alert"` primero de `<main>` con el texto y el enlace, `<title>` con «Error:», foco con JavaScript, botón operable, valores conservados sin contraseña, cookie (ausente en el registro, intacta en el borrado), una sola petición en el proxy y que el enlace de comprobación lleva a donde toca según la API hiciera o no la operación. `/entrar` y «Cerrar sesión» siguen mostrando su error de servidor. Con la API parada (conexión rechazada), C31 y el borrado con la API caída de `resilience.e2e.ts` siguen mostrando `*.error.servidor`.
+- E-5. **Menor** (fecha = `latestAdultBirthDate(hoy)` + 1 día) → se queda en `/register` con la pantalla de menor de edad (sin formulario y sin valores), también cuando además hay otros campos mal, y en la base de datos no hay ningún usuario con ese correo.
+- E-6. El proyecto `chromium-no-js` repite E-1 a E-4: los formularios funcionan sin JavaScript.
+- E-7. **CSRF**: un `POST` a `/login` con `Origin: https://evil.example` y `Content-Type: application/x-www-form-urlencoded` → 403.
+- E-8. La consola del navegador no muestra violaciones de CSP en `/`, `/register` ni `/account`.
+- E-9. **Resultado incierto** (`outcome-unknown.e2e.ts`, criterios de UX 60 a 65, con y sin JavaScript). La web habla con su propia API (`helpers/stack.ts`, opción `webApiUrl`) a través de un proxy (`helpers/api-proxy.ts`) que, en la ruta elegida, no responde nunca (`hang`) o pasa la petición a la API y corta sin devolver la respuesta (`cut`). Se comprueba: estado 503, bloque `role="alert"` primero de `<main>` con el texto y el enlace, `<title>` con «Error:», foco con JavaScript, botón operable, valores conservados sin contraseña, cookie (ausente en el registro, intacta en el borrado), una sola petición en el proxy y que el enlace de comprobación lleva a donde toca según la API hiciera o no la operación. `/login` y «Cerrar sesión» siguen mostrando su error de servidor. Con la API parada (conexión rechazada), C31 y el borrado con la API caída de `resilience.e2e.ts` siguen mostrando `*.error.servidor`.
 
 **El criterio de hecho del hito se cumple cuando** `npm run lint`, `npm run typecheck`, `npm test` y `npm run test:e2e` pasan en verde partiendo de `npm run db:reset`.
 
@@ -1261,7 +1261,7 @@ Tests: con `npm run db:up` hecho, `npm test`. La primera vez, `npm run e2e:insta
   - `usage_events` puede preferir `ON DELETE SET NULL` para conservar costes anonimizados; se decide en H1.
 - **Consentimiento de datos sensibles**: una migración que añade `sensitive_data` a la `CHECK` de `consents.purpose`, la constante en `CONSENT_PURPOSES`, un texto versionado y los endpoints de conceder y revocar (`ConsentsService.revoke` ya existe y tiene test).
 - **Contratos**: `packages/contracts` suma los esquemas de la entrevista (`ProfileObservation`, `TurnOutput`, `InterviewPhase`). Desde ahí los usan la web y la validación de la salida del modelo, como pide `arquitectura.md`.
-- **Web**: las rutas `/entrevista` y `/perfil` entran en el grupo `(privado)` y quedan protegidas sin tocar la guardia. Si la respuesta de Cupidilla se transmite en *streaming*, un `+server.ts` de SvelteKit reenvía el *stream* de la API: el principio de que el navegador solo habla con SvelteKit se mantiene.
+- **Web**: las rutas `/interview` y `/profile` entran en el grupo `(private)` y quedan protegidas sin tocar la guardia. Si la respuesta de Cupidilla se transmite en *streaming*, un `+server.ts` de SvelteKit reenvía el *stream* de la API: el principio de que el navegador solo habla con SvelteKit se mantiene.
 - **Configuración**: `ANTHROPIC_API_KEY` y el modelo se añaden a `envSchema`, que validará en el arranque. El límite de intentos de la entrevista usa el mismo `AppThrottlerGuard`.
 
 ---
@@ -1278,8 +1278,8 @@ Tareas en orden. Cada una se da por hecha solo cuando cumple su criterio.
 | T4 | Infraestructura común: `configureApp`, `ApiException` y su filtro, `exceptionFactory`, `InternalKeyGuard`, `AppThrottlerGuard`, `Clock`, middleware de log de peticiones | Pasan los unitarios y la integración I-13, I-19 e I-20 |
 | T5 | `users`, `consents` y `auth`: registro, login, logout, `GET /auth/session` y `GET /users/me` | Pasan I-1 a I-12, I-14, I-18 e I-21 (parcial) |
 | T6 | Eliminación de la cuenta | Pasan I-15 a I-17 e I-21 completo |
-| T7 | `apps/web` generada (§4.3) con `env.ts`, `hooks.server.ts`, `api-client.ts`, `session-cookie.ts`, `messages.ts`, CSP y cabeceras | `npm run typecheck` en verde; `npm ls svelte @sveltejs/kit` muestra 5.57.3 y 3.2.0; `/cuenta` sin sesión redirige a `/entrar`; pasa W-1 |
-| T8 | Páginas y acciones: `/`, `/registro`, `/entrar`, `/cuenta` (con `salir`), `/cuenta/eliminar` y `/legal/condiciones` (texto borrador con la versión visible), según [el diseño UX](h0-diseno-ux.md) y los acuerdos de §1 bis | Los flujos funcionan a mano en `npm run dev`, también con JavaScript desactivado |
+| T7 | `apps/web` generada (§4.3) con `env.ts`, `hooks.server.ts`, `api-client.ts`, `session-cookie.ts`, `messages.ts`, CSP y cabeceras | `npm run typecheck` en verde; `npm ls svelte @sveltejs/kit` muestra 5.57.3 y 3.2.0; `/account` sin sesión redirige a `/login`; pasa W-1 |
+| T8 | Páginas y acciones: `/`, `/register`, `/login`, `/account` (con `logout`), `/account/delete` y `/legal/terms` (texto borrador con la versión visible), según [el diseño UX](h0-diseno-ux.md) y los acuerdos de §1 bis | Los flujos funcionan a mano en `npm run dev`, también con JavaScript desactivado |
 | T9 | Playwright: configuración con los dos servidores y los tests E-1 a E-8 | `npm run test:e2e` en verde en los dos proyectos |
 | T10 | README con «clonar y arrancar» (§11.4) y verificación completa | Desde `npm run db:reset`: `lint`, `typecheck`, `test` y `test:e2e` en verde |
 

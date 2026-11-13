@@ -4,7 +4,7 @@ import { z } from 'zod';
 export const CONSENT_PURPOSES = ['service_use'] as const;
 export type ConsentPurpose = (typeof CONSENT_PURPOSES)[number];
 
-/** Versión vigente del texto de /legal/condiciones. */
+/** Versión vigente del texto de /legal/terms. */
 export const SERVICE_TERMS_VERSION = '2026-11-borrador';
 
 export const consentSchema = z.object({

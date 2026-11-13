@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('E-7: un envío de formulario desde otro origen se rechaza con 403', async ({ request }) => {
-  const response = await request.post('/entrar', {
+  const response = await request.post('/login', {
     headers: {
       Origin: 'https://evil.example',
       'Content-Type': 'application/x-www-form-urlencoded',

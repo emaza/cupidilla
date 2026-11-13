@@ -2,10 +2,10 @@ import { loginRequestSchema, type LoginRequest } from '@cupidilla/contracts';
 import { fieldMessages } from '#lib/errors/messages.ts';
 import { textField, type FormErrors } from './form-data.ts';
 
-export type LoginField = 'correo' | 'contrasena';
+export type LoginField = 'email' | 'password';
 
 export interface LoginValues {
-  correo: string;
+  email: string;
 }
 
 export type LoginParse =
@@ -13,20 +13,20 @@ export type LoginParse =
   | { kind: 'valid'; values: LoginValues; request: LoginRequest };
 
 /**
- * Convierte el formulario de /entrar al contrato. Solo un campo vacío da error por campo;
+ * Convierte el formulario de /login al contrato. Solo un campo vacío da error por campo;
  * cualquier otro problema (correo mal formado, contraseña demasiado larga) se muestra como
  * credenciales incorrectas y no llega a la API (acuerdo A10).
  */
 export function parseLoginForm(data: FormData): LoginParse {
-  const values: LoginValues = { correo: textField(data, 'correo') };
-  const password = textField(data, 'contrasena');
+  const values: LoginValues = { email: textField(data, 'email') };
+  const password = textField(data, 'password');
 
   const errors: FormErrors<LoginField> = { fields: {} };
-  if (values.correo.trim() === '') errors.fields.correo = fieldMessages.entrar.email.required;
-  if (password === '') errors.fields.contrasena = fieldMessages.entrar.password.required;
-  if (errors.fields.correo || errors.fields.contrasena) return { kind: 'invalid', values, errors };
+  if (values.email.trim() === '') errors.fields.email = fieldMessages.login.email.required;
+  if (password === '') errors.fields.password = fieldMessages.login.password.required;
+  if (errors.fields.email || errors.fields.password) return { kind: 'invalid', values, errors };
 
-  const parsed = loginRequestSchema.safeParse({ email: values.correo, password });
+  const parsed = loginRequestSchema.safeParse({ email: values.email, password });
   if (!parsed.success) {
     return {
       kind: 'invalid',

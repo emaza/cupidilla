@@ -12,7 +12,7 @@
 
   const submission = createSubmission();
 
-  const passwordError = $derived(form?.errors?.fields?.contrasena);
+  const passwordError = $derived(form?.errors?.fields?.password);
   const general = $derived(form?.errors?.general);
   const hasErrors = $derived(passwordError !== undefined || general !== undefined);
 </script>
@@ -22,14 +22,14 @@
 </svelte:head>
 
 <ErrorSummary
-  items={passwordError ? [{ target: 'contrasena', text: t(passwordError) }] : []}
+  items={passwordError ? [{ target: 'password', text: t(passwordError) }] : []}
   general={general ? t(general) : undefined}
   generalLink={general === 'eliminar.error.resultado_incierto'
-    ? { route: 'cuenta', text: t('eliminar.enlace.comprobar') }
+    ? { route: 'account', text: t('eliminar.enlace.comprobar') }
     : undefined}
 />
 
-<div class="tarjeta">
+<div class="card">
   <h1>{t('eliminar.titulo')}</h1>
   <p>{t('eliminar.texto.alcance')}</p>
   <p>{t('eliminar.texto.irreversible')}</p>
@@ -43,15 +43,15 @@
         error={passwordError ? t(passwordError) : undefined}
       />
 
-      <div class="acciones">
+      <div class="actions">
         <SubmitButton
           label={t('eliminar.boton.enviar')}
           sendingLabel={t('eliminar.boton.enviando')}
           statusText={t('eliminar.estado.enviando')}
           sending={submission.sending}
-          variant="peligro"
+          variant="danger"
         />
-        <a class="enlace-bloque" href={resolve('cuenta')}>{t('eliminar.enlace.cancelar')}</a>
+        <a class="block-link" href={resolve('account')}>{t('eliminar.enlace.cancelar')}</a>
       </div>
     </form>
   {/key}

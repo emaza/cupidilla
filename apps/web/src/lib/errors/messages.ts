@@ -13,7 +13,7 @@ export const WEB_ERROR_CODES = ['API_UNAVAILABLE'] as const;
 export type WebErrorCode = ErrorCode | (typeof WEB_ERROR_CODES)[number];
 
 /** Formularios de H0. Cada uno tiene sus propios textos de error (UX §5). */
-export type FormName = 'registro' | 'entrar' | 'eliminar' | 'salir';
+export type FormName = 'register' | 'login' | 'delete' | 'logout';
 
 function byCode(
   fallback: TextKey,
@@ -35,31 +35,31 @@ function byIssue(
 
 /** Código de error de la API → clave del texto general de cada formulario. */
 export const errorMessages: Record<FormName, Record<WebErrorCode, TextKey>> = {
-  registro: byCode('registro.error.servidor', {
+  register: byCode('registro.error.servidor', {
     EMAIL_TAKEN: 'registro.error.correo_existente',
     TERMS_VERSION_OUTDATED: 'registro.error.condiciones_version',
     UNDERAGE: 'registro.menor.texto1',
     RATE_LIMITED: 'comun.error.limite',
     OUTCOME_UNKNOWN: 'registro.error.resultado_incierto',
   }),
-  entrar: byCode('entrar.error.servidor', {
+  login: byCode('entrar.error.servidor', {
     // Un correo mal formado se trata como unas credenciales incorrectas (acuerdo A10).
     VALIDATION_FAILED: 'entrar.error.credenciales',
     INVALID_CREDENTIALS: 'entrar.error.credenciales',
     RATE_LIMITED: 'comun.error.limite',
   }),
-  eliminar: byCode('eliminar.error.servidor', {
+  delete: byCode('eliminar.error.servidor', {
     VALIDATION_FAILED: 'eliminar.error.contrasena',
     PASSWORD_INCORRECT: 'eliminar.error.contrasena',
     RATE_LIMITED: 'comun.error.limite',
     OUTCOME_UNKNOWN: 'eliminar.error.resultado_incierto',
   }),
-  salir: byCode('cuenta.error.servidor', {}),
+  logout: byCode('cuenta.error.servidor', {}),
 };
 
 /** Campo del contrato + motivo → clave del texto del error de ese campo. */
 export const fieldMessages = {
-  registro: {
+  register: {
     email: byIssue('registro.error.correo_formato', {
       required: 'registro.error.correo_vacio',
       too_long: 'registro.error.correo_largo',
@@ -76,11 +76,11 @@ export const fieldMessages = {
     acceptTerms: byIssue('registro.error.condiciones', {}),
     termsVersion: byIssue('registro.error.condiciones_version', {}),
   },
-  entrar: {
+  login: {
     email: byIssue('entrar.error.credenciales', { required: 'entrar.error.correo_vacio' }),
     password: byIssue('entrar.error.credenciales', { required: 'entrar.error.contrasena_vacia' }),
   },
-  eliminar: {
+  delete: {
     password: byIssue('eliminar.error.contrasena', {
       required: 'eliminar.error.contrasena_vacia',
     }),

@@ -17,7 +17,7 @@ export interface RegisterInput {
 }
 
 export async function fillRegister(page: Page, input: RegisterInput): Promise<void> {
-  await page.goto('/registro');
+  await page.goto('/register');
   await page.getByLabel('Correo electrónico').fill(input.email);
   await page.getByLabel('Contraseña', { exact: true }).fill(input.password ?? PASSWORD);
   await page.getByLabel('Día').fill(input.day ?? '5');
@@ -27,10 +27,10 @@ export async function fillRegister(page: Page, input: RegisterInput): Promise<vo
   await page.getByRole('button', { name: 'Crear cuenta' }).click();
 }
 
-/** Registra a una persona adulta y espera a estar en /cuenta. */
+/** Registra a una persona adulta y espera a estar en /account. */
 export async function registerAdult(page: Page, email = uniqueEmail()): Promise<string> {
   await fillRegister(page, { email });
-  await expect(page).toHaveURL('/cuenta');
+  await expect(page).toHaveURL('/account');
   return email;
 }
 
@@ -41,7 +41,7 @@ export async function login(page: Page, email: string, password = PASSWORD): Pro
 }
 
 export async function logout(page: Page): Promise<void> {
-  await page.goto('/cuenta');
+  await page.goto('/account');
   await page.getByRole('button', { name: 'Cerrar sesión' }).click();
-  await expect(page).toHaveURL('/?aviso=sesion-cerrada');
+  await expect(page).toHaveURL('/?notice=signed-out');
 }

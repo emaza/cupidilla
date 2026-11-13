@@ -13,6 +13,6 @@
 
 <h1>{t(notFound ? 'error404.titulo' : 'error500.titulo')}</h1>
 <p>{t(notFound ? 'error404.texto' : 'error500.texto')}</p>
-<div class="acciones">
-  <a class="boton boton-primario" href={resolve('')}>{t('error.boton.inicio')}</a>
+<div class="actions">
+  <a class="button button-primary" href={resolve('')}>{t('error.boton.inicio')}</a>
 </div>

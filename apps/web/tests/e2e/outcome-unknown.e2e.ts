@@ -11,17 +11,17 @@ import { startStack, type Stack } from './helpers/stack.ts';
 
 test.setTimeout(120_000);
 
-const INCIERTO_REGISTRO =
+const REGISTER_UNCERTAIN =
   'No sabemos si tu cuenta se ha creado: se ha perdido la conexión antes de recibir la respuesta. Antes de volver a registrarte, prueba a entrar con este correo y esta contraseña. Si entras, la cuenta ya existe. Si no puedes entrar, pulsa «Crear cuenta» otra vez.';
-const COMPROBAR_ENTRADA = 'Probar a entrar con este correo (se abre en una pestaña nueva)';
-const INCIERTO_ELIMINAR =
+const CHECK_LOGIN_LINK = 'Probar a entrar con este correo (se abre en una pestaña nueva)';
+const DELETE_UNCERTAIN =
   'No sabemos si tu cuenta se ha eliminado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta. Si la ves, sigue activa y puedes volver a intentarlo. Si te pide entrar, entra con tu correo y tu contraseña: si entras, la cuenta sigue activa. Si te dice que el correo o la contraseña son incorrectos y has escrito bien la contraseña, lo más probable es que se haya eliminado. Si te dice que hay demasiados intentos o que algo ha fallado, espera unos minutos y vuelve a intentarlo: eso no dice nada sobre tu cuenta.';
-const COMPROBAR_CUENTA = 'Ir a mi cuenta para comprobarlo';
-const SERVIDOR_ENTRAR =
+const CHECK_ACCOUNT_LINK = 'Ir a mi cuenta para comprobarlo';
+const LOGIN_SERVER_ERROR =
   'Algo ha fallado por nuestra parte y no hemos podido iniciar tu sesión. Inténtalo de nuevo en unos minutos.';
-const SERVIDOR_SALIR =
+const LOGOUT_SERVER_ERROR =
   'Algo ha fallado por nuestra parte y no hemos podido cerrar tu sesión. Inténtalo de nuevo en unos minutos.';
-const CORREO_EXISTENTE =
+const EMAIL_TAKEN_TEXT =
   'No hemos podido crear la cuenta con ese correo. Si ya tienes una, entra; si no, comprueba que está bien escrito o prueba con otro.';
 
 const REGISTER = 'POST /auth/register';
@@ -70,14 +70,14 @@ async function expectUncertainBlock(
   title: string,
   button: string,
 ): Promise<void> {
-  const summary = page.locator('main > .resumen-errores');
+  const summary = page.locator('main > .error-summary');
   await expect(summary).toHaveAttribute('role', 'alert');
   await expect(summary).toHaveAttribute('tabindex', '-1');
   await expect(summary).toContainText(text);
   await expect(summary.getByRole('listitem')).toHaveCount(0);
   expect(
     await page.evaluate(() => document.querySelector('main')?.firstElementChild?.className),
-  ).toBe('resumen-errores');
+  ).toBe('error-summary');
   await expect(page).toHaveTitle(title);
   if (javaScriptEnabled) await expect(summary).toBeFocused();
   await expect(page.locator('[aria-invalid="true"]')).toHaveCount(0);
@@ -107,7 +107,7 @@ test('C60, C61, C64: el registro se procesa pero la respuesta no llega; probar a
   const email = uniqueEmail();
   proxy.setFault(REGISTER, 'cut');
 
-  const status = await actionStatus(page, '/registro', () => fillRegister(page, { email }));
+  const status = await actionStatus(page, '/register', () => fillRegister(page, { email }));
   expect(status).toBe(503);
   expect(proxy.count(REGISTER)).toBe(1); // sin reintento automático
   expect((await rowsForEmail(email)).users).toBe(1); // la API sí lo procesó
@@ -115,7 +115,7 @@ test('C60, C61, C64: el registro se procesa pero la respuesta no llega; probar a
   await expectUncertainBlock(
     page,
     javaScriptEnabled,
-    INCIERTO_REGISTRO,
+    REGISTER_UNCERTAIN,
     'Error: Crear cuenta — Cupidilla',
     'Crear cuenta',
   );
@@ -128,18 +128,18 @@ test('C60, C61, C64: el registro se procesa pero la respuesta no llega; probar a
   expect(page.url()).not.toContain('?');
   expect(page.url()).not.toContain(encodeURIComponent(email));
 
-  const link = page.locator('main > .resumen-errores').getByRole('link');
-  await expect(link).toHaveText(COMPROBAR_ENTRADA);
-  expect(await pathOf(link)).toBe('/entrar');
+  const link = page.locator('main > .error-summary').getByRole('link');
+  await expect(link).toHaveText(CHECK_LOGIN_LINK);
+  expect(await pathOf(link)).toBe('/login');
   await expect(link).toHaveAttribute('target', '_blank');
 
-  // El enlace abre /entrar en otra pestaña; ahí se puede entrar porque la cuenta existe.
+  // El enlace abre /login en otra pestaña; ahí se puede entrar porque la cuenta existe.
   const [tab] = await Promise.all([context.waitForEvent('page'), link.click()]);
   await tab.waitForLoadState();
-  expect(new URL(tab.url()).pathname).toBe('/entrar');
+  expect(new URL(tab.url()).pathname).toBe('/login');
   expect(tab.url()).not.toContain('?');
   await login(tab, email);
-  await expect(tab).toHaveURL('/cuenta');
+  await expect(tab).toHaveURL('/account');
   await tab.close();
 
   // Lo escrito sigue en la pestaña original.
@@ -159,13 +159,13 @@ test('C60, C64: el registro no llega a responder (tiempo agotado); volver a envi
   proxy.setFault(REGISTER, 'hang');
   const before = proxy.count(REGISTER);
 
-  const status = await actionStatus(page, '/registro', () => fillRegister(page, { email }));
+  const status = await actionStatus(page, '/register', () => fillRegister(page, { email }));
   expect(status).toBe(503);
   expect(proxy.count(REGISTER) - before).toBe(1);
   await expectUncertainBlock(
     page,
     javaScriptEnabled,
-    INCIERTO_REGISTRO,
+    REGISTER_UNCERTAIN,
     'Error: Crear cuenta — Cupidilla',
     'Crear cuenta',
   );
@@ -176,7 +176,7 @@ test('C60, C64: el registro no llega a responder (tiempo agotado); volver a envi
   proxy.setFault(REGISTER, null);
   await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Crear cuenta' }).click();
-  await expect(page).toHaveURL('/cuenta');
+  await expect(page).toHaveURL('/account');
 
   await context.close();
 });
@@ -190,33 +190,33 @@ test('si la cuenta ya se creó, volver a enviar el registro da «correo existent
   const email = uniqueEmail();
   proxy.setFault(REGISTER, 'cut');
   await fillRegister(page, { email });
-  await expect(page.getByText(INCIERTO_REGISTRO)).toBeVisible();
+  await expect(page.getByText(REGISTER_UNCERTAIN)).toBeVisible();
 
   proxy.setFault(REGISTER, null);
   await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Crear cuenta' }).click();
-  await expect(page.locator('main > .resumen-errores')).toContainText(CORREO_EXISTENTE);
+  await expect(page.locator('main > .error-summary')).toContainText(EMAIL_TAKEN_TEXT);
 
   await context.close();
 });
 
-/** Registra una cuenta (sin fallos) y abre /cuenta/eliminar. */
+/** Registra una cuenta (sin fallos) y abre /account/delete. */
 async function signedInOnDeletePage(page: Page): Promise<string> {
   const email = uniqueEmail();
   await fillRegister(page, { email });
-  await expect(page).toHaveURL('/cuenta');
-  await page.goto('/cuenta/eliminar');
+  await expect(page).toHaveURL('/account');
+  await page.goto('/account/delete');
   return email;
 }
 
 async function submitDeletion(page: Page): Promise<number | undefined> {
-  return actionStatus(page, '/cuenta/eliminar', async () => {
+  return actionStatus(page, '/account/delete', async () => {
     await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
     await page.getByRole('button', { name: 'Eliminar mi cuenta definitivamente' }).click();
   });
 }
 
-test('C62, C63, C64: el borrado se procesa pero la respuesta no llega; comprobar lleva a /entrar', async ({
+test('C62, C63, C64: el borrado se procesa pero la respuesta no llega; comprobar lleva a /login', async ({
   browser,
   javaScriptEnabled,
 }) => {
@@ -232,27 +232,27 @@ test('C62, C63, C64: el borrado se procesa pero la respuesta no llega; comprobar
   await expectUncertainBlock(
     page,
     javaScriptEnabled,
-    INCIERTO_ELIMINAR,
+    DELETE_UNCERTAIN,
     'Error: Eliminar tu cuenta — Cupidilla',
     'Eliminar mi cuenta definitivamente',
   );
   // La cookie se conserva: no sabemos qué ha pasado.
   expect(await hasSessionCookie(page)).toBe(true);
-  await expect(page).not.toHaveURL(/aviso=cuenta-eliminada/);
+  await expect(page).not.toHaveURL(/notice=account-deleted/);
 
-  const link = page.locator('main > .resumen-errores').getByRole('link');
-  await expect(link).toHaveText(COMPROBAR_CUENTA);
-  expect(await pathOf(link)).toBe('/cuenta');
+  const link = page.locator('main > .error-summary').getByRole('link');
+  await expect(link).toHaveText(CHECK_ACCOUNT_LINK);
+  expect(await pathOf(link)).toBe('/account');
   expect(await link.getAttribute('target')).toBeNull();
 
   await link.click();
-  await expect(page).toHaveURL(/\/entrar/);
+  await expect(page).toHaveURL(/\/login/);
   expect(proxy.count(DELETION)).toBe(1);
 
   await context.close();
 });
 
-test('C62, C63, C64: el borrado no llega a responder (tiempo agotado); comprobar muestra /cuenta', async ({
+test('C62, C63, C64: el borrado no llega a responder (tiempo agotado); comprobar muestra /account', async ({
   browser,
   javaScriptEnabled,
 }) => {
@@ -267,21 +267,21 @@ test('C62, C63, C64: el borrado no llega a responder (tiempo agotado); comprobar
   await expectUncertainBlock(
     page,
     javaScriptEnabled,
-    INCIERTO_ELIMINAR,
+    DELETE_UNCERTAIN,
     'Error: Eliminar tu cuenta — Cupidilla',
     'Eliminar mi cuenta definitivamente',
   );
   expect(await hasSessionCookie(page)).toBe(true);
   expect((await rowsForEmail(email)).users).toBe(1);
 
-  await page.locator('main > .resumen-errores').getByRole('link').click();
-  await expect(page).toHaveURL('/cuenta');
+  await page.locator('main > .error-summary').getByRole('link').click();
+  await expect(page).toHaveURL('/account');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tu cuenta');
 
   await context.close();
 });
 
-test('C62, C63: borrado incierto sin borrar y con la sesión revocada: /entrar no confirma nada y se puede entrar', async ({
+test('C62, C63: borrado incierto sin borrar y con la sesión revocada: /login no confirma nada y se puede entrar', async ({
   browser,
   javaScriptEnabled,
 }) => {
@@ -292,21 +292,21 @@ test('C62, C63: borrado incierto sin borrar y con la sesión revocada: /entrar n
   const before = proxy.count(DELETION);
 
   expect(await submitDeletion(page)).toBe(503);
-  const summary = page.locator('main > .resumen-errores');
-  await expect(summary).toContainText(INCIERTO_ELIMINAR);
-  // El texto no afirma que ir a /entrar signifique que la cuenta se borró.
+  const summary = page.locator('main > .error-summary');
+  await expect(summary).toContainText(DELETE_UNCERTAIN);
+  // El texto no afirma que ir a /login signifique que la cuenta se borró.
   await expect(page.locator('main')).not.toContainText('la cuenta ya no existe');
   expect((await rowsForEmail(email)).users).toBe(1);
 
   // La sesión caduca o se cierra con la cuenta activa.
   expect(await revokeSessionsForEmail(email)).toBe(1);
-  await summary.getByRole('link', { name: COMPROBAR_CUENTA }).click();
-  await expect(page).toHaveURL(/\/entrar/);
+  await summary.getByRole('link', { name: CHECK_ACCOUNT_LINK }).click();
+  await expect(page).toHaveURL(/\/login/);
   await expect(page.locator('main')).not.toContainText('la cuenta ya no existe');
 
   // Con el correo y la contraseña correctos se entra: la cuenta sigue activa.
   await login(page, email);
-  await expect(page).toHaveURL('/cuenta');
+  await expect(page).toHaveURL('/account');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tu cuenta');
   await expect(page.locator('main')).toContainText(email);
   expect(proxy.count(DELETION) - before).toBe(1); // sin reintento automático
@@ -314,7 +314,7 @@ test('C62, C63: borrado incierto sin borrar y con la sesión revocada: /entrar n
   await context.close();
 });
 
-test('C62, C63: borrado incierto sin borrar, sesión revocada y /entrar que falla por servicio: su texto habitual, nada sobre el borrado', async ({
+test('C62, C63: borrado incierto sin borrar, sesión revocada y /login que falla por servicio: su texto habitual, nada sobre el borrado', async ({
   browser,
   javaScriptEnabled,
 }) => {
@@ -324,21 +324,21 @@ test('C62, C63: borrado incierto sin borrar, sesión revocada y /entrar que fall
   proxy.setFault(DELETION, 'hang');
 
   expect(await submitDeletion(page)).toBe(503);
-  await expect(page.locator('main > .resumen-errores')).toContainText(INCIERTO_ELIMINAR);
+  await expect(page.locator('main > .error-summary')).toContainText(DELETE_UNCERTAIN);
   expect(await revokeSessionsForEmail(email)).toBe(1);
 
   await page
-    .locator('main > .resumen-errores')
-    .getByRole('link', { name: COMPROBAR_CUENTA })
+    .locator('main > .error-summary')
+    .getByRole('link', { name: CHECK_ACCOUNT_LINK })
     .click();
-  await expect(page).toHaveURL(/\/entrar/);
+  await expect(page).toHaveURL(/\/login/);
 
-  // El servicio de entrada no responde: /entrar muestra su error de servidor de siempre.
+  // El servicio de entrada no responde: /login muestra su error de servidor de siempre.
   proxy.setFault('POST /auth/login', 'hang');
   await login(page, email);
   const main = page.locator('main');
-  await expect(main).toContainText(SERVIDOR_ENTRAR, { timeout: 15_000 });
-  await expect(page.getByRole('alert')).toContainText(SERVIDOR_ENTRAR);
+  await expect(main).toContainText(LOGIN_SERVER_ERROR, { timeout: 15_000 });
+  await expect(page.getByRole('alert')).toContainText(LOGIN_SERVER_ERROR);
   const text = await main.innerText();
   expect(text).not.toMatch(/eliminad|borrad|No sabemos si|ya no existe|sigue activa/i);
 
@@ -348,7 +348,7 @@ test('C62, C63: borrado incierto sin borrar, sesión revocada y /entrar que fall
   await context.close();
 });
 
-test('C65: OUTCOME_UNKNOWN nunca aparece en /entrar ni al cerrar sesión', async ({
+test('C65: OUTCOME_UNKNOWN nunca aparece en /login ni al cerrar sesión', async ({
   browser,
   javaScriptEnabled,
 }) => {
@@ -356,22 +356,22 @@ test('C65: OUTCOME_UNKNOWN nunca aparece en /entrar ni al cerrar sesión', async
   const page = await context.newPage();
   const email = uniqueEmail();
   await fillRegister(page, { email });
-  await expect(page).toHaveURL('/cuenta');
+  await expect(page).toHaveURL('/account');
 
-  // `hang` y no `cut`: si la API cerrara la sesión, /cuenta ya no se podría volver a mostrar.
+  // `hang` y no `cut`: si la API cerrara la sesión, /account ya no se podría volver a mostrar.
   proxy.setFault('POST /auth/logout', 'hang');
   await page.getByRole('button', { name: 'Cerrar sesión' }).click();
-  await expect(page.getByRole('alert')).toContainText(SERVIDOR_SALIR, { timeout: 15_000 });
+  await expect(page.getByRole('alert')).toContainText(LOGOUT_SERVER_ERROR, { timeout: 15_000 });
   await expect(page.locator('main')).not.toContainText('No sabemos si');
 
   proxy.setFault('POST /auth/logout', null);
   await page.getByRole('button', { name: 'Cerrar sesión' }).click();
-  await expect(page).toHaveURL(/aviso=sesion-cerrada/);
+  await expect(page).toHaveURL(/notice=signed-out/);
 
   proxy.setFault('POST /auth/login', 'hang');
-  await page.goto('/entrar');
+  await page.goto('/login');
   await login(page, email);
-  await expect(page.getByText(SERVIDOR_ENTRAR)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(LOGIN_SERVER_ERROR)).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('main')).not.toContainText('No sabemos si');
 
   await context.close();

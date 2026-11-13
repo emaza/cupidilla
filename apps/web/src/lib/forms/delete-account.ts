@@ -2,19 +2,19 @@ import { deleteAccountRequestSchema, type DeleteAccountRequest } from '@cupidill
 import { fieldMessages } from '#lib/errors/messages.ts';
 import { firstIssueByField, textField, type FormErrors } from './form-data.ts';
 
-export type DeleteAccountField = 'contrasena';
+export type DeleteAccountField = 'password';
 
 export type DeleteAccountParse =
   | { kind: 'invalid'; errors: FormErrors<DeleteAccountField> }
   | { kind: 'valid'; request: DeleteAccountRequest };
 
-/** Convierte el formulario de /cuenta/eliminar al contrato. Solo se pide la contraseña (A9). */
+/** Convierte el formulario de /account/delete al contrato. Solo se pide la contraseña (A9). */
 export function parseDeleteAccountForm(data: FormData): DeleteAccountParse {
-  const parsed = deleteAccountRequestSchema.safeParse({ password: textField(data, 'contrasena') });
+  const parsed = deleteAccountRequestSchema.safeParse({ password: textField(data, 'password') });
   if (parsed.success) return { kind: 'valid', request: parsed.data };
   const issue = firstIssueByField(parsed.error.issues).get('password') ?? 'invalid';
   return {
     kind: 'invalid',
-    errors: { fields: { contrasena: fieldMessages.eliminar.password[issue] } },
+    errors: { fields: { password: fieldMessages.delete.password[issue] } },
   };
 }

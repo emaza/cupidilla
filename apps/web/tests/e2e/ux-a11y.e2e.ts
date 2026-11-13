@@ -41,23 +41,23 @@ async function expectNoHorizontalScroll(page: Page, where: string): Promise<void
 test('C23/C24/C33/C46: atributos de los campos, fecha en fieldset sin date/number y sin placeholders', async ({
   page,
 }) => {
-  await page.goto('/registro');
+  await page.goto('/register');
   const attributes = (locator: Locator, names: string[]) =>
     Promise.all(names.map((name) => locator.getAttribute(name)));
 
-  expect(await attributes(page.locator('#correo'), ['type', 'autocomplete', 'inputmode'])).toEqual([
+  expect(await attributes(page.locator('#email'), ['type', 'autocomplete', 'inputmode'])).toEqual([
     'email',
     'username',
     'email',
   ]);
-  expect(await attributes(page.locator('#contrasena'), ['type', 'autocomplete'])).toEqual([
+  expect(await attributes(page.locator('#password'), ['type', 'autocomplete'])).toEqual([
     'password',
     'new-password',
   ]);
   for (const [id, autocomplete] of [
-    ['dia', 'bday-day'],
-    ['mes', 'bday-month'],
-    ['anio', 'bday-year'],
+    ['day', 'bday-day'],
+    ['month', 'bday-month'],
+    ['year', 'bday-year'],
   ] as const) {
     expect(await attributes(page.locator(`#${id}`), ['type', 'inputmode', 'autocomplete'])).toEqual(
       ['text', 'numeric', autocomplete],
@@ -67,7 +67,7 @@ test('C23/C24/C33/C46: atributos de los campos, fecha en fieldset sin date/numbe
   await expect(page.locator('fieldset input[type="text"]')).toHaveCount(3);
   await expect(page.locator('input[type="date"], input[type="number"]')).toHaveCount(0);
   await expect(page.locator('[placeholder]')).toHaveCount(0);
-  await expect(page.locator('#condiciones')).not.toBeChecked();
+  await expect(page.locator('#acceptTerms')).not.toBeChecked();
 
   // Todo control visible tiene una etiqueta asociada.
   const unlabeled = await page.evaluate(() =>
@@ -92,12 +92,12 @@ test('C34/C35/C36/C37: con errores, el resumen es lo primero de <main>, enlaza a
     acceptTerms: false,
   });
 
-  const summary = page.locator('main > .resumen-errores');
+  const summary = page.locator('main > .error-summary');
   await expect(summary).toBeVisible();
   // Es lo primero dentro de <main>, antes de la <h1>.
   expect(
     await page.evaluate(() => document.querySelector('main')?.firstElementChild?.className),
-  ).toBe('resumen-errores');
+  ).toBe('error-summary');
   await expect(summary.getByRole('heading', { level: 2 })).toHaveText(
     'Revisa esto antes de seguir',
   );
@@ -107,20 +107,20 @@ test('C34/C35/C36/C37: con errores, el resumen es lo primero de <main>, enlaza a
   const links = summary.getByRole('link');
   await expect(links).toHaveCount(4);
   expect(await links.evaluateAll((els) => els.map((el) => el.getAttribute('href')))).toEqual([
-    '#correo',
-    '#contrasena',
-    '#dia',
-    '#condiciones',
+    '#email',
+    '#password',
+    '#day',
+    '#acceptTerms',
   ]);
 
   // Cada campo con error: aria-invalid y aria-describedby apuntando a elementos que existen.
   const expectations: Record<string, string[]> = {
-    correo: ['error-correo'],
-    contrasena: ['ayuda-contrasena', 'error-contrasena'],
-    dia: ['error-fecha'],
-    mes: ['error-fecha'],
-    anio: ['error-fecha'],
-    condiciones: ['ayuda-condiciones', 'error-condiciones'],
+    email: ['email-error'],
+    password: ['password-help', 'password-error'],
+    day: ['birth-date-error'],
+    month: ['birth-date-error'],
+    year: ['birth-date-error'],
+    acceptTerms: ['accept-terms-help', 'accept-terms-error'],
   };
   for (const [id, described] of Object.entries(expectations)) {
     const field = page.locator(`#${id}`);
@@ -129,20 +129,20 @@ test('C34/C35/C36/C37: con errores, el resumen es lo primero de <main>, enlaza a
     for (const target of described) await expect(page.locator(`#${target}`), target).toHaveCount(1);
   }
   // Los errores llevan texto oculto «Error:», un icono y el color: no dependen solo del color.
-  await expect(page.locator('#error-correo .visualmente-oculto')).toHaveText('Error:');
-  await expect(page.locator('#error-correo .icono')).toHaveText('⚠');
+  await expect(page.locator('#email-error .visually-hidden')).toHaveText('Error:');
+  await expect(page.locator('#email-error .icon')).toHaveText('⚠');
 
   // El enlace del resumen lleva al campo.
   await links.nth(1).click();
-  if (javaScriptEnabled) await expect(page.locator('#contrasena')).toBeFocused();
-  else await expect(page).toHaveURL(/#contrasena$/);
+  if (javaScriptEnabled) await expect(page.locator('#password')).toBeFocused();
+  else await expect(page).toHaveURL(/#password$/);
 
   // Un campo sin error no tiene aria-invalid ni describedby de error.
   await fillRegister(page, { email: uniqueEmail(), password: 'corta' });
-  await expect(page.locator('#error-contrasena')).toBeVisible();
-  await expect(page.locator('#correo')).not.toHaveAttribute('aria-invalid', /.*/);
-  await expect(page.locator('#dia')).not.toHaveAttribute('aria-invalid', /.*/);
-  await expect(page.locator('#dia')).not.toHaveAttribute('aria-describedby', /.*/);
+  await expect(page.locator('#password-error')).toBeVisible();
+  await expect(page.locator('#email')).not.toHaveAttribute('aria-invalid', /.*/);
+  await expect(page.locator('#day')).not.toHaveAttribute('aria-invalid', /.*/);
+  await expect(page.locator('#day')).not.toHaveAttribute('aria-describedby', /.*/);
 });
 
 test('C59: la contraseña nunca reaparece en el HTML tras un error en registro, entrada y eliminar', async ({
@@ -150,46 +150,46 @@ test('C59: la contraseña nunca reaparece en el HTML tras un error en registro, 
 }) => {
   const secret = 'contraseña-secreta-que-no-debe-volver';
   await fillRegister(page, { email: 'mal', password: secret });
-  await expect(page.locator('#error-correo')).toBeVisible();
+  await expect(page.locator('#email-error')).toBeVisible();
   expect(await page.content()).not.toContain(secret);
-  await expect(page.locator('#contrasena')).toHaveValue('');
-  expect(await page.locator('#contrasena').getAttribute('value')).toBeNull();
+  await expect(page.locator('#password')).toHaveValue('');
+  expect(await page.locator('#password').getAttribute('value')).toBeNull();
 
-  await page.goto('/entrar');
+  await page.goto('/login');
   await page.getByLabel('Correo electrónico').fill('alguien@example.com');
   await page.getByLabel('Contraseña', { exact: true }).fill(secret);
   await page.getByRole('button', { name: 'Entrar' }).click();
-  await expect(page.locator('.resumen-errores')).toBeVisible();
+  await expect(page.locator('.error-summary')).toBeVisible();
   expect(await page.content()).not.toContain(secret);
-  await expect(page.locator('#contrasena')).toHaveValue('');
+  await expect(page.locator('#password')).toHaveValue('');
 
   await registerAdult(page);
-  await page.goto('/cuenta/eliminar');
+  await page.goto('/account/delete');
   await page.getByLabel('Contraseña', { exact: true }).fill(secret);
   await page.getByRole('button', { name: 'Eliminar mi cuenta definitivamente' }).click();
-  await expect(page.locator('#error-contrasena')).toBeVisible();
+  await expect(page.locator('#password-error')).toBeVisible();
   expect(await page.content()).not.toContain(secret);
-  await expect(page.locator('#contrasena')).toHaveValue('');
+  await expect(page.locator('#password')).toHaveValue('');
 });
 
-test('C38/C40: orden de tabulación de /registro y «Saltar al contenido»', async ({
+test('C38/C40: orden de tabulación de /register y «Saltar al contenido»', async ({
   page,
   javaScriptEnabled,
 }) => {
-  await page.goto('/registro');
+  await page.goto('/register');
   const order = await tabOrder(page);
   const expected = [
     'Saltar al contenido',
     'Cupidilla',
     'Entrar',
     'Crear cuenta',
-    '#correo',
-    '#contrasena',
+    '#email',
+    '#password',
     ...(javaScriptEnabled ? ['Mostrar contraseña'] : []),
-    '#dia',
-    '#mes',
-    '#anio',
-    '#condiciones',
+    '#day',
+    '#month',
+    '#year',
+    '#acceptTerms',
     'Leer las condiciones (se abre en una pestaña nueva)',
     'Crear cuenta',
     '¿Ya tienes cuenta? Entra',
@@ -203,14 +203,14 @@ test('C38/C40: orden de tabulación de /registro y «Saltar al contenido»', asy
   // Tab ya haya enfocado el enlace). El enlace seguía enfocado pero fuera de la pantalla, y el
   // test fallaba a ratos. Una pestaña nueva no tiene desplazamiento que restaurar.
   const fresh = await page.context().newPage();
-  await fresh.goto('/registro');
+  await fresh.goto('/register');
   await fresh.keyboard.press('Tab');
   const skip = fresh.getByRole('link', { name: 'Saltar al contenido' });
   await expect(skip).toBeFocused();
   const box = await skip.boundingBox();
   expect(box && box.y >= 0 && box.x >= 0 && box.width > 0 && box.height > 0).toBe(true);
   await fresh.keyboard.press('Enter');
-  await expect(fresh).toHaveURL(/#contenido$/);
+  await expect(fresh).toHaveURL(/#content$/);
   await expect(fresh.locator('main')).toBeFocused();
 });
 
@@ -218,8 +218,8 @@ test('C38: registrarse, salir y eliminar la cuenta solo con el teclado, sin tram
   page,
 }) => {
   const email = uniqueEmail();
-  await page.goto('/registro');
-  await page.locator('#correo').focus();
+  await page.goto('/register');
+  await page.locator('#email').focus();
   await page.keyboard.type(email);
   await page.keyboard.press('Tab');
   await page.keyboard.type(PASSWORD);
@@ -230,16 +230,16 @@ test('C38: registrarse, salir y eliminar la cuenta solo con el teclado, sin tram
     await page.keyboard.type(part);
   }
   await page.keyboard.press('Tab'); // casilla
-  await expect(page.locator('#condiciones')).toBeFocused();
+  await expect(page.locator('#acceptTerms')).toBeFocused();
   await page.keyboard.press('Space');
-  await expect(page.locator('#condiciones')).toBeChecked();
+  await expect(page.locator('#acceptTerms')).toBeChecked();
   await page.keyboard.press('Tab'); // enlace a las condiciones
   await page.keyboard.press('Tab'); // botón de enviar
   await expect(page.locator('form button[type="submit"]')).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL('/cuenta');
+  await expect(page).toHaveURL('/account');
 
-  // En /cuenta se llega con Tab al botón de salir y al enlace de eliminar, en ese orden.
+  // En /account se llega con Tab al botón de salir y al enlace de eliminar, en ese orden.
   const order = await tabOrder(page);
   expect(order).toEqual([
     'Saltar al contenido',
@@ -252,11 +252,11 @@ test('C38: registrarse, salir y eliminar la cuenta solo con el teclado, sin tram
 
   await page.getByRole('link', { name: 'Eliminar mi cuenta' }).focus();
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL('/cuenta/eliminar');
-  await page.locator('#contrasena').focus();
+  await expect(page).toHaveURL('/account/delete');
+  await page.locator('#password').focus();
   await page.keyboard.type(PASSWORD);
   await page.keyboard.press('Enter'); // Intro en el campo envía el formulario
-  await expect(page).toHaveURL('/?aviso=cuenta-eliminada');
+  await expect(page).toHaveURL('/?notice=account-deleted');
 });
 
 test('C46/C47: una sola <h1>, títulos sin saltos de nivel, <title> con el patrón y landmarks, en todas las pantallas', async ({
@@ -265,9 +265,9 @@ test('C46/C47: una sola <h1>, títulos sin saltos de nivel, <title> con el patr�
   await registerAdult(page);
   for (const path of [
     '/',
-    '/cuenta',
-    '/cuenta/eliminar',
-    '/legal/condiciones',
+    '/account',
+    '/account/delete',
+    '/legal/terms',
     '/pagina-que-no-existe',
   ]) {
     await page.goto(path);
@@ -291,7 +291,7 @@ test('C46/C47: una sola <h1>, títulos sin saltos de nivel, <title> con el patr�
     expect(structure.landmarks, `landmarks de ${path}`).toEqual([true, true, true, true]);
     expect(structure.lang).toBe('es');
   }
-  for (const path of ['/registro', '/entrar']) {
+  for (const path of ['/register', '/login']) {
     await page.context().clearCookies();
     await page.goto(path);
     expect(await page.locator('h1').count(), `h1 en ${path}`).toBe(1);
@@ -302,14 +302,14 @@ test('C43/C45: controles de al menos 44 px, filas de la casilla y campos con let
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 700 });
-  await page.goto('/registro');
+  await page.goto('/register');
   const tooSmall = await page.evaluate(() =>
     [
       ...document.querySelectorAll<HTMLElement>(
-        'a, button, input:not([type="hidden"]):not(#condiciones)',
+        'a, button, input:not([type="hidden"]):not(#acceptTerms)',
       ),
     ]
-      .filter((el) => !el.matches('.saltar') && el.getBoundingClientRect().width > 0)
+      .filter((el) => !el.matches('.skip-link') && el.getBoundingClientRect().width > 0)
       .filter((el) => {
         const box = el.getBoundingClientRect();
         return box.height < 43.5 || box.width < 43.5;
@@ -320,9 +320,9 @@ test('C43/C45: controles de al menos 44 px, filas de la casilla y campos con let
       ),
   );
   expect(tooSmall).toEqual([]);
-  const row = await page.locator('label.casilla').boundingBox();
+  const row = await page.locator('label.checkbox').boundingBox();
   expect(row?.height).toBeGreaterThanOrEqual(44);
-  const checkbox = await page.locator('#condiciones').boundingBox();
+  const checkbox = await page.locator('#acceptTerms').boundingBox();
   expect(checkbox && Math.round(checkbox.width)).toBe(24);
   const sizes = await page.evaluate(() =>
     [...document.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"])')].map((el) =>
@@ -337,13 +337,13 @@ test('C44/C55/C56: a 320 px no hay desplazamiento horizontal en ninguna pantalla
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 700 });
-  for (const path of ['/', '/registro', '/entrar', '/legal/condiciones', '/no-existe']) {
+  for (const path of ['/', '/register', '/login', '/legal/terms', '/no-existe']) {
     await page.goto(path);
     await expectNoHorizontalScroll(page, path);
   }
-  await page.goto('/registro');
+  await page.goto('/register');
   const rows = await page.evaluate(() =>
-    ['dia', 'mes', 'anio'].map((id) => document.getElementById(id)?.getBoundingClientRect()),
+    ['day', 'month', 'year'].map((id) => document.getElementById(id)?.getBoundingClientRect()),
   );
   expect(new Set(rows.map((box) => box?.y)).size).toBe(1);
   expect(rows[2]?.right).toBeLessThanOrEqual(320);
@@ -358,17 +358,17 @@ test('C44/C55/C56: a 320 px no hay desplazamiento horizontal en ninguna pantalla
   await page.setViewportSize({ width: 1280, height: 800 });
   await registerAdult(page, longEmail);
   await page.setViewportSize({ width: 320, height: 700 });
-  await page.goto('/cuenta');
-  await expect(page.locator('dl.datos')).toContainText(longEmail);
-  await expectNoHorizontalScroll(page, '/cuenta con un correo de 254 caracteres');
+  await page.goto('/account');
+  await expect(page.locator('dl.data-list')).toContainText(longEmail);
+  await expectNoHorizontalScroll(page, '/account con un correo de 254 caracteres');
 });
 
 test('C55: a partir de 48em el formulario se centra en una tarjeta de 28rem y la página en 40rem', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/registro');
-  const card = await page.locator('.tarjeta').boundingBox();
+  await page.goto('/register');
+  const card = await page.locator('.card').boundingBox();
   expect(card?.width).toBeLessThanOrEqual(28 * 16 + 1);
   expect(card?.width).toBeGreaterThan(28 * 16 - 20);
   const main = await page.locator('main').boundingBox();
@@ -380,7 +380,7 @@ test('C55: a partir de 48em el formulario se centra en una tarjeta de 28rem y la
 test('C39: todo lo tabulable enseña un anillo de foco de 3 px con el color --color-foco y 2 px de margen', async ({
   page,
 }) => {
-  await page.goto('/registro');
+  await page.goto('/register');
   for (let i = 0; i < 15; i++) {
     await page.keyboard.press('Tab');
     const ring = await page.evaluate(() => {
@@ -398,16 +398,16 @@ test('C39: todo lo tabulable enseña un anillo de foco de 3 px con el color --co
 test('C48: la casilla se activa con la barra espaciadora y con un clic en cualquier parte de su etiqueta; el enlace de las condiciones no la toca', async ({
   page,
 }) => {
-  await page.goto('/registro');
-  const checkbox = page.locator('#condiciones');
+  await page.goto('/register');
+  const checkbox = page.locator('#acceptTerms');
   await checkbox.focus();
   await page.keyboard.press('Space');
   await expect(checkbox).toBeChecked();
   await page.keyboard.press('Space');
   await expect(checkbox).not.toBeChecked();
-  await page.locator('label.casilla span').click();
+  await page.locator('label.checkbox span').click();
   await expect(checkbox).toBeChecked();
-  await page.locator('label.casilla span').click();
+  await page.locator('label.checkbox span').click();
   await expect(checkbox).not.toBeChecked();
   // El enlace está fuera de la etiqueta: pulsarlo no cambia la casilla (se abre en otra pestaña).
   expect(await page.evaluate(() => document.querySelectorAll('label a').length)).toBe(0);
@@ -417,7 +417,7 @@ test('C22/C28: el enlace a las condiciones abre una pestaña nueva y avisa; lo e
   page,
   context,
 }) => {
-  await page.goto('/registro');
+  await page.goto('/register');
   const email = uniqueEmail();
   await page.getByLabel('Correo electrónico').fill(email);
   const link = page.getByRole('link', { name: /Leer las condiciones/ });
@@ -426,13 +426,13 @@ test('C22/C28: el enlace a las condiciones abre una pestaña nueva y avisa; lo e
   await expect(link).toHaveAttribute('rel', /noopener/);
   const [popup] = await Promise.all([context.waitForEvent('page'), link.click()]);
   await popup.waitForLoadState();
-  await expect(popup).toHaveURL(/\/legal\/condiciones$/);
+  await expect(popup).toHaveURL(/\/legal\/terms$/);
   await expect(page.getByLabel('Correo electrónico')).toHaveValue(email);
   await popup.close();
 
   // Ningún campo bloquea el pegado.
   const prevented = await page.evaluate(() =>
-    ['correo', 'contrasena', 'dia', 'mes', 'anio'].map((id) => {
+    ['email', 'password', 'day', 'month', 'year'].map((id) => {
       const event = new ClipboardEvent('paste', { cancelable: true, bubbles: true });
       document.getElementById(id)?.dispatchEvent(event);
       return event.defaultPrevented;
@@ -450,11 +450,11 @@ test('C30: con JavaScript, el botón muestra «enviando» y un segundo envío no
   page.on('request', (request) => {
     if (request.method() === 'POST') posts.push(request.url());
   });
-  await page.route('**/registro', async (route) => {
+  await page.route('**/register', async (route) => {
     if (route.request().method() === 'POST') await new Promise((done) => setTimeout(done, 1500));
     await route.continue();
   });
-  await page.goto('/registro');
+  await page.goto('/register');
   await page.getByLabel('Correo electrónico').fill(uniqueEmail());
   await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
   await page.getByLabel('Día').fill('5');
@@ -469,7 +469,7 @@ test('C30: con JavaScript, el botón muestra «enviando» y un segundo envío no
   await expect(page.locator('form [role="status"]')).toHaveText('Creando tu cuenta…');
   await button.click({ force: true });
   await page.getByLabel('Correo electrónico').press('Enter');
-  await expect(page).toHaveURL('/cuenta');
+  await expect(page).toHaveURL('/account');
   expect(posts).toHaveLength(1);
 });
 
@@ -477,21 +477,21 @@ test('C29: «Mostrar contraseña» solo existe con JavaScript, alterna la visibi
   page,
   javaScriptEnabled,
 }) => {
-  await page.goto('/registro');
-  const toggle = page.locator('.boton-texto');
+  await page.goto('/register');
+  const toggle = page.locator('.button-text');
   if (!javaScriptEnabled) {
     await expect(toggle).toHaveCount(0);
     return;
   }
   await expect(toggle).toHaveText('Mostrar contraseña');
-  await page.locator('#contrasena').fill('algo');
+  await page.locator('#password').fill('algo');
   await toggle.click();
-  await expect(page.locator('#contrasena')).toHaveAttribute('type', 'text');
+  await expect(page.locator('#password')).toHaveAttribute('type', 'text');
   await expect(toggle).toHaveText('Ocultar contraseña');
   await toggle.click();
-  await expect(page.locator('#contrasena')).toHaveAttribute('type', 'password');
+  await expect(page.locator('#password')).toHaveAttribute('type', 'password');
   await expect(toggle).toHaveText('Mostrar contraseña');
-  await expect(page.locator('#contrasena')).toHaveValue('algo');
+  await expect(page.locator('#password')).toHaveValue('algo');
 });
 
 test('[BUG-QA-4] C44: a 320 px con el texto ampliado al 200 %, ninguna pantalla se desborda horizontalmente', async ({
@@ -500,10 +500,10 @@ test('[BUG-QA-4] C44: a 320 px con el texto ampliado al 200 %, ninguna pantalla 
 }) => {
   test.skip(!javaScriptEnabled, 'Para ampliar el texto hace falta inyectar CSS desde el test');
   // Texto ampliado (Android/iOS, UX §4 «texto ampliado»): se simula duplicando el tamaño de la
-  // letra raíz. Todo el CSS va en `rem`, así que la página debería reajustarse. Hoy /registro se
+  // letra raíz. Todo el CSS va en `rem`, así que la página debería reajustarse. Hoy /register se
   // desborda porque día, mes y año tienen anchos fijos en `rem` y no se parten en varias líneas.
   await page.setViewportSize({ width: 320, height: 700 });
-  for (const path of ['/', '/entrar', '/registro', '/legal/condiciones']) {
+  for (const path of ['/', '/login', '/register', '/legal/terms']) {
     await page.goto(path);
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
     await expectNoHorizontalScroll(page, `${path} con el texto al 200 %`);
@@ -522,9 +522,9 @@ test('[BUG-QA-5] C43: entre objetivos táctiles contiguos hay al menos 8 px (reg
     const gaps = await page.evaluate(() => {
       const targets = [
         ...document.querySelectorAll<HTMLElement>(
-          'a, button, input:not([type="hidden"]):not([type="checkbox"]), label.casilla',
+          'a, button, input:not([type="hidden"]):not([type="checkbox"]), label.checkbox',
         ),
-      ].filter((el) => !el.matches('.saltar') && el.getBoundingClientRect().width > 0);
+      ].filter((el) => !el.matches('.skip-link') && el.getBoundingClientRect().width > 0);
       const name = (el?: HTMLElement) => el?.id || (el?.textContent ?? '').trim().slice(0, 20);
       const result: { pair: string; gap: number }[] = [];
       for (let i = 1; i < targets.length; i++) {
@@ -541,10 +541,10 @@ test('[BUG-QA-5] C43: entre objetivos táctiles contiguos hay al menos 8 px (reg
     });
     for (const { pair, gap } of gaps) if (gap < 8) tooClose.push(`${path}: ${pair} (${gap} px)`);
   };
-  await check('/registro');
-  await check('/entrar');
+  await check('/register');
+  await check('/login');
   await registerAdult(page);
-  await check('/cuenta');
-  await check('/cuenta/eliminar');
+  await check('/account');
+  await check('/account/delete');
   expect(tooClose).toEqual([]);
 });

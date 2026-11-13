@@ -21,7 +21,7 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'chromium-sin-js', use: { ...devices['Desktop Chrome'], javaScriptEnabled: false } },
+    { name: 'chromium-no-js', use: { ...devices['Desktop Chrome'], javaScriptEnabled: false } },
   ],
   webServer: [
     {

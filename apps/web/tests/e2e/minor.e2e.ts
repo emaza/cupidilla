@@ -17,7 +17,7 @@ function minorBirthDate(): { day: string; month: string; year: string } {
 }
 
 async function expectMinorScreen(page: Page, email: string): Promise<void> {
-  await expect(page).toHaveURL('/registro');
+  await expect(page).toHaveURL('/register');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('No podemos crear tu cuenta');
   await expect(page).toHaveTitle('No podemos crear tu cuenta — Cupidilla');
   await expect(page.locator('main form')).toHaveCount(0);

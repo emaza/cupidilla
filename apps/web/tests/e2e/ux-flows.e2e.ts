@@ -10,14 +10,14 @@ test.afterAll(closeDb);
 test('C11: tras cerrar sesión, «atrás» no muestra la cuenta y pide entrar', async ({ page }) => {
   const email = uniqueEmail();
   await fillRegister(page, { email });
-  await expect(page).toHaveURL('/cuenta');
+  await expect(page).toHaveURL('/account');
 
   // La página privada pide que no se guarde en caché.
-  const response = await page.goto('/cuenta');
+  const response = await page.goto('/account');
   expect(response?.headers()['cache-control']).toBe('private, no-store');
 
   await page.getByRole('button', { name: 'Cerrar sesión' }).click();
-  await expect(page).toHaveURL('/?aviso=sesion-cerrada');
+  await expect(page).toHaveURL('/?notice=signed-out');
 
   await page.goBack();
   // Con JavaScript el router de SvelteKit sigue la redirección sin cambiar la barra de direcciones;
@@ -36,9 +36,9 @@ test('C58: visitar por GET la URL de la acción de salir no cierra la sesión', 
   context,
 }) => {
   const email = await registerAdult(page);
-  await page.goto('/cuenta?/salir');
+  await page.goto('/account?/logout');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tu cuenta');
-  await page.goto('/cuenta');
+  await page.goto('/account');
   await expect(page.getByText(email, { exact: true })).toBeVisible();
   expect((await context.cookies()).some((c) => c.name === 'cupidilla_session')).toBe(true);
   expect((await rowsForEmail(email)).sessions).toBe(1);
@@ -48,30 +48,36 @@ test('C58: la acción de salir solo existe como POST (no hay ningún enlace que 
   page,
 }) => {
   await registerAdult(page);
-  const form = page.locator('form[action="/cuenta?/salir"]');
+  const form = page.locator('form[action="/account?/logout"]');
   await expect(form).toHaveAttribute('method', /post/i);
-  await expect(page.locator('a[href*="salir"]')).toHaveCount(0);
+  await expect(page.locator('a[href*="logout"]')).toHaveCount(0);
 });
 
-test('[BUG-QA-1] C18: un ?aviso= desconocido no muestra ningún aviso (tampoco los nombres heredados de Object)', async ({
+test('[BUG-QA-1] C18: un ?notice= desconocido no muestra ningún aviso (tampoco los nombres heredados de Object)', async ({
   page,
 }) => {
   // `constructor`, `toString`, `__proto__`… existen en cualquier objeto: la lista de avisos tiene
   // que ser cerrada de verdad. Hoy salen como un aviso verde con el texto vacío.
-  for (const aviso of [
+  for (const notice of [
     'zzz',
     '',
-    'SESION-CERRADA',
+    'SIGNED-OUT',
+    // Valores de antes de pasar las rutas a inglés.
+    'sesion-cerrada',
+    'cuenta-eliminada',
     'constructor',
     'toString',
     '__proto__',
     'hasOwnProperty',
   ]) {
-    await page.goto(`/?aviso=${encodeURIComponent(aviso)}`);
+    await page.goto(`/?notice=${encodeURIComponent(notice)}`);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(page.getByRole('status'), `aviso=${aviso}`).toHaveCount(0);
+    await expect(page.getByRole('status'), `notice=${notice}`).toHaveCount(0);
   }
+  // El parámetro de antes tampoco muestra nada.
   await page.goto('/?aviso=sesion-cerrada');
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await page.goto('/?notice=signed-out');
   await expect(page.getByRole('status')).toContainText('Has cerrado sesión.');
 });
 
@@ -83,7 +89,7 @@ test('C3: quien cumple 18 hoy puede registrarse (y el de mañana, no: ver E-5)',
     .map(Number) as [number, number, number];
   const email = uniqueEmail();
   await fillRegister(page, { email, day: String(day), month: String(month), year: String(year) });
-  await expect(page).toHaveURL('/cuenta');
+  await expect(page).toHaveURL('/account');
   expect((await rowsForEmail(email)).users).toBe(1);
 });
 
@@ -103,11 +109,11 @@ test('C6: correo ya registrado (con otras mayúsculas y espacios): error en el c
   });
   const message =
     'No hemos podido crear la cuenta con ese correo. Si ya tienes una, entra; si no, comprueba que está bien escrito o prueba con otro.';
-  await expect(page.locator('#error-correo')).toContainText(message);
-  await expect(page.locator('#correo')).toHaveAttribute('aria-invalid', 'true');
-  await expect(page.locator('#error-correo').getByRole('link', { name: 'entra' })).toHaveAttribute(
+  await expect(page.locator('#email-error')).toContainText(message);
+  await expect(page.locator('#email')).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.locator('#email-error').getByRole('link', { name: 'entra' })).toHaveAttribute(
     'href',
-    /entrar$/,
+    /login$/,
   );
   await expect(page.getByLabel('Día')).toHaveValue('7');
   await expect(page.getByLabel('Mes')).toHaveValue('8');
@@ -120,10 +126,10 @@ test('C6: correo ya registrado (con otras mayúsculas y espacios): error en el c
 test('C9: un correo mal formado al entrar da el mismo mensaje genérico, no uno de formato', async ({
   page,
 }) => {
-  await page.goto('/entrar');
+  await page.goto('/login');
   await login(page, 'esto no es un correo', 'cualquiera');
-  await expect(page.locator('.resumen-errores')).toContainText('Correo o contraseña incorrectos.');
-  await expect(page.locator('.resumen-errores')).not.toContainText('formato');
+  await expect(page.locator('.error-summary')).toContainText('Correo o contraseña incorrectos.');
+  await expect(page.locator('.error-summary')).not.toContainText('formato');
   await expect(page.locator('[aria-invalid="true"]')).toHaveCount(0);
 });
 
@@ -133,11 +139,11 @@ test('entrar: un correo existente con contraseña errónea y uno inexistente son
   const email = await registerAdult(page);
   await logout(page);
   const attempt = async (address: string): Promise<{ text: string; html: string }> => {
-    await page.goto('/entrar');
+    await page.goto('/login');
     await login(page, address, 'contraseña equivocada');
-    await expect(page.locator('.resumen-errores')).toBeVisible();
+    await expect(page.locator('.error-summary')).toBeVisible();
     return {
-      text: await page.locator('.resumen-errores').innerText(),
+      text: await page.locator('.error-summary').innerText(),
       html: (await page.locator('main').innerHTML()).replace(/value="[^"]*"/g, ''),
     };
   };
@@ -157,8 +163,8 @@ const PASSWORD_CASES: [string, string, string | null][] = [
 for (const [name, password, error] of PASSWORD_CASES) {
   test(`C25: contraseña de ${name}`, async ({ page }) => {
     await fillRegister(page, { email: uniqueEmail(), password });
-    if (error) await expect(page.locator('#error-contrasena')).toContainText(error);
-    else await expect(page).toHaveURL('/cuenta');
+    if (error) await expect(page.locator('#password-error')).toContainText(error);
+    else await expect(page).toHaveURL('/account');
   });
 }
 
@@ -176,8 +182,8 @@ const DATE_CASES: [string, string, string, string][] = [
 for (const [day, month, year, error] of DATE_CASES) {
   test(`C26: fecha ${day || '·'}/${month || '·'}/${year || '·'}`, async ({ page }) => {
     await fillRegister(page, { email: uniqueEmail(), day, month, year });
-    await expect(page.locator('#error-fecha')).toContainText(error);
-    await expect(page.locator('#error-fecha')).toHaveCount(1);
+    await expect(page.locator('#birth-date-error')).toContainText(error);
+    await expect(page.locator('#birth-date-error')).toHaveCount(1);
   });
 }
 
@@ -189,7 +195,7 @@ for (const [day, month] of [
   test(`C26: «${day}» y «${month}» se aceptan como día y mes`, async ({ page }) => {
     const email = uniqueEmail();
     await fillRegister(page, { email, day: day ?? '', month: month ?? '', year: '1990' });
-    await expect(page).toHaveURL('/cuenta');
+    await expect(page).toHaveURL('/account');
     expect((await rowsForEmail(email)).users).toBe(1);
   });
 }
@@ -199,7 +205,7 @@ test('C21: sin marcar la casilla no se crea la cuenta; C20: tras el error la cas
 }) => {
   const email = uniqueEmail();
   await fillRegister(page, { email, acceptTerms: false });
-  await expect(page.locator('#error-condiciones')).toContainText(
+  await expect(page.locator('#accept-terms-error')).toContainText(
     'Para crear la cuenta tienes que aceptar las condiciones de uso.',
   );
   await expect(page.getByLabel(/Acepto las condiciones de uso/)).not.toBeChecked();
@@ -209,7 +215,7 @@ test('C21: sin marcar la casilla no se crea la cuenta; C20: tras el error la cas
   await page.getByLabel(/Acepto las condiciones de uso/).check();
   await page.getByLabel('Contraseña', { exact: true }).fill('corta');
   await page.getByRole('button', { name: 'Crear cuenta' }).click();
-  await expect(page.locator('#error-contrasena')).toBeVisible();
+  await expect(page.locator('#password-error')).toBeVisible();
   await expect(page.getByLabel(/Acepto las condiciones de uso/)).toBeChecked();
 });
 
@@ -217,17 +223,17 @@ test('C17: el consentimiento guarda la versión vigente y la fecha del registro'
   page,
 }) => {
   const email = await registerAdult(page);
-  await expect(page.locator('dl.datos')).toContainText('Condiciones aceptadas');
-  await expect(page.locator('dl.datos')).toContainText(
+  await expect(page.locator('dl.data-list')).toContainText('Condiciones aceptadas');
+  await expect(page.locator('dl.data-list')).toContainText(
     /versión 2026-11-borrador, el \d{1,2} de [a-zé]+ de \d{4}/,
   );
   expect((await rowsForEmail(email)).consents).toBe(1);
 });
 
-test('C52: /legal/condiciones es pública, enseña el borrador, la versión y los [PENDIENTE] tal cual', async ({
+test('C52: /legal/terms es pública, enseña el borrador, la versión y los [PENDIENTE] tal cual', async ({
   page,
 }) => {
-  await page.goto('/legal/condiciones');
+  await page.goto('/legal/terms');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Condiciones de uso');
   await expect(
     page.getByText(
@@ -241,7 +247,7 @@ test('C52: /legal/condiciones es pública, enseña el borrador, la versión y lo
   await expect(page).toHaveTitle('Condiciones de uso (borrador) — Cupidilla');
 
   await registerAdult(page);
-  await page.goto('/legal/condiciones');
+  await page.goto('/legal/terms');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Condiciones de uso');
 });
 
@@ -253,21 +259,21 @@ test('el token de sesión no aparece nunca en el HTML, en los datos de la págin
   const token = (await context.cookies()).find((c) => c.name === 'cupidilla_session')?.value ?? '';
   expect(token).toHaveLength(43);
 
-  for (const path of ['/cuenta', '/cuenta/eliminar', '/', '/legal/condiciones']) {
+  for (const path of ['/account', '/account/delete', '/', '/legal/terms']) {
     const response = await page.goto(path);
     expect(await response?.text(), path).not.toContain(token);
     expect(await page.content(), path).not.toContain(token);
   }
-  for (const path of ['/cuenta/__data.json', '/__data.json']) {
+  for (const path of ['/account/__data.json', '/__data.json']) {
     const response = await page.request.get(path);
     expect(await response.text(), path).not.toContain(token);
     expect(await response.text(), path).not.toContain('birthDate');
   }
   // Un error de contraseña al eliminar tampoco lo devuelve.
-  await page.goto('/cuenta/eliminar');
+  await page.goto('/account/delete');
   await page.getByLabel('Contraseña', { exact: true }).fill('contraseña equivocada');
   await page.getByRole('button', { name: 'Eliminar mi cuenta definitivamente' }).click();
-  await expect(page.locator('#error-contrasena')).toBeVisible();
+  await expect(page.locator('#password-error')).toBeVisible();
   expect(await page.content()).not.toContain(token);
   expect(await page.content()).not.toContain('contraseña equivocada');
   expect((await rowsForEmail(email)).users).toBe(1);

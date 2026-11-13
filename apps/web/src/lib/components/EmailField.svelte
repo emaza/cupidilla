@@ -17,21 +17,21 @@
   let { label, value, error, errorContent }: Props = $props();
 </script>
 
-<div class="campo">
-  <label for="correo">{label}</label>
+<div class="field">
+  <label for="email">{label}</label>
   {#if error}
-    <FieldError id="error-correo" text={error} children={errorContent} />
+    <FieldError id="email-error" text={error} children={errorContent} />
   {/if}
   <input
-    id="correo"
-    name="correo"
+    id="email"
+    name="email"
     type="email"
     autocomplete="username"
     inputmode="email"
     autocapitalize="none"
     spellcheck="false"
     defaultValue={value}
-    aria-describedby={error ? 'error-correo' : undefined}
+    aria-describedby={error ? 'email-error' : undefined}
     aria-invalid={error ? 'true' : undefined}
   />
 </div>

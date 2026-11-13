@@ -19,10 +19,10 @@ vi.mock('#lib/server/session-cookie.ts', () => ({
   getSessionToken: vi.fn(),
 }));
 
-const registro = await import('./(invitado)/registro/+page.server.ts');
-const entrar = await import('./(invitado)/entrar/+page.server.ts');
-const cuenta = await import('./(privado)/cuenta/+page.server.ts');
-const eliminar = await import('./(privado)/cuenta/eliminar/+page.server.ts');
+const registerPage = await import('./(guest)/register/+page.server.ts');
+const loginPage = await import('./(guest)/login/+page.server.ts');
+const accountPage = await import('./(private)/account/+page.server.ts');
+const deletePage = await import('./(private)/account/delete/+page.server.ts');
 
 const TERMS = '2026-11-borrador';
 
@@ -61,13 +61,13 @@ async function run(
 }
 
 const adultForm = {
-  correo: 'ana@example.com',
-  contrasena: 'una frase larga de prueba',
-  dia: '5',
-  mes: '5',
-  anio: '1990',
-  condiciones: 'on',
-  version_condiciones: TERMS,
+  email: 'ana@example.com',
+  password: 'una frase larga de prueba',
+  day: '5',
+  month: '5',
+  year: '1990',
+  acceptTerms: 'on',
+  termsVersion: TERMS,
 };
 
 beforeEach(() => {
@@ -76,7 +76,7 @@ beforeEach(() => {
 
 describe('registro: respuestas de la API (criterios 31 y 32)', () => {
   const submit = (fields: Record<string, string> = adultForm) =>
-    run(() => registro.actions.default(formEvent(fields)) as Promise<unknown>);
+    run(() => registerPage.actions.default(formEvent(fields)) as Promise<unknown>);
 
   it('429 → comun.error.limite, con los valores conservados y sin la contraseña', async () => {
     api.register.mockResolvedValue(apiFailure(429, 'RATE_LIMITED'));
@@ -85,7 +85,7 @@ describe('registro: respuestas de la API (criterios 31 y 32)', () => {
       status: 429,
       data: {
         errors: { fields: {}, general: 'comun.error.limite' },
-        values: { correo: 'ana@example.com', dia: '5', mes: '5', anio: '1990', condiciones: true },
+        values: { email: 'ana@example.com', day: '5', month: '5', year: '1990', acceptTerms: true },
       },
     });
     expect(JSON.stringify(result)).not.toContain('una frase larga de prueba');
@@ -98,7 +98,7 @@ describe('registro: respuestas de la API (criterios 31 y 32)', () => {
       status: 503,
       data: {
         errors: { general: 'registro.error.servidor' },
-        values: { correo: 'ana@example.com', condiciones: true },
+        values: { email: 'ana@example.com', acceptTerms: true },
       },
     });
     expect(JSON.stringify(result)).not.toMatch(/API_UNAVAILABLE|ECONN|fetch/);
@@ -112,7 +112,7 @@ describe('registro: respuestas de la API (criterios 31 y 32)', () => {
       status: 503,
       data: {
         errors: { fields: {}, dateParts: [], general: 'registro.error.resultado_incierto' },
-        values: { correo: 'ana@example.com', dia: '5', mes: '5', anio: '1990', condiciones: true },
+        values: { email: 'ana@example.com', day: '5', month: '5', year: '1990', acceptTerms: true },
       },
     });
     expect(api.register).toHaveBeenCalledOnce();
@@ -127,7 +127,7 @@ describe('registro: respuestas de la API (criterios 31 y 32)', () => {
     });
   });
 
-  it('con la API acierta: cookie y redirección 303 a /cuenta, sin devolver el token', async () => {
+  it('con la API acierta: cookie y redirección 303 a /account, sin devolver el token', async () => {
     api.register.mockResolvedValue({
       ok: true,
       status: 201,
@@ -137,7 +137,7 @@ describe('registro: respuestas de la API (criterios 31 y 32)', () => {
       },
     });
     const outcome = await submit();
-    expect(outcome.redirect).toEqual({ status: 303, location: '/cuenta' });
+    expect(outcome.redirect).toEqual({ status: 303, location: '/account' });
     expect(cookie.set).toHaveBeenCalledWith(expect.anything(), 'TOKEN-SECRETO', expect.any(String));
   });
 
@@ -147,11 +147,11 @@ describe('registro: respuestas de la API (criterios 31 y 32)', () => {
     const tomorrow = new Date(Date.UTC(year, month - 1, day + 1));
     const { result } = await submit({
       ...adultForm,
-      dia: String(tomorrow.getUTCDate()),
-      mes: String(tomorrow.getUTCMonth() + 1),
-      anio: String(tomorrow.getUTCFullYear()),
-      contrasena: 'x',
-      condiciones: '',
+      day: String(tomorrow.getUTCDate()),
+      month: String(tomorrow.getUTCMonth() + 1),
+      year: String(tomorrow.getUTCFullYear()),
+      password: 'x',
+      acceptTerms: '',
     });
     expect(result).toMatchObject({ status: 422, data: { underage: true } });
     expect(Object.keys((result as { data: object }).data)).toEqual(['underage']);
@@ -171,15 +171,15 @@ describe('registro: respuestas de la API (criterios 31 y 32)', () => {
     expect(result).toMatchObject({
       status: 409,
       data: {
-        values: { condiciones: false, correo: 'ana@example.com' },
-        errors: { fields: { condiciones: 'registro.error.condiciones_version' } },
+        values: { acceptTerms: false, email: 'ana@example.com' },
+        errors: { fields: { acceptTerms: 'registro.error.condiciones_version' } },
       },
     });
   });
 
   it('una versión de condiciones manipulada en el formulario llega a la API tal cual (ella decide)', async () => {
     api.register.mockResolvedValue(apiFailure(409, 'TERMS_VERSION_OUTDATED'));
-    await submit({ ...adultForm, version_condiciones: 'inventada' });
+    await submit({ ...adultForm, termsVersion: 'inventada' });
     expect(api.register).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ termsVersion: 'inventada', acceptTerms: true }),
@@ -187,10 +187,10 @@ describe('registro: respuestas de la API (criterios 31 y 32)', () => {
   });
 
   it('sin casilla marcada no se llama a la API', async () => {
-    const { result } = await submit({ ...adultForm, condiciones: '' });
+    const { result } = await submit({ ...adultForm, acceptTerms: '' });
     expect(result).toMatchObject({
       status: 400,
-      data: { errors: { fields: { condiciones: 'registro.error.condiciones' } } },
+      data: { errors: { fields: { acceptTerms: 'registro.error.condiciones' } } },
     });
     expect(api.register).not.toHaveBeenCalled();
   });
@@ -200,8 +200,8 @@ describe('entrar: respuestas de la API (criterios 31, 32, 8 y 10)', () => {
   const submit = (fields: Record<string, string> = {}) =>
     run(
       () =>
-        entrar.actions.default(
-          formEvent({ correo: 'ana@example.com', contrasena: 'una frase larga', ...fields }),
+        loginPage.actions.default(
+          formEvent({ email: 'ana@example.com', password: 'una frase larga', ...fields }),
         ) as Promise<unknown>,
     );
   const ok = {
@@ -214,7 +214,7 @@ describe('entrar: respuestas de la API (criterios 31, 32, 8 y 10)', () => {
     api.login.mockResolvedValue(apiFailure(429, 'RATE_LIMITED'));
     expect((await submit()).result).toMatchObject({
       status: 429,
-      data: { errors: { general: 'comun.error.limite' }, values: { correo: 'ana@example.com' } },
+      data: { errors: { general: 'comun.error.limite' }, values: { email: 'ana@example.com' } },
     });
   });
 
@@ -253,39 +253,46 @@ describe('entrar: respuestas de la API (criterios 31, 32, 8 y 10)', () => {
   });
 
   it('un correo mal formado no llega a la API', async () => {
-    const { result } = await submit({ correo: 'no es un correo' });
+    const { result } = await submit({ email: 'no es un correo' });
     expect(result).toMatchObject({ data: { errors: { general: 'entrar.error.credenciales' } } });
     expect(api.login).not.toHaveBeenCalled();
   });
 
   it.each([
-    ['/cuenta/eliminar', '/cuenta/eliminar'],
-    ['/cuenta', '/cuenta'],
-    ['https://otro.sitio', '/cuenta'],
-    ['//otro.sitio', '/cuenta'],
-    ['/\\otro.sitio', '/cuenta'],
-    ['javascript:alert(1)', '/cuenta'],
-    ['', '/cuenta'],
-  ])('siguiente=%j → redirige a %s', async (siguiente, expected) => {
+    ['/account/delete', '/account/delete'],
+    ['/account', '/account'],
+    ['https://otro.sitio', '/account'],
+    ['//otro.sitio', '/account'],
+    ['/\\otro.sitio', '/account'],
+    ['javascript:alert(1)', '/account'],
+    ['', '/account'],
+  ])('next=%j → redirige a %s', async (next, expected) => {
     api.login.mockResolvedValue(ok);
-    const outcome = await submit({ siguiente });
+    const outcome = await submit({ next });
     expect(outcome.redirect).toEqual({ status: 303, location: expected });
   });
 });
 
-describe('/cuenta: salir (acuerdo A14)', () => {
+describe('/account: salir (acuerdo A14)', () => {
   const signedIn = { user: { id: 'u', email: 'ana@example.com' }, sessionToken: 'T'.repeat(43) };
-  const salir = () => run(() => cuenta.actions.salir(formEvent({}, signedIn)) as Promise<unknown>);
+  const submitLogout = () =>
+    run(() => accountPage.actions.logout(formEvent({}, signedIn)) as Promise<unknown>);
 
   it('204: borra la cookie y vuelve a la portada con el aviso', async () => {
     api.logout.mockResolvedValue({ ok: true, status: 204, data: undefined });
-    expect((await salir()).redirect).toEqual({ status: 303, location: '/?aviso=sesion-cerrada' });
+    expect((await submitLogout()).redirect).toEqual({
+      status: 303,
+      location: '/?notice=signed-out',
+    });
     expect(cookie.clear).toHaveBeenCalledOnce();
   });
 
   it('401 (la sesión ya no existe): también sale', async () => {
     api.logout.mockResolvedValue(apiFailure(401, 'UNAUTHENTICATED'));
-    expect((await salir()).redirect).toEqual({ status: 303, location: '/?aviso=sesion-cerrada' });
+    expect((await submitLogout()).redirect).toEqual({
+      status: 303,
+      location: '/?notice=signed-out',
+    });
     expect(cookie.clear).toHaveBeenCalledOnce();
   });
 
@@ -295,26 +302,23 @@ describe('/cuenta: salir (acuerdo A14)', () => {
     ['la API da 500', apiFailure(500, 'INTERNAL_ERROR')],
   ])('%s: NO borra la cookie y muestra cuenta.error.servidor', async (_, failure) => {
     api.logout.mockResolvedValue(failure);
-    const { result, redirect } = await salir();
+    const { result, redirect } = await submitLogout();
     expect(redirect).toBeUndefined();
     expect(result).toMatchObject({ status: 503, data: { general: 'cuenta.error.servidor' } });
     expect(cookie.clear).not.toHaveBeenCalled();
   });
 });
 
-describe('/cuenta/eliminar', () => {
+describe('/account/delete', () => {
   const signedIn = { user: { id: 'u', email: 'ana@example.com' }, sessionToken: 'T'.repeat(43) };
   const submit = (password = 'una frase larga') =>
-    run(
-      () =>
-        eliminar.actions.default(formEvent({ contrasena: password }, signedIn)) as Promise<unknown>,
-    );
+    run(() => deletePage.actions.default(formEvent({ password }, signedIn)) as Promise<unknown>);
 
   it('contraseña vacía: error de campo y no llama a la API', async () => {
     const { result } = await submit('');
     expect(result).toMatchObject({
       status: 400,
-      data: { errors: { fields: { contrasena: 'eliminar.error.contrasena_vacia' } } },
+      data: { errors: { fields: { password: 'eliminar.error.contrasena_vacia' } } },
     });
     expect(api.deleteAccount).not.toHaveBeenCalled();
   });
@@ -324,7 +328,7 @@ describe('/cuenta/eliminar', () => {
     const { result } = await submit();
     expect(result).toMatchObject({
       status: 403,
-      data: { errors: { fields: { contrasena: 'eliminar.error.contrasena' } } },
+      data: { errors: { fields: { password: 'eliminar.error.contrasena' } } },
     });
     expect(cookie.clear).not.toHaveBeenCalled();
   });
@@ -354,11 +358,11 @@ describe('/cuenta/eliminar', () => {
     expect(JSON.stringify(result)).not.toMatch(/una frase larga|OUTCOME_UNKNOWN/);
   });
 
-  it('sesión caducada (401): como sin sesión, a /entrar?siguiente=/cuenta', async () => {
+  it('sesión caducada (401): como sin sesión, a /login?next=/account', async () => {
     api.deleteAccount.mockResolvedValue(apiFailure(401, 'UNAUTHENTICATED'));
     expect((await submit()).redirect).toEqual({
       status: 303,
-      location: '/entrar?siguiente=/cuenta',
+      location: '/login?next=/account',
     });
   });
 
@@ -366,7 +370,7 @@ describe('/cuenta/eliminar', () => {
     api.deleteAccount.mockResolvedValue({ ok: true, status: 204, data: undefined });
     expect((await submit()).redirect).toEqual({
       status: 303,
-      location: '/?aviso=cuenta-eliminada',
+      location: '/?notice=account-deleted',
     });
     expect(cookie.clear).toHaveBeenCalledOnce();
   });

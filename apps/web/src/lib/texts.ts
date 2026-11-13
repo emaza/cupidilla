@@ -1,7 +1,7 @@
 /**
  * Textos de interfaz, copiados palabra por palabra de la tabla de §5 del diseño UX.
  * Las claves son las de esa tabla. `{x}` es un valor variable (ver `fill`).
- * El texto de /legal/condiciones (§5.9) vive en `legal/terms-2026-11-borrador.svelte`.
+ * El texto de /legal/terms (§5.9) vive en `legal/terms-2026-11-borrador.svelte`.
  */
 export const texts = {
   // 5.1 Comunes
