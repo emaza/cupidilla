@@ -12,7 +12,7 @@ Se añade «Continuar con Google» y «Continuar con Facebook» a `/login` y `/r
 - **Reparto**: la API hace todo lo que lleva secretos o decide algo: genera `state`, `code_verifier` y `nonce`, construye la URL del proveedor, canjea el código, valida el `id_token`, llama a la Graph API y decide si se entra, si hay alta pendiente o si hay unión. SvelteKit solo guarda una cookie opaca, redirige al proveedor y reenvía a la API la consulta de la vuelta tal cual.
 - **Estado temporal en tablas, no en cookies firmadas**: `oauth_states` (flujo en curso, 10 min) y `pending_identities` (alta o unión pendiente, 30 min). La cookie `cupidilla_oauth` solo lleva un token opaco cuyo SHA-256 es la clave de la fila, igual que la sesión.
 - **Datos**: tabla `identities` (proveedor + `subject`, FK a `users` con `ON DELETE CASCADE`). `users.password_hash` pasa a admitir nulos y `sessions` gana `authenticated_at`, la base de la «sesión reciente».
-- **`/account`**: añadir y quitar proveedores, crear una contraseña si no hay y borrar la cuenta sin contraseña. Lo sensible exige una sesión autenticada hace menos de 10 minutos.
+- **`/account`**: añadir y quitar proveedores, crear una contraseña si no hay y borrar la cuenta sin contraseña. Con contraseña, cada cambio la pide en el mismo formulario; sin ella, crear una contraseña y añadir un proveedor exigen una sesión autenticada hace menos de 10 minutos (decisión 20, §9).
 - **Biblioteca**: `openid-client` 6.8.8 con `jose` 6.2.14, en la API. La web no añade ninguna dependencia.
 - **Pruebas**: un proveedor falso propio (`packages/fake-oauth-provider`, sin dependencias) que imita a Google y a Facebook. Se usa en integración y en e2e; nunca se llama a Google ni a Facebook en CI.
 
@@ -48,7 +48,7 @@ Responden a [UX §8.2](login-terceros-diseno-ux.md#82-para-el-arquitecto-pendien
 | T5 | Tope de 5 fallos por estado pendiente. **Además**, la unión comparte con `/login` el contador por correo (5 cada 15 minutos). Siempre se calcula argon2, así que tarda lo mismo que `/login` | §8 |
 | T6 | Se detecta y la vuelta da `use_other_provider` con la lista de proveedores de esa cuenta | §6 |
 | T7 | Solo `subject`, correo del proveedor, si se considera verificado y dos fechas. Ni nombre, ni foto, ni *tokens* | §5 |
-| T8 | Se escribe «ELIMINAR» y, además, hace falta una sesión de menos de 10 minutos o volver a entrar con el proveedor (decisión del CTO) | §9.2 |
+| T8 | Se escribe «ELIMINAR». La sesión reciente que pedía la decisión del CTO la quitó la decisión 20 | §9.2 |
 | T9 | Quitar un proveedor bloquea la fila de `users` (`FOR UPDATE`) dentro de la transacción y comprueba que queda otra forma de entrar | §9.4 |
 | T10 | Confirmado: manda `(provider, subject)`. El correo del proveedor solo se actualiza en `identities.provider_email` | §6 |
 | T11 | No se guarda ningún *token*: no hay nada que revocar | §5 |
@@ -491,7 +491,9 @@ const returnPath = z.string().max(64).regex(/^\/[a-z/-]*$/)
   .refine((v) => !v.includes('//'), 'invalid_format');          // la regex sola acepta «//x»; la web aplica además safeReturnPath
 
 export const oauthStartRequestSchema = z.strictObject({ entryPoint: z.enum(OAUTH_ENTRY_POINTS), returnPath: returnPath.optional() });
-export const oauthSessionStartRequestSchema = z.strictObject({ purpose: z.enum(['reauthenticate', 'connect']), returnPath: returnPath.optional() });
+export const oauthSessionStartRequestSchema = z.strictObject({ purpose: z.enum(['reauthenticate', 'connect']), returnPath: returnPath.optional(),
+  password: passwordInputSchema.optional() });                   // con `connect`, en cuentas con contraseña (decisión 20)
+export const removeIdentityRequestSchema = z.strictObject({ password: passwordInputSchema.optional() });
 export const oauthStartResponseSchema = z.object({ authorizationUrl: z.url(), flowToken: opaqueToken, expiresAt: z.iso.datetime() });
 
 export const oauthCallbackRequestSchema = z.strictObject({ flowToken: opaqueToken, callbackQuery: z.string().max(4096) });
@@ -536,7 +538,7 @@ Códigos de error nuevos en `ERROR_CODES`:
 |---|---|---|
 | `OAUTH_FLOW_INVALID` | 400 | Flujo o estado pendiente inexistente, caducado, ya usado o de otro proveedor; `state` o `Bearer` que no coinciden; `email` que no coincide en la unión |
 | `LINK_ATTEMPTS_EXCEEDED` | 403 | 5.º fallo de contraseña en una unión; la fila ya está borrada |
-| `REAUTHENTICATION_REQUIRED` | 403 | Borrado sin contraseña, añadir un proveedor o crear una contraseña sin sesión reciente |
+| `REAUTHENTICATION_REQUIRED` | 403 | En una cuenta sin contraseña, añadir un proveedor o crear una contraseña sin sesión reciente (decisión 20) |
 | `ACCOUNT_USES_OTHER_PROVIDER` | 409 | Carrera en el alta contra una cuenta sin contraseña |
 | `LAST_SIGN_IN_METHOD` | 409 | Quitar la última forma de entrar |
 | `PASSWORD_ALREADY_SET` | 409 | Crear una contraseña cuando ya hay una |
@@ -611,14 +613,11 @@ La web no necesita variables nuevas en tiempo de ejecución.
 | `GET /auth/{provider}/callback` | `src/routes/auth/[provider=provider]/callback/+server.ts` | Sin cookie → 303 `/login?error=provider-expired`, sin llamar a la API. Con cookie → `api.oauthCallback(event, { flowToken, callbackQuery: url.search.slice(1) }, sessionToken)` y redirige según §11.3. Siempre `Cache-Control: no-store`. Nunca pinta HTML |
 | `/register/complete` | `src/routes/(guest)/register/complete/+page.svelte \| +page.server.ts` | `load`: `GET /auth/oauth/pending`; si `kind = 'link'`, 303 `/login/link`. Acciones: `default` (alta) y `cancel` |
 | `/login/link` | `src/routes/(guest)/login/link/+page.svelte \| +page.server.ts` | Igual con `kind = 'link'`. Acciones `default` (unión) y `cancel` |
-| `/account` | existente | Sección «Formas de entrar». Acción `removeIdentity` (campo `provider`) → 303 `/account?notice=unlinked&provider=…`. El botón «Añadir {proveedor}» es un formulario `POST /auth/{provider}` con `intent=connect`; solo se dibuja con sesión reciente. Con sesión antigua, el bloque «Confirma que eres tú» de UX §3.5.2 |
+| `/account` | existente | Sección «Formas de entrar». Acción `removeIdentity` (campo `provider`) → 303 `/account?notice=unlinked&provider=…`. El botón «Añadir {proveedor}» es un formulario `POST /auth/{provider}` con `intent=connect`. Con contraseña en la cuenta, se dibuja siempre, y ese formulario y el de quitar llevan el campo `password` (decisión 20). Sin contraseña, solo con sesión reciente; con sesión antigua, el bloque «Confirma que eres tú» de UX §3.5.2 |
 | `/account/password` | `src/routes/(private)/account/password/+page.svelte \| +page.server.ts` | Solo si la cuenta no tiene contraseña; si la tiene, 303 `/account`. Sesión reciente: campo `password` (`autocomplete="new-password"`), acción `default` → `POST /users/me/password` y 303 `/account?notice=password-created`; con 409, 303 `/account`. Sesión antigua: bloque «Confirma que eres tú» con botones de proveedor (`intent=reauthenticate`, `next=/account/password`) |
-| `/account/delete` | existente | Con contraseña, H0. Sin ella: con sesión reciente, campo `confirmation` («ELIMINAR», UX §3.6); si no es reciente, el bloque «Confirma que eres tú» (`intent=reauthenticate`, `next=/account/delete`) |
+| `/account/delete` | existente | Con contraseña, H0 (acción `password`). Sin ella: campo `confirmation` («ELIMINAR», UX §3.6, acción `confirm`), sin sesión reciente (decisión 20) |
 
-**Bloque «Confirma que eres tú» (UX §3.5.2)**, igual en las tres páginas privadas:
-- Con proveedores unidos: un formulario `POST /auth/{provider}` por cada uno, con `from=account`, `intent=reauthenticate` y `next` igual a la página actual.
-- Con contraseña y sin proveedores: acción `reauthenticate` (campo `password`) en esa misma página → `POST /users/me/reauthentication`. Si acierta, 303 a la misma página con `?notice=reauthenticated`. Si la contraseña es errónea, el error de campo de H0; con 429, `?error=rate-limited`.
-- Una cuenta con contraseña **y** proveedores ve las dos opciones. El proveedor no es obligatorio.
+**Bloque «Confirma que eres tú» (UX §3.5.2)**, solo para cuentas sin contraseña (decisión 20), en `/account` y `/account/password`: un formulario `POST /auth/{provider}` por cada proveedor unido, con `from=account`, `intent=reauthenticate` y `next` igual a la página actual.
 - Si cualquier acción protegida recibe 403 `REAUTHENTICATION_REQUIRED` (la sesión envejeció entre cargar y enviar): 303 a la misma página con `?error=reauth-required`, sin haber hecho nada.
 
 - `src/params/provider.ts`: `match = (p) => p === 'google' || p === 'facebook'`.
@@ -800,14 +799,13 @@ Paquete privado `@cupidilla/fake-oauth-provider`, solo fuente TypeScript y sin c
 - O-14. Escenarios del proveedor (`token_error`, `wrong_nonce`, `wrong_audience`, `wrong_issuer`, `expired_id_token`, `slow_token`, `graph_error`) → `failed`, `provider_failed`, en menos de `OAUTH_HTTP_TIMEOUT_MS` + 1 s. Cancelar en el proveedor → `failed`, `cancelled`, y la fila consumida.
 - O-15. Fila pendiente con `Clock` + 31 min → `OAUTH_FLOW_INVALID` en `pending`, `signup` y `link`. La cancelación es idempotente.
 - O-16. Login con correo de una cuenta sin contraseña → 401 con un cuerpo **idéntico** al de una contraseña errónea.
-- O-17. **Borrado sin contraseña**:
-  - Sesión de hace 11 min → 403 `REAUTHENTICATION_REQUIRED`.
-  - Reautenticación con otro `subject` → `failed`, `identity_mismatch`.
-  - Reautenticación correcta → `authenticated_at` actualizado y borrado → 204.
+- O-17. **Borrado sin contraseña** (decisión 20):
+  - Con una sesión de horas → 204, sin pedir nada más; un `password` en el cuerpo no cambia nada.
   - Después, 0 filas en todas las tablas con FK a `users` y en `oauth_states`.
+  - Reautenticación con otro `subject` → `failed`, `identity_mismatch` (se prueba en el flujo de reautenticación).
   - Con contraseña, H0 sin cambios (I-15 e I-16 siguen en verde).
 - O-18. Vuelta de una reautenticación con el `Bearer` de otra sesión, o sin él → `OAUTH_FLOW_INVALID`. Cerrar la sesión borra en cascada su `oauth_states`.
-- O-19. Quitar un proveedor: con contraseña → 204. Con única identidad y sin contraseña → 409. Con dos identidades, dos retiradas simultáneas → una 204 y otra 409.
+- O-19. Quitar un proveedor: con contraseña en la cuenta, sin ella 400, errónea 403 y correcta 204 (decisión 20). Con única identidad y sin contraseña → 409. Con dos identidades, dos retiradas simultáneas → una 204 y otra 409.
 - O-20. **Logs**: en todos los casos anteriores no aparecen `code`, `state`, `verifier`, `nonce`, `id_token`, *access token*, `appsecret_proof`, `flowToken`, `pendingToken`, `subject`, el correo del proveedor, el `client_secret`, la `callbackQuery` ni la contraseña creada.
 - O-21. Configuración: la API no arranca con `OAUTH_FAKE_PROVIDER_URL` y `NODE_ENV=production`, con media pareja de credenciales, sin `OAUTH_REDIRECT_BASE_URL` o con una base `http:` que no sea *loopback*. Un proveedor sin configurar falta en `providers` y da 404 al empezar.
 - O-22. Límites: el 21.º inicio en 15 min desde una IP → 429. Cubo de sesión: 3 reautenticaciones fallidas y 2 borrados fallidos → el siguiente da 429.

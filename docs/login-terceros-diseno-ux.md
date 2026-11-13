@@ -8,7 +8,7 @@ Especificación de interfaz para entrar y registrarse con Google y Facebook, y p
 
 ## 0. Alcance y principios
 
-**Dentro**: botones de proveedor en `/login` y `/register`; completar el alta; unir con una cuenta existente; errores del proveedor; en `/account`: formas de entrar, añadir y quitar proveedor, crear contraseña, y borrado sin contraseña con sesión reciente.
+**Dentro**: botones de proveedor en `/login` y `/register`; completar el alta; unir con una cuenta existente; errores del proveedor; en `/account`: formas de entrar, añadir y quitar proveedor, crear contraseña, y borrado sin contraseña (decisión 20: solo con ELIMINAR).
 **Fuera**: recuperación de contraseña, **cambiar** una contraseña que ya existe, verificación de correo propia, otros proveedores, cambio de correo.
 
 **Usuarios y objetivo.** Una persona adulta que no quiere inventar otra contraseña y prefiere pulsar un botón conocido. Quiere entrar en dos pasos, saber qué recibe Cupidilla de su cuenta de Google o Facebook y no quedarse encerrada ni perder su cuenta por error. La edad sigue siendo un requisito: ningún camino salta la comprobación de 18 años.
@@ -49,8 +49,10 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    AC["/account"] -->|Quitar proveedor, queda otra forma| AC
-    AC -->|Añadir proveedor| R1{"¿Sesión de menos de 10 min?"}
+    AC["/account"] -->|Quitar proveedor, queda otra forma; con contraseña, escribiéndola| AC
+    AC -->|Añadir proveedor| R0{"¿Tiene contraseña?"}
+    R0 -->|Sí, escrita en el formulario| PR
+    R0 -->|No| R1{"¿Sesión de menos de 10 min?"}
     AC -->|Crear contraseña| PW["/account/password"]
     AC -->|Eliminar mi cuenta| DL["/account/delete"]
     R1 -->|Sí| PR["Pantalla del proveedor"] --> AC
@@ -60,8 +62,7 @@ flowchart TD
     R2 -->|No| V
     DL --> R3{"¿Tiene contraseña?"}
     R3 -->|Sí| H0["Contraseña (H0)"]
-    R3 -->|No, sesión reciente| E["Escribir ELIMINAR"]
-    R3 -->|No, sesión antigua| V
+    R3 -->|No| E["Escribir ELIMINAR"]
     V -->|Proveedor: vuelve a la misma pantalla| R1
 ```
 
@@ -319,7 +320,7 @@ Reglas:
    <ul>
      Correo y contraseña   No tienes contraseña                 Crear contraseña  (enlace a /account/password)
      Google                Unido el 13 de noviembre de 2026     [ Quitar Google ]
-     Facebook              No unido                             [ f  Continuar con Facebook ]   (solo con sesión reciente)
+     Facebook              No unido                             [ f  Continuar con Facebook ]   (con contraseña: siempre, tras su campo; sin ella: con sesión reciente)
    Si quitas una forma de entrar no se borra tu cuenta, ni tu cuenta en ese servicio. Siempre debe quedarte al menos una.
    [bloque «Confirma que eres tú», solo con sesión antigua y algo que añadir]
 <section> <h2> Cupidilla ...
@@ -453,7 +454,7 @@ Después de crear la contraseña: el borrado pide la contraseña (H0), se puede 
 | `/register/complete` (menor) | n/a | n/a | n/a | pantalla de cierre | n/a |
 | `/login/link` | vacío | «Uniendo cuentas…» | contraseña vacía o incorrecta | límite, 5 fallos, servidor, resultado incierto | pantalla de `next` con aviso |
 | `/account` | formas de entrar | «Quitando…» | n/a | última forma, servidor, en uso, ya unido, fallo, límite, otra cuenta | aviso |
-| `/account/delete` (sin contraseña) | ELIMINAR o bloque de confirmar | «Eliminando…» | confirmación | límite, servidor, incierto, sesión antigua | `/` con aviso |
+| `/account/delete` (sin contraseña) | ELIMINAR | «Eliminando…» | confirmación | límite, servidor, incierto | `/` con aviso |
 | `/account/password` | campo o bloque de confirmar | «Creando contraseña…» | vacía, corta, larga | límite, servidor, incierto, sesión antigua | `/account` con aviso |
 
 Casos límite: correo de 254 caracteres (se parte); zoom 200 % y 320 px; sin JavaScript; doble envío; «atrás» tras unir, tras el alta y tras cerrar sesión; dos pestañas con el mismo estado temporal (la segunda recibe `provider-expired`); repetir el enlace de retorno; sesión que cumple 10 minutos mientras se escribe.
@@ -824,11 +825,11 @@ Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con l
 |---|---|
 | D1 | Quien olvidó su contraseña no puede unir cuentas hasta que haya recuperación por correo. Riesgo aceptado; el texto lo dice (`union.ayuda.olvido`) |
 | D2 | Cuenta sin contraseña de otro proveedor: entra con el que ya tiene y añade el otro desde `/account` |
-| D3 y D4 | En `/account` se puede añadir un proveedor, quitarlo si queda otra forma de entrar y crear una contraseña. Añadir y crear contraseña exigen sesión reciente. Cambiar una contraseña existente, fuera |
+| D3 y D4 | En `/account` se puede añadir un proveedor, quitarlo si queda otra forma de entrar y crear una contraseña. Con contraseña, añadir y quitar la piden en el formulario; sin ella, añadir y crear contraseña exigen sesión reciente (decisión 20). Cambiar una contraseña existente, fuera |
 | D5 | Botón de Facebook blanco con «f» azul, pendiente de que Meta lo confirme (plan B en 3.1.2). Fuente del sistema |
 | D6 | Se sube la versión de las condiciones para las altas nuevas; nadie que ya aceptó vuelve a aceptar. Borrador en 5.9 |
 | D7 | Solo identificador y correo |
-| D8 | Borrado sin contraseña: palabra ELIMINAR y sesión de menos de 10 minutos; si es más antigua, antes se vuelve a entrar con el proveedor |
+| D8 | Borrado sin contraseña: palabra ELIMINAR. La sesión de menos de 10 minutos que se pedía la quitó la decisión 20 |
 
 ### 8.2 Para el arquitecto
 
@@ -851,7 +852,7 @@ D12. **Contraseña sin recuperación.** Con D1 y D3, ahora se pueden crear contr
 |---|---|
 | H0 §3.2 y §3.3 | Bloque de botones encima del formulario; cambia el orden de tabulación; el resto igual |
 | H0 §3.4 | «Formas de entrar», avisos y errores nuevos |
-| H0 §3.5 | Variante sin contraseña con sesión reciente o reautenticación |
+| H0 §3.5 | Variante sin contraseña: escribir ELIMINAR (decisión 20) |
 | H0 §1.7 | `next` admite `/account/password`; `/register/complete` y `/login/link` se comportan como `/register` y `/login` respecto a la sesión |
 | H0 §5 | Claves nuevas `proveedor.*`, `alta.*`, `union.*`, `verificar.*`, `contrasena.*`, `cuenta.acceso.*`, `cuenta.aviso.*`, `cuenta.error.*` (nuevas), `eliminar.*` (nuevas), `entrar.ayuda.proveedor` |
 | H0 §5.9 | Versión nueva y secciones 4, 5, 7 y 9 revisadas (5.9 de este documento). H0 §5.9 decía que se pediría aceptar toda versión nueva: ya no |
