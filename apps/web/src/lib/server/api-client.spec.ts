@@ -200,3 +200,48 @@ describe('api-client: resultado incierto (OUTCOME_UNKNOWN)', () => {
     },
   );
 });
+
+describe('api-client: entrada con proveedor (W-O5)', () => {
+  const signup = () =>
+    api.oauthSignup(event, {
+      pendingToken: 'P'.repeat(43),
+      birthDate: '1990-05-05',
+      acceptTerms: true,
+      termsVersion: '2026-11-borrador',
+    });
+  const callback = () =>
+    api.oauthCallback(event, 'google', { flowToken: 'F'.repeat(43), callbackQuery: 'code=c' });
+
+  it.each<Mode>(['close', 'reset', 'truncated', 'off-schema', 'bare-502'])(
+    'el alta con proveedor es no idempotente: %s → OUTCOME_UNKNOWN, sin reintentar',
+    async (failure) => {
+      target.url = serverUrl;
+      mode = failure;
+      expect(await signup()).toEqual({
+        ok: false,
+        status: 503,
+        error: { code: 'OUTCOME_UNKNOWN' },
+      });
+      expect(received).toBe(1);
+    },
+  );
+
+  it('la vuelta espera hasta 12 s (dos peticiones al proveedor); el resto, 5 s', async () => {
+    target.url = serverUrl;
+    mode = 'reset';
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    await callback();
+    await login();
+    expect(timeout.mock.calls.map(([ms]) => ms)).toEqual([12_000, 5000]);
+  });
+
+  it('la vuelta no es una escritura de la persona: un corte da API_UNAVAILABLE', async () => {
+    target.url = serverUrl;
+    mode = 'reset';
+    expect(await callback()).toEqual({
+      ok: false,
+      status: 503,
+      error: { code: 'API_UNAVAILABLE' },
+    });
+  });
+});

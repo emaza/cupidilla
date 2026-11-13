@@ -183,6 +183,9 @@ test('C38/C40: orden de tabulación de /register y «Saltar al contenido»', asy
     'Cupidilla',
     'Entrar',
     'Crear cuenta',
+    // Botones de proveedor encima del formulario (UX terceros §3.1.1), en orden alfabético.
+    'Continuar con Google',
+    'Continuar con Facebook',
     '#email',
     '#password',
     ...(javaScriptEnabled ? ['Mostrar contraseña'] : []),
@@ -235,7 +238,7 @@ test('C38: registrarse, salir y eliminar la cuenta solo con el teclado, sin tram
   await expect(page.locator('#acceptTerms')).toBeChecked();
   await page.keyboard.press('Tab'); // enlace a las condiciones
   await page.keyboard.press('Tab'); // botón de enviar
-  await expect(page.locator('form button[type="submit"]')).toBeFocused();
+  await expect(page.locator('form button.button-primary[type="submit"]')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL('/account');
 
@@ -245,6 +248,12 @@ test('C38: registrarse, salir y eliminar la cuenta solo con el teclado, sin tram
     'Saltar al contenido',
     'Cupidilla',
     'Mi cuenta',
+    // «Formas de entrar»: la cuenta tiene contraseña, así que cada proveedor se añade
+    // escribiéndola antes del botón (decisión 20).
+    '#password-add-google',
+    'Continuar con Google',
+    '#password-add-facebook',
+    'Continuar con Facebook',
     'Cerrar sesión',
     'Eliminar mi cuenta',
     'Condiciones de uso',
@@ -348,7 +357,7 @@ test('C44/C55/C56: a 320 px no hay desplazamiento horizontal en ninguna pantalla
   expect(new Set(rows.map((box) => box?.y)).size).toBe(1);
   expect(rows[2]?.right).toBeLessThanOrEqual(320);
   // Botones de ancho completo y apilados.
-  const button = await page.locator('form button[type="submit"]').boundingBox();
+  const button = await page.locator('form button.button-primary[type="submit"]').boundingBox();
   expect(button?.width).toBeGreaterThanOrEqual(320 - 2 * 16 - 1);
 
   // Único por ejecución: los dos proyectos de Playwright corren este test a la vez.
@@ -462,7 +471,7 @@ test('C30: con JavaScript, el botón muestra «enviando» y un segundo envío no
   await page.getByLabel('Año').fill('1990');
   await page.getByLabel(/Acepto las condiciones de uso/).check();
 
-  const button = page.locator('form button[type="submit"]');
+  const button = page.locator('form button.button-primary[type="submit"]');
   await button.click();
   await expect(button).toHaveText('Creando cuenta…');
   await expect(button).toHaveAttribute('aria-disabled', 'true');

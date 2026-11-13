@@ -66,7 +66,13 @@ describe('Eliminación de la cuenta', () => {
     const response = await deleteAccount(user.token, 'contraseña-errónea');
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('PASSWORD_INCORRECT');
-    expect(await rowsReferencingUser(user.userId)).toEqual({ users: 1, sessions: 1, consents: 1 });
+    expect(await rowsReferencingUser(user.userId)).toEqual({
+      users: 1,
+      sessions: 1,
+      consents: 1,
+      identities: 0,
+      pending_identities: 0,
+    });
     expect(
       (await api(t.app).get('/auth/session').set('Authorization', `Bearer ${user.token}`)).status,
     ).toBe(200);
@@ -81,7 +87,14 @@ describe('Eliminación de la cuenta', () => {
     expect(response.status).toBe(204);
 
     const remaining = await rowsReferencingUser(user.userId);
-    expect(Object.keys(remaining).sort()).toEqual(['consents', 'sessions', 'users']);
+    // Toda tabla con FK a users entra aquí (oauth_states cuelga de sessions, no de users).
+    expect(Object.keys(remaining).sort()).toEqual([
+      'consents',
+      'identities',
+      'pending_identities',
+      'sessions',
+      'users',
+    ]);
     expect(Object.values(remaining).every((count) => count === 0)).toBe(true);
     const emailRows = await t.db.execute<{ count: string }>(
       sql`select count(*)::text as count from users where email = ${user.email}`,
@@ -104,7 +117,13 @@ describe('Eliminación de la cuenta', () => {
     const a = await registerUser(t.app);
     const b = await registerUser(t.app);
     expect((await deleteAccount(a.token, a.password)).status).toBe(204);
-    expect(await rowsReferencingUser(b.userId)).toEqual({ users: 1, sessions: 1, consents: 1 });
+    expect(await rowsReferencingUser(b.userId)).toEqual({
+      users: 1,
+      sessions: 1,
+      consents: 1,
+      identities: 0,
+      pending_identities: 0,
+    });
     expect(await countRows(t.db, 'users')).toBe(1);
   });
 

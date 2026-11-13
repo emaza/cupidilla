@@ -14,6 +14,9 @@
   --color-exito: #1b6b3a;
   --color-foco: #0b57d0;
   --color-sobre-primario: #ffffff;
+  /* Botones de Google y Facebook: los colores que fijan sus guías de marca (UX §3.1.2). */
+  --color-marca-borde: #747775;
+  --color-marca-texto: #1f1f1f;
 
   --fuente-base: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --texto-base: 1rem;
@@ -550,4 +553,131 @@ input[aria-invalid='true'] {
   .button {
     transition: none;
   }
+}
+
+/* Botones de proveedor (UX §3.1.2): tema claro de las guías de Google y Meta, con la fuente del
+   sistema. Mismo tamaño y peso visual para los dos; apilados y a ancho completo. */
+
+.provider-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+  margin-bottom: var(--espacio-4);
+}
+
+.provider-buttons form {
+  margin: 0;
+}
+
+.button-provider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espacio-3);
+  width: 100%;
+  min-height: var(--alto-control);
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  text-align: center;
+  color: var(--color-marca-texto);
+  background: var(--color-fondo);
+  border: var(--borde-fino) solid var(--color-marca-borde);
+  border-radius: var(--radio-s);
+  cursor: pointer;
+}
+
+.button-provider:hover {
+  background: color-mix(in srgb, var(--color-marca-texto) 8%, var(--color-fondo));
+}
+
+.button-provider:active {
+  background: color-mix(in srgb, var(--color-marca-texto) 12%, var(--color-fondo));
+}
+
+.button-provider:focus-visible {
+  outline: var(--foco-anillo) solid var(--color-foco);
+  outline-offset: var(--foco-margen);
+}
+
+.button-provider[aria-disabled='true'] {
+  cursor: progress;
+}
+
+.provider-logo {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.provider-separator {
+  margin: var(--espacio-6) 0 var(--espacio-4);
+  font-weight: var(--peso-fuerte);
+}
+
+.provider-email {
+  overflow-wrap: anywhere;
+}
+
+/* Botón con aspecto de enlace (Cancelar en su propio formulario, UX §3.2). */
+.link-button {
+  min-height: var(--tactil-minimo);
+  padding: 0;
+  font: inherit;
+  color: var(--color-primario);
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--color-primario-hover);
+}
+
+/* «Formas de entrar» en /account (UX §3.5): una fila por forma; en móvil, la acción debajo. */
+.access-list {
+  list-style: none;
+  margin: 0 0 var(--espacio-4);
+  padding: 0;
+}
+
+.access-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  padding: var(--espacio-3) 0;
+  border-bottom: var(--borde-fino) solid var(--color-borde-suave);
+}
+
+.access-row .provider-buttons {
+  margin-bottom: 0;
+}
+
+.access-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.access-name {
+  font-weight: var(--peso-fuerte);
+}
+
+.access-state {
+  color: var(--color-texto-suave);
+}
+
+@media (min-width: 48em) {
+  .access-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.confirm-identity {
+  border-top: var(--borde-fino) solid var(--color-borde-suave);
+  padding-top: var(--espacio-4);
 }

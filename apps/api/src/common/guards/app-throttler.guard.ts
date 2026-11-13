@@ -22,6 +22,27 @@ export const CLIENT_IP_HEADER = 'x-client-ip';
 export const IP_THROTTLER = 'ip';
 /** Conjunto por cuenta: solo en las rutas que lo declaran con `@Throttle({ account: ... })`. */
 export const ACCOUNT_THROTTLER = 'account';
+/**
+ * Conjunto por sesión con un cubo propio de cada ruta (técnico terceros §10.3): empezar un flujo
+ * con sesión y quitar un proveedor. Solo en las rutas que lo declaran.
+ */
+export const SESSION_THROTTLER = 'session';
+
+/**
+ * Cubo `account` de la sesión, compartido por todas las rutas que comprueban una contraseña con
+ * sesión (técnico terceros §12.5): con una sesión robada no se pueden probar más de 5 contraseñas
+ * cada 15 minutos sumando todas las rutas.
+ */
+export const SESSION_PASSWORD_LIMIT = {
+  [ACCOUNT_THROTTLER]: {
+    limit: 5,
+    ttl: 15 * 60_000,
+    blockDuration: 15 * 60_000,
+  },
+};
+
+/** Conjuntos que solo actúan en las rutas que declaran su límite. */
+const OPT_IN_THROTTLERS = new Set([ACCOUNT_THROTTLER, SESSION_THROTTLER]);
 
 const MINUTE = 60_000;
 export const THROTTLE_TTL = { minute: MINUTE, quarterHour: 15 * MINUTE, hour: 60 * MINUTE };
@@ -57,8 +78,17 @@ export function accountTracker(req: TrackedRequest): string {
 }
 
 /**
+ * Clave del conjunto `account`: solo el tracker, sin la clase ni el método (técnico terceros
+ * §12.5). Así el cubo es el mismo en todas las rutas que lo declaran: por correo, `/auth/login`
+ * y `/auth/oauth/link`; por sesión, borrado, reautenticación y crear contraseña.
+ */
+export function accountKey(_context: ExecutionContext, tracker: string, name: string): string {
+  return createHash('sha256').update(`${name}-${tracker}`).digest('hex');
+}
+
+/**
  * Límite de intentos con dos conjuntos con nombre (§8.8). Multiplica los límites por
- * `RATE_LIMIT_FACTOR`, solo aplica `account` donde la ruta lo declara y responde con
+ * `RATE_LIMIT_FACTOR`, solo aplica `account` y `session` donde la ruta los declara y responde con
  * `Retry-After`.
  */
 @Injectable()
@@ -77,7 +107,8 @@ export class AppThrottlerGuard extends ThrottlerGuard {
 
   protected override async handleRequest(requestProps: ThrottlerRequest): Promise<boolean> {
     const { context, throttler } = requestProps;
-    if (throttler.name === ACCOUNT_THROTTLER && !this.declaresAccountLimit(context)) {
+    const name = throttler.name ?? '';
+    if (OPT_IN_THROTTLERS.has(name) && !this.declaresLimit(context, name)) {
       return true;
     }
     return super.handleRequest({ ...requestProps, limit: requestProps.limit * this.factor });
@@ -92,9 +123,9 @@ export class AppThrottlerGuard extends ThrottlerGuard {
     await super.throwThrottlingException(context, detail);
   }
 
-  private declaresAccountLimit(context: ExecutionContext): boolean {
+  private declaresLimit(context: ExecutionContext, name: string): boolean {
     return (
-      this.reflector.getAllAndOverride(THROTTLER_LIMIT + ACCOUNT_THROTTLER, [
+      this.reflector.getAllAndOverride(THROTTLER_LIMIT + name, [
         context.getHandler(),
         context.getClass(),
       ]) !== undefined

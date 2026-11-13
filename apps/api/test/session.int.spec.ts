@@ -1,6 +1,7 @@
+import { SERVICE_TERMS_VERSION } from '@cupidilla/contracts';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateSessionToken, hashSessionToken } from '../src/auth/sessions.service.js';
+import { generateOpaqueToken, hashOpaqueToken } from '../src/common/crypto/opaque-token.js';
 import { sessions } from '../src/database/schema/index.js';
 import {
   api,
@@ -35,7 +36,7 @@ describe('Sesión', () => {
       await t.db
         .select()
         .from(sessions)
-        .where(eq(sessions.tokenHash, hashSessionToken(token)))
+        .where(eq(sessions.tokenHash, hashOpaqueToken(token)))
     )[0];
 
   describe('GET /auth/session (I-12)', () => {
@@ -53,7 +54,7 @@ describe('Sesión', () => {
     });
 
     it('con un token inventado o mal formado responde 401', async () => {
-      expect((await getSession(generateSessionToken())).status).toBe(401);
+      expect((await getSession(generateOpaqueToken())).status).toBe(401);
       const malformed = await api(t.app).get('/auth/session').set('Authorization', 'Bearer corto');
       expect(malformed.status).toBe(401);
       expect(malformed.body.error.code).toBe('UNAUTHENTICATED');
@@ -112,11 +113,13 @@ describe('Sesión', () => {
       consents: [
         {
           purpose: 'service_use',
-          policyVersion: '2026-11-borrador',
+          policyVersion: SERVICE_TERMS_VERSION,
           grantedAt: TEST_NOW,
           revokedAt: null,
         },
       ],
+      signInMethods: { password: true, identities: [] },
+      session: { authenticatedAt: TEST_NOW },
     });
     expect((await api(t.app).get('/users/me')).status).toBe(401);
   });

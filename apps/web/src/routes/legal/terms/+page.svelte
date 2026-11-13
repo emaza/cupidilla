@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import Terms from '#lib/legal/terms-2026-11-borrador.svelte';
+  import Terms from '#lib/legal/terms-2026-11-borrador-2.svelte';
   import { t } from '#lib/texts.ts';
 </script>
 

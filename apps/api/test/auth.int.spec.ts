@@ -1,6 +1,7 @@
+import { SERVICE_TERMS_VERSION } from '@cupidilla/contracts';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { hashSessionToken } from '../src/auth/sessions.service.js';
+import { hashOpaqueToken } from '../src/common/crypto/opaque-token.js';
 import { consents, sessions, users } from '../src/database/schema/index.js';
 import {
   api,
@@ -49,7 +50,7 @@ describe('POST /auth/register y /auth/login', () => {
 
     const [row] = await t.db.select().from(users);
     expect(row?.email).toBe('ana.lopez@example.com');
-    expect(row?.passwordHash.startsWith('$argon2id$')).toBe(true);
+    expect(row?.passwordHash?.startsWith('$argon2id$')).toBe(true);
     expect(row?.birthDate).toBe('1990-05-05');
 
     const consentRows = await t.db.select().from(consents);
@@ -57,14 +58,14 @@ describe('POST /auth/register y /auth/login', () => {
     expect(consentRows[0]).toMatchObject({
       userId: user.id,
       purpose: 'service_use',
-      policyVersion: '2026-11-borrador',
+      policyVersion: SERVICE_TERMS_VERSION,
       revokedAt: null,
     });
     expect(consentRows[0]?.grantedAt.toISOString()).toBe(TEST_NOW);
 
     const sessionRows = await t.db.select().from(sessions);
     expect(sessionRows).toHaveLength(1);
-    expect(sessionRows[0]?.tokenHash).toBe(hashSessionToken(session.token));
+    expect(sessionRows[0]?.tokenHash).toBe(hashOpaqueToken(session.token));
     expect(sessionRows[0]?.expiresAt.getTime()).toBe(new Date(TEST_NOW).getTime() + 30 * DAY_MS);
     expect(session.expiresAt).toBe(sessionRows[0]?.expiresAt.toISOString());
   });
@@ -212,7 +213,7 @@ describe('POST /auth/register y /auth/login', () => {
     expect(response.status).toBe(200);
     const rows = await t.db.select().from(sessions).where(eq(sessions.userId, user.userId));
     expect(rows.map((row) => row.tokenHash)).toEqual([
-      hashSessionToken(response.body.session.token),
+      hashOpaqueToken(response.body.session.token),
     ]);
   });
 });

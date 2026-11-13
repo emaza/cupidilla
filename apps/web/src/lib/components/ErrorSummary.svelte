@@ -22,9 +22,11 @@
     general?: string;
     /** Enlace que acompaña al error general, tras el texto (p. ej. en el resultado incierto). */
     generalLink?: GeneralLink;
+    /** Línea fija de ayuda tras el error general (p. ej. `entrar.ayuda.proveedor`). */
+    generalHelp?: string;
   }
 
-  let { items = [], general, generalLink }: Props = $props();
+  let { items = [], general, generalLink, generalHelp }: Props = $props();
 
   function focusTarget(event: MouseEvent, target: string) {
     const element = document.getElementById(target);
@@ -56,6 +58,9 @@
     {/if}
     {#if general}
       <p>{general}</p>
+      {#if generalHelp}
+        <p>{generalHelp}</p>
+      {/if}
       {#if generalLink}
         <p>
           {#if generalLink.newTab}

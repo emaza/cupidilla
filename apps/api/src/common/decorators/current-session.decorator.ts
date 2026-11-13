@@ -7,6 +7,8 @@ export interface ActiveSession {
   userId: string;
   tokenHash: string;
   expiresAt: Date;
+  /** Cuándo se demostró por última vez la identidad en esta sesión (§9.1). */
+  authenticatedAt: Date;
   renewed: boolean;
   user: PublicUser;
 }

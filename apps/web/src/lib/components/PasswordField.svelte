@@ -7,9 +7,11 @@
     autocomplete: 'new-password' | 'current-password';
     help?: string;
     error?: string;
+    /** Ids de otros textos que describen el campo (p. ej. el aviso de efecto de UX §3.7). */
+    describedBy?: string;
   }
 
-  let { label, autocomplete, help, error }: Props = $props();
+  let { label, autocomplete, help, error, describedBy: extra }: Props = $props();
 
   // El botón «Mostrar contraseña» solo existe con JavaScript: se añade al montar (UX §2.3).
   // `null` mientras no hay JavaScript (también en el HTML del servidor).
@@ -19,8 +21,9 @@
   });
 
   const describedBy = $derived(
-    [help ? 'password-help' : '', error ? 'password-error' : ''].filter(Boolean).join(' ') ||
-      undefined,
+    [extra ?? '', help ? 'password-help' : '', error ? 'password-error' : '']
+      .filter(Boolean)
+      .join(' ') || undefined,
   );
 </script>
 

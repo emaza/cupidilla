@@ -26,6 +26,8 @@ Registro de lo que está decidido y de lo que sigue abierto. Cuando una decisió
 | 16 | **Base técnica de H0**: npm workspaces, Node 24, todo en ESM, TypeScript 6.0 y PostgreSQL 18 en Docker. El navegador solo habla con SvelteKit, y SvelteKit con la API ([diseño técnico](h0-diseno-tecnico.md), [diseño UX](h0-diseno-ux.md)) | 11 de noviembre de 2026, CTO con el arquitecto |
 | 17 | **Aspecto de Cupidilla en H1: minimalista.** Interfaz solo de conversación con un avatar sencillo; el personaje ilustrado llega con la identidad visual | 12 de noviembre de 2026, el CEO |
 | 18 | **URLs y nombres internos de la web en inglés**: `/register`, `/login`, `/account`, `/account/delete`, `/legal/terms`, con parámetros, acciones y campos de formulario también en inglés. Los textos de la interfaz y sus claves siguen en español. Se hace en un PR aparte después de fusionar H0 y antes de H1 ([plan](plan-rutas-en-ingles.md)) | 13 de noviembre de 2026, el CEO |
+| 19 | **Entrada con Google y Facebook**, antes de H1. Authorization Code con PKCE; la API guarda los secretos y canjea el código. La primera vez se piden la fecha de nacimiento y las condiciones. Si el correo ya tiene cuenta, se pide la contraseña una vez para unirlas. Desde `/account` se puede añadir o quitar un proveedor y crear una contraseña. Borrar sin contraseña exige escribir «ELIMINAR» y haber entrado hace menos de 10 minutos. Las condiciones suben de versión sin volver a pedir la aceptación ([técnico](login-terceros-diseno-tecnico.md), [UX](login-terceros-diseno-ux.md)) | 13 de noviembre de 2026, el CEO con el CTO |
+| 20 | **Confirmar los cambios de la cuenta.** Con contraseña, se pide la contraseña en el mismo formulario para añadir o quitar Google o Facebook y para borrar la cuenta, sin la regla de los 10 minutos. Sin contraseña: quitar un proveedor (si queda otro) no pide nada, y borrar pide solo escribir «ELIMINAR». Crear una contraseña y añadir un proveedor siguen pidiendo una sesión de menos de 10 minutos o volver a entrar con el proveedor, porque convertirían una sesión robada en un acceso permanente. Cambia la parte de la 19 sobre el borrado sin contraseña ([técnico](login-terceros-diseno-tecnico.md#9-cuentas-sin-contraseña-y-account)) | 13 de noviembre de 2026, el CEO con el CTO |
 
 ## Abiertas
 
@@ -65,6 +67,8 @@ Ordenadas por cuándo bloquean. La recomendación es mía; quien decide aparece 
 | **Registro abierto o por invitación** | Abierto · con invitación | Con invitación en la beta cerrada. H0 lo deja abierto porque todavía no hay usuarios reales | Tú |
 | **Prueba del consentimiento tras borrar la cuenta** | No conservar nada · conservar una prueba anonimizada | Resolverlo dentro de la revisión jurídica. H0 lo borra todo y así lo dice la interfaz | Tú, con asesoría legal |
 | **Versión de Node en producción** | Node 24 · Node 26 | Pasar a Node 26 antes del primer despliegue; H0 se desarrolla en la 24, que es la instalada | Arquitecto |
+| **Cuenta sin forma de entrar** | Recuperación por correo · aceptar la pérdida | Añadir la recuperación por correo. Hasta entonces, quien solo entra con un proveedor y lo pierde, o quien olvida su contraseña, pierde la cuenta (riesgo R4 del diseño de entrada con terceros) | Arquitecto |
+| **Revisión jurídica de la entrada con terceros** | Textos legales, política de privacidad e instrucciones de borrado que exige Meta | Incluirla en la revisión jurídica general | Tú, con asesoría legal |
 
 ### Después de la beta
 

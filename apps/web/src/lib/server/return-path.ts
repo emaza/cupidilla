@@ -1,5 +1,8 @@
-/** Rutas privadas a las que se puede volver tras entrar (acuerdo A6). Lista cerrada. */
-export const RETURN_PATHS = ['/account', '/account/delete'] as const;
+/**
+ * Rutas privadas a las que se puede volver tras entrar (acuerdo A6), también a través de un
+ * proveedor (técnico §11.1). Lista cerrada.
+ */
+export const RETURN_PATHS = ['/account', '/account/delete', '/account/password'] as const;
 
 export type ReturnPath = (typeof RETURN_PATHS)[number];
 

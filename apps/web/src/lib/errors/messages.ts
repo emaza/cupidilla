@@ -12,8 +12,8 @@ import type { TextKey } from '#lib/texts.ts';
 export const WEB_ERROR_CODES = ['API_UNAVAILABLE'] as const;
 export type WebErrorCode = ErrorCode | (typeof WEB_ERROR_CODES)[number];
 
-/** Formularios de H0. Cada uno tiene sus propios textos de error (UX §5). */
-export type FormName = 'register' | 'login' | 'delete' | 'logout';
+/** Formularios. Cada uno tiene sus propios textos de error (UX §5). */
+export type FormName = 'register' | 'login' | 'delete' | 'logout' | 'signup' | 'link';
 
 function byCode(
   fallback: TextKey,
@@ -55,6 +55,21 @@ export const errorMessages: Record<FormName, Record<WebErrorCode, TextKey>> = {
     OUTCOME_UNKNOWN: 'eliminar.error.resultado_incierto',
   }),
   logout: byCode('cuenta.error.servidor', {}),
+  // /register/complete (UX §3.2). Los textos con {proveedor} los completa la página.
+  signup: byCode('alta.error.servidor', {
+    TERMS_VERSION_OUTDATED: 'registro.error.condiciones_version',
+    UNDERAGE: 'registro.menor.texto1',
+    RATE_LIMITED: 'comun.error.limite',
+    OUTCOME_UNKNOWN: 'alta.error.resultado_incierto',
+  }),
+  // /login/link (UX §3.3). Los textos con {proveedor} los completa la página.
+  link: byCode('union.error.servidor', {
+    VALIDATION_FAILED: 'union.error.contrasena',
+    PASSWORD_INCORRECT: 'union.error.contrasena',
+    LINK_ATTEMPTS_EXCEEDED: 'union.error.limite',
+    RATE_LIMITED: 'comun.error.limite',
+    OUTCOME_UNKNOWN: 'union.error.resultado_incierto',
+  }),
 };
 
 /** Campo del contrato + motivo → clave del texto del error de ese campo. */
@@ -84,5 +99,8 @@ export const fieldMessages = {
     password: byIssue('eliminar.error.contrasena', {
       required: 'eliminar.error.contrasena_vacia',
     }),
+  },
+  link: {
+    password: byIssue('union.error.contrasena', { required: 'union.error.contrasena_vacia' }),
   },
 } as const satisfies Record<string, Record<string, Record<FieldIssue, TextKey>>>;

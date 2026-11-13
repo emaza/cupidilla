@@ -1,28 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  generateSessionToken,
-  hashSessionToken,
-  needsRenewal,
-  SESSION_TOKEN_PATTERN,
-} from './sessions.service.js';
-
-describe('token de sesión', () => {
-  it('tiene 256 bits en base64url (43 caracteres) y no se repite', () => {
-    const tokens = new Set(Array.from({ length: 100 }, generateSessionToken));
-    expect(tokens.size).toBe(100);
-    for (const token of tokens) {
-      expect(token).toMatch(SESSION_TOKEN_PATTERN);
-      expect(Buffer.from(token, 'base64url')).toHaveLength(32);
-    }
-  });
-
-  it('se guarda como SHA-256 en hexadecimal', () => {
-    expect(hashSessionToken('abc')).toBe(
-      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
-    );
-    expect(hashSessionToken(generateSessionToken())).toMatch(/^[0-9a-f]{64}$/);
-  });
-});
+import { needsRenewal } from './sessions.service.js';
 
 describe('renovación de la sesión', () => {
   const DAY_MS = 24 * 60 * 60 * 1000;

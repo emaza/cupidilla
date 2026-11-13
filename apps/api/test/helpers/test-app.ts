@@ -1,5 +1,5 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModuleBuilder } from '@nestjs/testing';
 import { SERVICE_TERMS_VERSION, type RegisterRequest } from '@cupidilla/contracts';
 import { sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
@@ -19,12 +19,18 @@ export interface TestApp {
 }
 
 /** App completa con `configureApp`, base de datos real y `Clock` falso. */
-export async function createTestApp(options: { now?: string } = {}): Promise<TestApp> {
+export async function createTestApp(
+  options: {
+    now?: string;
+    /** Para sustituir más proveedores de Nest (p. ej. los clientes OAuth). */
+    override?: (builder: TestingModuleBuilder) => TestingModuleBuilder;
+  } = {},
+): Promise<TestApp> {
   const clock = new FakeClock(options.now ?? TEST_NOW);
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+  const builder = Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(Clock)
-    .useValue(clock)
-    .compile();
+    .useValue(clock);
+  const moduleRef = await (options.override ? options.override(builder) : builder).compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>();
   configureApp(app);
   await app.init();

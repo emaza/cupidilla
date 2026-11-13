@@ -6,11 +6,13 @@ import { AuthModule } from './auth/auth.module.js';
 import { SessionGuard } from './auth/session.guard.js';
 import { ClockModule } from './common/clock.js';
 import {
+  accountKey,
   accountTracker,
   ACCOUNT_THROTTLER,
   AppThrottlerGuard,
   IP_THROTTLER,
   ipTracker,
+  SESSION_THROTTLER,
   THROTTLE_TTL,
 } from './common/guards/app-throttler.guard.js';
 import { InternalKeyGuard } from './common/guards/internal-key.guard.js';
@@ -18,6 +20,7 @@ import { envSchema } from './config/env.schema.js';
 import { ConsentsModule } from './consents/consents.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
+import { OAuthModule } from './oauth/oauth.module.js';
 import { UsersModule } from './users/users.module.js';
 
 @Module({
@@ -33,6 +36,15 @@ import { UsersModule } from './users/users.module.js';
           ttl: THROTTLE_TTL.quarterHour,
           limit: 5,
           getTracker: accountTracker,
+          // Un cubo por correo o por sesión, compartido entre rutas (técnico terceros §12.5).
+          generateKey: accountKey,
+        },
+        // Por sesión, un cubo por ruta. Solo donde la ruta lo declara.
+        {
+          name: SESSION_THROTTLER,
+          ttl: THROTTLE_TTL.quarterHour,
+          limit: 10,
+          getTracker: accountTracker,
         },
       ],
     }),
@@ -41,6 +53,7 @@ import { UsersModule } from './users/users.module.js';
     ConsentsModule,
     UsersModule,
     AuthModule,
+    OAuthModule,
     HealthModule,
   ],
   providers: [

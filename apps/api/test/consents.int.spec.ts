@@ -1,3 +1,4 @@
+import { SERVICE_TERMS_VERSION } from '@cupidilla/contracts';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ConsentsService } from '../src/consents/consents.service.js';
@@ -46,7 +47,7 @@ describe('ConsentsService (I-18)', () => {
     expect(history).toEqual([
       {
         purpose: 'service_use',
-        policyVersion: '2026-11-borrador',
+        policyVersion: SERVICE_TERMS_VERSION,
         grantedAt: TEST_NOW,
         revokedAt: t.clock.now().toISOString(),
       },

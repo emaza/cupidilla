@@ -71,7 +71,9 @@ export class AuthService {
 
   async login(request: LoginRequest): Promise<AuthResponse> {
     const credentials = await this.users.findCredentialsByEmail(request.email);
-    if (!credentials) {
+    // Sin cuenta o sin contraseña (cuenta creada con un proveedor, §9.6): el mismo argon2 con un
+    // hash ficticio y la misma respuesta, para no revelar si la cuenta existe ni cómo se creó.
+    if (!credentials || credentials.passwordHash === null) {
       await this.passwords.verifyDummy(request.password);
       throw invalidCredentials();
     }
@@ -94,6 +96,6 @@ export class AuthService {
   }
 }
 
-/** Misma respuesta para correo inexistente y contraseña errónea. */
+/** Misma respuesta para correo inexistente, cuenta sin contraseña y contraseña errónea. */
 const invalidCredentials = (): ApiException =>
   new ApiException('INVALID_CREDENTIALS', 401, undefined, 'Invalid credentials');

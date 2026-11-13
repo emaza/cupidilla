@@ -18,6 +18,7 @@
   },
   "devDependencies": {
     "@cupidilla/contracts": "*",
+    "@cupidilla/fake-oauth-provider": "*",
     "@playwright/test": "1.65.0",
     "@sveltejs/adapter-node": "6.0.2",
     "@sveltejs/kit": "3.2.0",

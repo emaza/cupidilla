@@ -8,9 +8,16 @@ import {
   registerErrorsFromIssues,
   type RegisterErrors,
 } from '#lib/forms/register.ts';
-import { api } from '#lib/server/api-client.ts';
+import { api, configuredProviders } from '#lib/server/api-client.ts';
+import { urlMessage } from '#lib/server/oauth-notices.ts';
 import { setSessionCookie } from '#lib/server/session-cookie.ts';
-import type { Actions } from './$types';
+import type { Actions, PageServerLoad } from './$types';
+
+/** Botones de los proveedores configurados y avisos de la URL (UX §3.1 y §3.4). */
+export const load: PageServerLoad = async (event) => ({
+  providers: await configuredProviders(event),
+  message: urlMessage('entry', event.url.searchParams),
+});
 
 const onlyField = (fields: RegisterErrors['fields']): RegisterErrors => ({ fields, dateParts: [] });
 

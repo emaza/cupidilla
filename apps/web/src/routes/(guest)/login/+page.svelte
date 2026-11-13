@@ -5,6 +5,8 @@
   import ErrorSummary from '#lib/components/ErrorSummary.svelte';
   import Notice from '#lib/components/Notice.svelte';
   import PasswordField from '#lib/components/PasswordField.svelte';
+  import ProviderButtons from '#lib/components/ProviderButtons.svelte';
+  import UrlMessage from '#lib/components/UrlMessage.svelte';
   import SubmitButton from '#lib/components/SubmitButton.svelte';
   import { createSubmission } from '#lib/forms/submission.svelte.ts';
   import { pageTitle, t } from '#lib/texts.ts';
@@ -16,7 +18,9 @@
 
   const fields = $derived(form?.errors?.fields ?? {});
   const general = $derived(form?.errors?.general);
-  const hasErrors = $derived(Object.keys(fields).length > 0 || general !== undefined);
+  const hasErrors = $derived(
+    Object.keys(fields).length > 0 || general !== undefined || data.message?.kind === 'error',
+  );
   const summary = $derived(
     [
       { target: 'email', key: fields.email },
@@ -29,7 +33,17 @@
   <title>{pageTitle('entrar.meta.titulo', hasErrors)}</title>
 </svelte:head>
 
-<ErrorSummary items={summary} general={general ? t(general) : undefined} />
+<ErrorSummary
+  items={summary}
+  general={general ? t(general) : undefined}
+  generalHelp={general === 'entrar.error.credenciales' && data.providers.length > 0
+    ? t('entrar.ayuda.proveedor')
+    : undefined}
+/>
+
+{#if !form}
+  <UrlMessage message={data.message} />
+{/if}
 
 {#if data.next}
   <Notice tone="info" text={t('entrar.aviso.necesita_sesion')} />
@@ -37,6 +51,12 @@
 
 <div class="card">
   <h1>{t('entrar.titulo')}</h1>
+
+  {#if data.providers.length > 0}
+    <ProviderButtons providers={data.providers} from="login" next={data.next} />
+    <p class="provider-separator">{t('proveedor.separador.entrar')}</p>
+  {/if}
+
   <p>{t('comun.campos_obligatorios')}</p>
 
   {#key form}

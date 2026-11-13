@@ -23,6 +23,7 @@
     "db:migrate": "npm run db:migrate -w @cupidilla/api",
     "build:contracts": "npm run build -w @cupidilla/contracts",
     "dev": "npm run build:contracts && concurrently -k -n contracts,api,web -c blue,magenta,green \"npm run dev -w @cupidilla/contracts\" \"npm run dev -w @cupidilla/api\" \"npm run dev -w @cupidilla/web\"",
+    "oauth:fake": "node --env-file-if-exists=.env packages/fake-oauth-provider/src/main.ts",
     "build": "npm run build:contracts && npm run build -w @cupidilla/api && npm run build -w @cupidilla/web",
     "typecheck": "npm run build:contracts && npm run typecheck --workspaces --if-present",
     "lint": "eslint . && prettier --check .",
@@ -42,5 +43,8 @@
     "prettier-plugin-svelte": "4.1.1",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.2"
+  },
+  "overrides": {
+    "jose": "6.2.14"
   }
 }

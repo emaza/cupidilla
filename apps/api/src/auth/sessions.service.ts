@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { and, eq, lte } from 'drizzle-orm';
-import { createHash, randomBytes } from 'node:crypto';
 import { Clock } from '../common/clock.js';
+import { generateOpaqueToken, hashOpaqueToken } from '../common/crypto/opaque-token.js';
 import type { ActiveSession } from '../common/decorators/current-session.decorator.js';
 import type { Env } from '../config/env.schema.js';
 import { DB, type Database, type Executor } from '../database/database.types.js';
@@ -19,18 +19,6 @@ export function needsRenewal(expiresAt: Date, now: Date, ttlMs: number): boolean
   return expiresAt.getTime() - now.getTime() < ttlMs / 2;
 }
 
-/** Token de 256 bits en base64url: 43 caracteres. */
-export const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
-
-export function generateSessionToken(): string {
-  return randomBytes(32).toString('base64url');
-}
-
-/** SHA-256 en hexadecimal: es lo único que se guarda de un token. */
-export function hashSessionToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
-}
-
 @Injectable()
 export class SessionsService {
   private readonly ttlMs: number;
@@ -44,12 +32,17 @@ export class SessionsService {
   }
 
   async create(db: Executor, userId: string): Promise<{ token: string; expiresAt: Date }> {
-    const token = generateSessionToken();
+    const token = generateOpaqueToken();
     const now = this.clock.now();
     const expiresAt = new Date(now.getTime() + this.ttlMs);
-    await db
-      .insert(sessions)
-      .values({ tokenHash: hashSessionToken(token), userId, createdAt: now, expiresAt });
+    // Una sesión nueva acaba de demostrar la identidad: authenticated_at = created_at (§5.1).
+    await db.insert(sessions).values({
+      tokenHash: hashOpaqueToken(token),
+      userId,
+      createdAt: now,
+      authenticatedAt: now,
+      expiresAt,
+    });
     return { token, expiresAt };
   }
 
@@ -58,6 +51,7 @@ export class SessionsService {
     const [row] = await this.db
       .select({
         expiresAt: sessions.expiresAt,
+        authenticatedAt: sessions.authenticatedAt,
         id: users.id,
         email: users.email,
         createdAt: users.createdAt,
@@ -81,7 +75,14 @@ export class SessionsService {
       renewed = true;
       await this.db.update(sessions).set({ expiresAt }).where(eq(sessions.tokenHash, tokenHash));
     }
-    return { userId: row.id, tokenHash, expiresAt, renewed, user: toPublicUser(row) };
+    return {
+      userId: row.id,
+      tokenHash,
+      expiresAt,
+      authenticatedAt: row.authenticatedAt,
+      renewed,
+      user: toPublicUser(row),
+    };
   }
 
   async revoke(tokenHash: string): Promise<void> {

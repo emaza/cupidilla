@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { safeReturnPath } from './return-path.ts';
 
-describe('W-3: safeReturnPath', () => {
-  it.each(['/account', '/account/delete'])('devuelve %s tal cual', (path) => {
+describe('W-3 y W-O4: safeReturnPath', () => {
+  it.each(['/account', '/account/delete', '/account/password'])('devuelve %s tal cual', (path) => {
     expect(safeReturnPath(path)).toBe(path);
   });
 
