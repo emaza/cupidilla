@@ -341,48 +341,60 @@ La unión es `nonIdempotent` en la web. Un reintento tras `OUTCOME_UNKNOWN` no d
 
 ## 9. Cuentas sin contraseña y `/account`
 
+> **Decisión 20 (13 de noviembre de 2026).** Cambia cómo se confirman los cambios de la cuenta, y este apartado ya la recoge:
+>
+> | Cambio | Cuenta con contraseña | Cuenta sin contraseña |
+> |---|---|---|
+> | Añadir un proveedor | La contraseña, en el mismo formulario | Sesión reciente o volver a entrar con el proveedor |
+> | Quitar un proveedor | La contraseña, en el mismo formulario | Nada (si queda otra forma de entrar) |
+> | Crear una contraseña | (No aplica) | Sesión reciente o volver a entrar con el proveedor |
+> | Borrar la cuenta | La contraseña (H0) | Solo escribir «ELIMINAR» |
+>
+> Con contraseña no hay regla de los 10 minutos. Sin contraseña, solo la mantienen los dos cambios que convertirían una sesión robada en un acceso permanente: crear una contraseña y añadir un proveedor.
+
 ### 9.1 Sesión reciente
 
-Una sesión es **reciente** si `now − sessions.authenticated_at < RECENT_AUTH_MAX_AGE_MINUTES` (10). La exigen:
-- el borrado sin contraseña;
+Una sesión es **reciente** si `now − sessions.authenticated_at < RECENT_AUTH_MAX_AGE_MINUTES` (10). Desde la decisión 20, solo la exigen, y solo en cuentas **sin** contraseña:
 - añadir un proveedor;
 - crear una contraseña.
 
-Quitar un proveedor no la exige, como pide UX.
+Si no es reciente, la API responde 403 `REAUTHENTICATION_REQUIRED` y la web ofrece renovarla con el botón «Confirmar con {proveedor}», uno por cada identidad → `POST /auth/{provider}` con `from=account`, `intent=reauthenticate` y `next`. La API responde a `POST /users/me/oauth/:provider/authorization` `{ purpose: 'reauthenticate' }` guardando `session_token_hash` en la fila. En la vuelta exige tres cosas:
+- que la web envíe el `Bearer` de esa misma sesión (si no, `OAUTH_FLOW_INVALID`);
+- que la sesión siga viva;
+- que `(provider, subject)` sea una identidad de ese usuario (si no, `failed`, `identity_mismatch`).
 
-Si no es reciente, la API responde 403 `REAUTHENTICATION_REQUIRED` y la web ofrece renovarla:
+Entonces actualiza `authenticated_at` y responde `reauthenticated` con `returnPath`.
 
-| La cuenta tiene… | Cómo se renueva | Qué hace la API |
-|---|---|---|
-| Contraseña | Un campo de contraseña en la misma pantalla → `POST /users/me/reauthentication` `{ password }` | argon2id. Si acierta, `UPDATE sessions SET authenticated_at = now` y 204; si no, 403 `PASSWORD_INCORRECT`. Límite: el cubo `account` de la sesión (§12.5) |
-| Solo proveedores | Botón «Confirmar con {proveedor}», uno por cada identidad → `POST /auth/{provider}` con `from=account`, `intent=reauthenticate` y `next` | `POST /users/me/oauth/:provider/authorization` `{ purpose: 'reauthenticate' }`. La fila guarda `session_token_hash`. En la vuelta, la API exige tres cosas: que la web envíe el `Bearer` de esa misma sesión (si no, `OAUTH_FLOW_INVALID`), que la sesión siga viva y que `(provider, subject)` sea una identidad de ese usuario (si no, `failed`, `identity_mismatch`). Entonces actualiza `authenticated_at` y responde `reauthenticated` con `returnPath` |
+`POST /users/me/reauthentication` `{ password }` (renovar con la contraseña) sigue en la API, pero la web ya no lo usa: una cuenta con contraseña la escribe en el propio cambio.
 
 `max_age` no sirve para forzar que la persona se identifique de nuevo: Google no publica `auth_time` entre sus `claims_supported` (comprobado hoy) ni admite `prompt=login`, y Facebook no permite comprobar en la respuesta que hubo `auth_type=reauthenticate`. Lo que garantiza la reautenticación es que se ha pasado por el proveedor con una identidad de la cuenta (R5).
+
+**Confirmar con la contraseña** (`UsersService.confirmPassword`): si la cuenta tiene contraseña y no viene, 400 `required`; si no coincide, 403 `PASSWORD_INCORRECT`. Si la cuenta no tiene contraseña, no se comprueba nada y cada cambio decide qué pide.
 
 ### 9.2 Borrar la cuenta
 
 `deleteAccountRequestSchema = z.strictObject({ password: passwordInputSchema.optional() })`. En `UsersService.deleteAccount`:
 
 - Si hay `password_hash`: H0 sin cambios. Sin `password`, 400 `required`; si es incorrecta, 403 `PASSWORD_INCORRECT`.
-- Si no lo hay: si la sesión no es reciente, 403 `REAUTHENTICATION_REQUIRED`. Si lo es, `DELETE FROM users`.
+- Si no lo hay: `DELETE FROM users`, sin sesión reciente (decisión 20). Un `password` en el cuerpo no cambia nada.
 - La palabra «ELIMINAR» la valida la acción de la web: es una confirmación de intención y la API no la necesita. La web solo envía la petición si la palabra es correcta.
 
 El `DELETE FROM users` arrastra en cascada `identities`, `pending_identities`, `sessions`, `consents` y, a través de `sessions`, `oauth_states`.
 
 ### 9.3 Añadir un proveedor
 
-`POST /auth/{provider}` con `from=account` e `intent=connect`. La API comprueba antes que la sesión sea reciente (403 `REAUTHENTICATION_REQUIRED`); así una sesión robada no puede dejar unida una identidad del atacante como acceso permanente. Se guarda la fila con `purpose = 'connect'`, y en la vuelta se comprueba el `Bearer` como en §9.1. Después:
+`POST /auth/{provider}` con `from=account` e `intent=connect`; con contraseña en la cuenta, el formulario lleva también el campo `password`, que la web reenvía en `POST /users/me/oauth/:provider/authorization` `{ purpose: 'connect', password }`. La API comprueba antes la contraseña (§9.1) o, sin contraseña en la cuenta, que la sesión sea reciente (403 `REAUTHENTICATION_REQUIRED`). Así una sesión robada no puede dejar unida una identidad del atacante como acceso permanente. Se guarda la fila con `purpose = 'connect'`, y en la vuelta se comprueba el `Bearer` como en §9.1. Después:
 
 | Situación | Resultado |
 |---|---|
 | La identidad ya es de este usuario | `connected` sin cambios |
 | La identidad es de otra cuenta | `failed`, `identity_in_use` |
 | El usuario ya tiene otra identidad de ese proveedor (`identities_user_provider_unique`) | `failed`, `already_linked` |
-| No existe | `INSERT identities` → `connected`. El correo del proveedor puede ser distinto del de la cuenta, y no hace falta que esté verificado: la sesión reciente ya prueba quién es |
+| No existe | `INSERT identities` → `connected`. El correo del proveedor puede ser distinto del de la cuenta, y no hace falta que esté verificado: la contraseña o la sesión reciente ya prueban quién es |
 
 ### 9.4 Quitar un proveedor
 
-`POST /users/me/identities/:provider/removal` (S) → 204. Dentro de `Transactions.run`:
+`POST /users/me/identities/:provider/removal` (S) `{ password? }` → 204. Con contraseña en la cuenta, hay que escribirla (§9.1); sin ella, el cuerpo puede ir vacío. Después, dentro de `Transactions.run`:
 
 1. `SELECT password_hash FROM users WHERE id = $1 FOR UPDATE`, que serializa dos peticiones simultáneas (T9).
 2. Cuenta las identidades. Si no hay contraseña y es la única, 409 `LAST_SIGN_IN_METHOD`.
@@ -544,11 +556,11 @@ Todos con `X-Internal-Api-Key`. **S** = exige sesión. **R** = exige sesión rec
 | `POST /auth/oauth/signup` | — | `OAuthSignupRequest` | `201 OAuthAuthResponse` | 400, 400 `OAUTH_FLOW_INVALID`, 409 `TERMS_VERSION_OUTDATED`/`EMAIL_TAKEN`/`ACCOUNT_USES_OTHER_PROVIDER`, 422 `UNDERAGE` | 5 por IP y hora |
 | `POST /auth/oauth/link` | — | `OAuthLinkRequest` | `200 OAuthAuthResponse` | 400, 400 `OAUTH_FLOW_INVALID`, 403 `PASSWORD_INCORRECT`/`LINK_ATTEMPTS_EXCEEDED`, 429 | 10 por IP + cubo de correo |
 | `POST /auth/oauth/pending/cancellation` | — | `{ pendingToken }` | `204` | 400 | general |
-| `POST /users/me/oauth/:provider/authorization` | S (R si `connect`) | `OAuthSessionStartRequest` | `201 OAuthStartResponse` | 401, 403 `REAUTHENTICATION_REQUIRED`, 404 (con `reauthenticate`, si no hay identidad de ese proveedor) | 5 por sesión cada 15 min |
+| `POST /users/me/oauth/:provider/authorization` | S (con `connect`: contraseña o, sin ella en la cuenta, R) | `OAuthSessionStartRequest` | `201 OAuthStartResponse` | 400, 401, 403 `PASSWORD_INCORRECT`/`REAUTHENTICATION_REQUIRED`, 404 (con `reauthenticate`, si no hay identidad de ese proveedor) | 5 por sesión cada 15 min + cubo de sesión |
 | `POST /users/me/reauthentication` | S | `{ password }` | `204` | 400, 401, 403 `PASSWORD_INCORRECT`, 404 (cuenta sin contraseña), 429 | cubo de sesión |
 | `POST /users/me/password` | S, R | `{ password }` | `204` | 400, 401, 403 `REAUTHENTICATION_REQUIRED`, 409 `PASSWORD_ALREADY_SET`, 429 | cubo de sesión |
-| `POST /users/me/identities/:provider/removal` | S | — | `204` | 401, 404, 409 `LAST_SIGN_IN_METHOD` | 10 por sesión cada 15 min |
-| `POST /users/me/deletion` (cambia) | S (R sin contraseña) | `{ password? }` | `204` | 400, 401, 403 `PASSWORD_INCORRECT`/`REAUTHENTICATION_REQUIRED`, 429 | cubo de sesión |
+| `POST /users/me/identities/:provider/removal` | S (contraseña si la cuenta la tiene) | `{ password? }` | `204` | 400, 401, 403 `PASSWORD_INCORRECT`, 404, 409 `LAST_SIGN_IN_METHOD` | 10 por sesión cada 15 min + cubo de sesión |
+| `POST /users/me/deletion` (cambia) | S | `{ password? }` | `204` | 400, 401, 403 `PASSWORD_INCORRECT`, 429 | cubo de sesión |
 
 `:provider` se valida con `z.enum(OAUTH_PROVIDERS)`. `POST /users/me/password` y `/users/me/deletion` usan `@HttpCode(204)`, y la web les pasa `expectStatus: 204` (como en H0).
 
@@ -707,7 +719,7 @@ En la tabla de §10.3. Lo nuevo:
 
 - **Cubos compartidos.** `AppThrottlerGuard.generateKey` deja de incluir clase y método en el conjunto `account`: el cubo depende solo del *tracker*.
   - Correo (`email:`): `/auth/login` y `/auth/oauth/link`.
-  - Sesión (`session:`): `/users/me/deletion`, `/users/me/reauthentication` y `/users/me/password`.
+  - Sesión (`session:`): `/users/me/deletion`, `/users/me/reauthentication`, `/users/me/password` y, desde la decisión 20, `/users/me/oauth/:provider/authorization` y `/users/me/identities/:provider/removal`, que también comprueban la contraseña.
   - Todas esas rutas declaran el mismo límite: 5 cada 15 minutos con bloqueo de 15. El borrado gana así el bloqueo que no tenía en H0.
   - Efecto: con una sesión robada no se pueden probar más de 5 contraseñas cada 15 minutos sumando todas las rutas.
 - El tope de 5 fallos por unión está en PostgreSQL, así que sobrevive a un reinicio de la API, a diferencia del *throttler* en memoria (R5 de H0).
@@ -983,6 +995,13 @@ Necesita que el CEO haya hecho §15.
 |---|---|---|
 | 7.1 | README: cómo configurar §15 y cómo usar el proveedor falso en `dev` | Una persona nueva arranca con el falso siguiendo el README |
 | 7.2 | Recorrido manual de §14.2 con las cuentas de prueba | R2 y R3 resueltos y anotados en este documento; sin violaciones de CSP en la consola |
+
+### Fase 8 — Confirmar los cambios con la contraseña (decisión 20)
+
+| # | Tarea | Hecho cuando |
+|---|---|---|
+| 8.1 | API: `confirmPassword`; contraseña al añadir y al quitar en cuentas con contraseña; borrado sin contraseña sin sesión reciente; las dos rutas, en el cubo de sesión | Pruebas de integración de §9 actualizadas (O-17, O-19, O-22, O-23) y en verde |
+| 8.2 | Web: campo de contraseña en «Quitar» y en el botón de añadir de `/account`; ELIMINAR sin bloque de confirmar; textos de UX | e2e de `/account` en verde |
 
 ---
 

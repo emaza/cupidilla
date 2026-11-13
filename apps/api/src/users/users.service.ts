@@ -102,6 +102,33 @@ export class UsersService {
   }
 
   /**
+   * Confirmación de un cambio en la cuenta (decisión 20): si la cuenta tiene contraseña, hay que
+   * escribirla (400 si falta, 403 si no es correcta). Devuelve si la cuenta tiene contraseña: si
+   * no la tiene, cada cambio decide qué pide (§9).
+   */
+  async confirmPassword(userId: string, password: string | undefined): Promise<boolean> {
+    const [row] = await this.db
+      .select({ passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!row) throw new ApiException('UNAUTHENTICATED', 401);
+    if (row.passwordHash === null) return false;
+    if (password === undefined) {
+      throw new ApiException(
+        'VALIDATION_FAILED',
+        400,
+        [{ path: 'password', issue: 'required' }],
+        'Request validation failed',
+      );
+    }
+    if (!(await this.passwords.verify(row.passwordHash, password))) {
+      throw new ApiException('PASSWORD_INCORRECT', 403, undefined, 'Password does not match');
+    }
+    return true;
+  }
+
+  /**
    * POST /users/me/password (§9.5): crea la contraseña de una cuenta que no tiene. Una sola
    * sentencia atómica: si ya había contraseña (otra pestaña), 409. No cierra otras sesiones ni
    * cambia `authenticated_at` (T17).
@@ -150,7 +177,7 @@ export class UsersService {
    * todas las sesiones y todos los consentimientos del usuario.
    */
   async deleteAccount(
-    session: Pick<ActiveSession, 'userId' | 'authenticatedAt'>,
+    session: Pick<ActiveSession, 'userId'>,
     password: string | undefined,
   ): Promise<void> {
     const userId = session.userId;
@@ -161,9 +188,8 @@ export class UsersService {
       .limit(1);
     if (!row) throw new ApiException('UNAUTHENTICATED', 401);
     if (row.passwordHash === null) {
-      // Sin contraseña (§9.2): basta una sesión reciente. La palabra «ELIMINAR» la valida la web:
-      // es una confirmación de intención, no de identidad.
-      assertRecent(session, this.clock.now());
+      // Sin contraseña (§9.2, decisión 20): no hay nada que pedir. La palabra «ELIMINAR» la valida
+      // la web: es una confirmación de intención, no de identidad.
       await this.db.delete(users).where(eq(users.id, userId));
       this.logger.log({ event: 'account_deleted' });
       return;

@@ -27,7 +27,8 @@ export type AccountResponse = z.infer<typeof accountResponseSchema>;
 
 /**
  * Cuerpo de POST /users/me/deletion. Con contraseña en la cuenta, volver a escribirla es la
- * confirmación y la API la exige; sin contraseña, la API exige una sesión reciente (§9.2).
+ * confirmación y la API la exige; sin contraseña no se pide nada más que la palabra ELIMINAR, que
+ * valida la web (decisión 20).
  */
 export const deleteAccountRequestSchema = z.strictObject(
   { password: passwordInputSchema.optional() },
@@ -51,3 +52,14 @@ export const reauthenticateRequestSchema = z.strictObject(
 );
 
 export type ReauthenticateRequest = z.infer<typeof reauthenticateRequestSchema>;
+
+/**
+ * Cuerpo de POST /users/me/identities/:provider/removal. Una cuenta con contraseña la escribe
+ * para confirmar; una sin contraseña no envía nada (decisión 20).
+ */
+export const removeIdentityRequestSchema = z.strictObject(
+  { password: passwordInputSchema.optional() },
+  { error: strictObjectError },
+);
+
+export type RemoveIdentityRequest = z.infer<typeof removeIdentityRequestSchema>;

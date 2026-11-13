@@ -148,21 +148,17 @@ describe('QA fase 1: login con password_hash nulo', () => {
     expect(row?.passwordHash).toBeNull();
   });
 
-  it('con la sesión antigua y la cuenta sin hash, el borrado da 403 REAUTHENTICATION_REQUIRED y no distingue la contraseña', async () => {
+  it('cuenta sin hash: el borrado no pide contraseña ni sesión reciente y una contraseña en el cuerpo no cambia nada (decisión 20)', async () => {
     const user = await registerUser(t.app);
     await withoutPassword(user.userId);
-    // Desde la fase 5, con la sesión reciente el borrado sin contraseña se permite (§9.2).
     t.clock.set(new Date(new Date(TEST_NOW).getTime() + 11 * 60_000));
-    for (const body of [{}, { password: 'cualquiera' }, { password: user.password }]) {
-      const response = await api(t.app)
-        .post('/users/me/deletion')
-        .set('Authorization', `Bearer ${user.token}`)
-        .send(body);
-      expect(response.status).toBe(403);
-      expect(response.body.error.code).toBe('REAUTHENTICATION_REQUIRED');
-    }
-    expect(await countRows(t.db, 'users')).toBe(1);
-    expect(await countRows(t.db, 'sessions')).toBe(1);
+    const response = await api(t.app)
+      .post('/users/me/deletion')
+      .set('Authorization', `Bearer ${user.token}`)
+      .send({ password: 'cualquiera' });
+    expect(response.status).toBe(204);
+    expect(await countRows(t.db, 'users')).toBe(0);
+    expect(await countRows(t.db, 'sessions')).toBe(0);
   });
 });
 

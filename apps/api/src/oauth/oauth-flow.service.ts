@@ -110,7 +110,10 @@ export class OAuthFlowService implements OnModuleInit {
     this.client(provider);
     let loginHint: string | undefined;
     if (request.purpose === 'connect') {
-      assertRecent(session, this.clock.now());
+      // Con contraseña, se escribe en el mismo formulario; sin ella, sesión reciente (decisión 20):
+      // una sesión robada no puede dejar unida una identidad del atacante.
+      const hasPassword = await this.users.confirmPassword(session.userId, request.password);
+      if (!hasPassword) assertRecent(session, this.clock.now());
     } else {
       const identity = (await this.identities.listRowsForUser(session.userId)).find(
         (row) => row.provider === provider,

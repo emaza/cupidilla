@@ -232,6 +232,44 @@ describe('/account: reautenticar, añadir y quitar proveedores (fase 5)', () => 
     });
   });
 
+  describe('añadir un proveedor a una cuenta con contraseña (decisión 20)', () => {
+    async function passwordAccount() {
+      const user = await registerUser(t.app);
+      return user;
+    }
+    const start = (token: string, body: object) =>
+      authed(token)
+        .post('/users/me/oauth/facebook/authorization')
+        .send({ purpose: 'connect', ...body });
+
+    it('sin contraseña → 400; errónea → 403; sin escribir nada en oauth_states', async () => {
+      const user = await passwordAccount();
+      const missing = await start(user.token, {});
+      expect(missing.status).toBe(400);
+      expect(missing.body.error.fields).toEqual([{ path: 'password', issue: 'required' }]);
+      const wrong = await start(user.token, { password: 'otra-contraseña-mala' });
+      expect(wrong.status).toBe(403);
+      expect(wrong.body.error.code).toBe('PASSWORD_INCORRECT');
+      expect(await countRows(t.db, 'oauth_states')).toBe(0);
+    });
+
+    it('con la contraseña correcta vale aunque la sesión tenga horas: sin regla de 10 minutos', async () => {
+      const user = await passwordAccount();
+      t.clock.advanceMinutes(180);
+      const started = await start(user.token, { password: user.password });
+      expect(started.status).toBe(201);
+      const callbackUrl = await completeFakeAuthorization(started.body.authorizationUrl as string, {
+        subject: `fb-${user.userId}`,
+        email: user.email,
+      });
+      const response = await authed(user.token)
+        .post('/auth/oauth/facebook/callback')
+        .send({ flowToken: started.body.flowToken, callbackQuery: callbackUrl.search.slice(1) });
+      expect(response.body).toEqual({ result: 'connected' });
+      expect(await countRows(t.db, 'identities')).toBe(1);
+    });
+  });
+
   describe('reautenticación con contraseña (§9.1, T16)', () => {
     it('O-23: correcta → 204 y authenticated_at renovado; errónea → 403 y no se renueva', async () => {
       const user = await registerUser(t.app);
@@ -283,7 +321,7 @@ describe('/account: reautenticar, añadir y quitar proveedores (fase 5)', () => 
       expect(await countRows(t.db, 'users')).toBe(1);
     });
 
-    it('O-22: el inicio con sesión tiene su propio límite: el 6.º en 15 minutos → 429', async () => {
+    it('O-22: empezar con sesión cuenta en el cubo de contraseñas de la sesión (decisión 20)', async () => {
       const account = await providerAccount();
       const statuses: number[] = [];
       for (let attempt = 0; attempt < 6; attempt += 1) {
@@ -296,19 +334,20 @@ describe('/account: reautenticar, añadir y quitar proveedores (fase 5)', () => 
         );
       }
       expect(statuses).toEqual([201, 201, 201, 201, 201, 429]);
-      // No comparte cubo con las contraseñas.
+      // Al añadir un proveedor se puede escribir la contraseña: comparte cubo con las demás rutas
+      // que la comprueban, así que tras 5 intentos queda bloqueada también la reautenticación.
       expect(
         (
           await authed(account.token)
             .post('/users/me/reauthentication')
             .send({ password: 'x-x-x-x-x' })
         ).status,
-      ).toBe(404);
+      ).toBe(429);
     });
   });
 
   describe('O-19: quitar un proveedor (§9.4)', () => {
-    it('con contraseña → 204; no cierra la sesión', async () => {
+    it('con contraseña: hay que escribirla (sin ella 400, errónea 403, correcta 204); no cierra la sesión', async () => {
       const user = await registerUser(t.app);
       const linked = await runFlow(t.app, { identity: { email: user.email } });
       const joined = await api(t.app).post('/auth/oauth/link').send({
@@ -317,7 +356,17 @@ describe('/account: reautenticar, añadir y quitar proveedores (fase 5)', () => 
         password: user.password,
       });
       expect(joined.status).toBe(200);
-      const response = await authed(user.token).post('/users/me/identities/google/removal');
+      const remove = (body: object) =>
+        authed(user.token).post('/users/me/identities/google/removal').send(body);
+      // Decisión 20: con contraseña en la cuenta, hay que escribirla.
+      const missing = await remove({});
+      expect(missing.status).toBe(400);
+      expect(missing.body.error.fields).toEqual([{ path: 'password', issue: 'required' }]);
+      const wrong = await remove({ password: 'otra-contraseña-mala' });
+      expect(wrong.status).toBe(403);
+      expect(wrong.body.error.code).toBe('PASSWORD_INCORRECT');
+      expect(await countRows(t.db, 'identities')).toBe(1);
+      const response = await remove({ password: user.password });
       expect(response.status).toBe(204);
       expect(await countRows(t.db, 'identities')).toBe(0);
       expect((await authed(user.token).get('/users/me')).status).toBe(200);

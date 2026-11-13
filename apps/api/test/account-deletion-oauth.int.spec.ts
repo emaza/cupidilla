@@ -1,4 +1,3 @@
-import { completeFakeAuthorization } from '@cupidilla/fake-oauth-provider';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { runFlow, signupBody } from './helpers/oauth.js';
@@ -12,7 +11,7 @@ import {
   type TestApp,
 } from './helpers/test-app.js';
 
-describe('O-17: borrar una cuenta sin contraseña (§9.2)', () => {
+describe('O-17: borrar una cuenta sin contraseña (§9.2, decisión 20)', () => {
   let t: TestApp;
 
   beforeAll(async () => {
@@ -49,32 +48,15 @@ describe('O-17: borrar una cuenta sin contraseña (§9.2)', () => {
     return result.rows.map((row) => row.table_name);
   }
 
-  it('sesión de hace 11 min → 403; reautenticación con el proveedor → borrado 204 y nada queda', async () => {
+  it('con la sesión de hace horas → 204 sin pedir nada más, y nada queda (decisión 20)', async () => {
     const account = await googleAccount();
-    // Un flujo de reautenticación a medias y otra sesión de la misma cuenta.
+    // Un flujo de reautenticación a medias: cuelga de la sesión y se borra con ella.
     const started = await authed(account.token)
       .post('/users/me/oauth/google/authorization')
-      .send({ purpose: 'reauthenticate', returnPath: '/account/delete' });
+      .send({ purpose: 'reauthenticate', returnPath: '/account' });
     expect(started.status).toBe(201);
 
-    t.clock.advanceMinutes(11);
-    const stale = await authed(account.token).post('/users/me/deletion').send({});
-    expect(stale.status).toBe(403);
-    expect(stale.body.error.code).toBe('REAUTHENTICATION_REQUIRED');
-    expect(await countRows(t.db, 'users')).toBe(1);
-
-    const reauth = await authed(account.token)
-      .post('/users/me/oauth/google/authorization')
-      .send({ purpose: 'reauthenticate', returnPath: '/account/delete' });
-    const url = await completeFakeAuthorization(reauth.body.authorizationUrl as string, {
-      subject: account.identity.subject,
-      email: account.identity.email,
-    });
-    const back = await authed(account.token)
-      .post('/auth/oauth/google/callback')
-      .send({ flowToken: reauth.body.flowToken, callbackQuery: url.search.slice(1) });
-    expect(back.body).toEqual({ result: 'reauthenticated', returnPath: '/account/delete' });
-
+    t.clock.advanceMinutes(180);
     const deleted = await authed(account.token).post('/users/me/deletion').send({});
     expect(deleted.status).toBe(204);
 
@@ -91,13 +73,12 @@ describe('O-17: borrar una cuenta sin contraseña (§9.2)', () => {
     expect(await countRows(t.db, 'users')).toBe(0);
   });
 
-  it('una contraseña en el cuerpo no cambia nada en una cuenta sin contraseña', async () => {
+  it('una contraseña en el cuerpo no cambia nada en una cuenta sin contraseña: se borra igual', async () => {
     const account = await googleAccount();
-    t.clock.advanceMinutes(11);
     const response = await authed(account.token)
       .post('/users/me/deletion')
       .send({ password: 'lo-que-sea-largo' });
-    expect(response.status).toBe(403);
-    expect(await countRows(t.db, 'users')).toBe(1);
+    expect(response.status).toBe(204);
+    expect(await countRows(t.db, 'users')).toBe(0);
   });
 });

@@ -90,10 +90,11 @@ describe('O-24: crear una contraseña (§9.5)', () => {
     expect(deletion.status).toBe(400);
     expect(deletion.body.error.fields).toEqual([{ path: 'password', issue: 'required' }]);
 
-    // Con contraseña ya se puede quitar el único proveedor.
-    expect((await authed(account.token).post('/users/me/identities/google/removal')).status).toBe(
-      204,
-    );
+    // Con contraseña ya se puede quitar el único proveedor, escribiéndola (decisión 20).
+    const removed = await authed(account.token)
+      .post('/users/me/identities/google/removal')
+      .send({ password: PASSWORD });
+    expect(removed.status).toBe(204);
   });
 
   it('segunda creación → 409 PASSWORD_ALREADY_SET; dos simultáneas → una 204 y otra 409', async () => {

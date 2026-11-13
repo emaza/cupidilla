@@ -28,6 +28,19 @@ export const ACCOUNT_THROTTLER = 'account';
  */
 export const SESSION_THROTTLER = 'session';
 
+/**
+ * Cubo `account` de la sesión, compartido por todas las rutas que comprueban una contraseña con
+ * sesión (técnico terceros §12.5): con una sesión robada no se pueden probar más de 5 contraseñas
+ * cada 15 minutos sumando todas las rutas.
+ */
+export const SESSION_PASSWORD_LIMIT = {
+  [ACCOUNT_THROTTLER]: {
+    limit: 5,
+    ttl: 15 * 60_000,
+    blockDuration: 15 * 60_000,
+  },
+};
+
 /** Conjuntos que solo actúan en las rutas que declaran su límite. */
 const OPT_IN_THROTTLERS = new Set([ACCOUNT_THROTTLER, SESSION_THROTTLER]);
 

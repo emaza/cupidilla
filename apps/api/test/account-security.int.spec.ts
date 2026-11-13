@@ -125,7 +125,7 @@ describe('Cuentas sin contraseña y sesión autenticada (fase 1)', () => {
     expect(await countRows(t.db, 'users')).toBe(1);
   });
 
-  it('borrado de una cuenta sin contraseña con la sesión antigua: 403 sin borrar nada', async () => {
+  it('borrado de una cuenta sin contraseña: con la sesión antigua también se borra (decisión 20)', async () => {
     const user = await registerUser(t.app);
     await withoutPassword(user.userId);
     t.clock.advanceDays(1);
@@ -133,8 +133,7 @@ describe('Cuentas sin contraseña y sesión autenticada (fase 1)', () => {
       .post('/users/me/deletion')
       .set('Authorization', `Bearer ${user.token}`)
       .send({});
-    expect(response.status).toBe(403);
-    expect(response.body.error.code).toBe('REAUTHENTICATION_REQUIRED');
-    expect(await countRows(t.db, 'users')).toBe(1);
+    expect(response.status).toBe(204);
+    expect(await countRows(t.db, 'users')).toBe(0);
   });
 });

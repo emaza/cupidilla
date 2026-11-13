@@ -61,11 +61,15 @@ export const oauthStartRequestSchema = z.strictObject(
 );
 export type OAuthStartRequest = z.infer<typeof oauthStartRequestSchema>;
 
-/** POST /users/me/oauth/:provider/authorization (con sesión). */
+/**
+ * POST /users/me/oauth/:provider/authorization (con sesión). Al añadir un proveedor (`connect`),
+ * una cuenta con contraseña la escribe en el mismo formulario (decisión 20).
+ */
 export const oauthSessionStartRequestSchema = z.strictObject(
   {
     purpose: z.enum(['reauthenticate', 'connect'], { error: 'invalid' }),
     returnPath: returnPathSchema.optional(),
+    password: passwordInputSchema.optional(),
   },
   { error: strictObjectError },
 );
