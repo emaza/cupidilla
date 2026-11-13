@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { AccountResponse, PublicUser } from '@cupidilla/contracts';
 import { eq } from 'drizzle-orm';
+import { markSessionAuthenticated } from '../auth/recent-auth.js';
 import { ApiException } from '../common/errors/api.exception.js';
 import { Clock } from '../common/clock.js';
 import type { ActiveSession } from '../common/decorators/current-session.decorator.js';
@@ -98,6 +99,30 @@ export class UsersService {
       },
       session: { authenticatedAt: session.authenticatedAt.toISOString() },
     };
+  }
+
+  /**
+   * POST /users/me/reauthentication (§9.1, T16): renueva `authenticated_at` con la contraseña.
+   * Una cuenta sin contraseña no tiene nada que comprobar aquí: 404.
+   */
+  async reauthenticateWithPassword(
+    session: Pick<ActiveSession, 'userId' | 'tokenHash'>,
+    password: string,
+  ): Promise<void> {
+    const [row] = await this.db
+      .select({ passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, session.userId))
+      .limit(1);
+    if (!row) throw new ApiException('UNAUTHENTICATED', 401);
+    if (row.passwordHash === null) {
+      throw new ApiException('NOT_FOUND', 404, undefined, 'Account has no password');
+    }
+    if (!(await this.passwords.verify(row.passwordHash, password))) {
+      throw new ApiException('PASSWORD_INCORRECT', 403, undefined, 'Password does not match');
+    }
+    await markSessionAuthenticated(this.db, session.tokenHash, this.clock.now());
+    this.logger.log({ event: 'session_reauthenticated', method: 'password' });
   }
 
   /**

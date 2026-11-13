@@ -6,13 +6,14 @@ import { ConsentsModule } from '../consents/consents.module.js';
 import { UsersModule } from '../users/users.module.js';
 import { IdentitiesModule } from './identities.service.js';
 import { OAuthFlowService } from './oauth-flow.service.js';
+import { OAuthAccountController } from './oauth-account.controller.js';
 import { OAuthController } from './oauth.controller.js';
 import { PendingIdentitiesService } from './pending-identities.service.js';
 import { createProviderClients, PROVIDER_CLIENTS } from './providers/provider-clients.js';
 
 @Module({
   imports: [UsersModule, ConsentsModule, AuthModule, IdentitiesModule],
-  controllers: [OAuthController],
+  controllers: [OAuthController, OAuthAccountController],
   providers: [
     {
       provide: PROVIDER_CLIENTS,

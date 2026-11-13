@@ -12,6 +12,7 @@ import {
   AppThrottlerGuard,
   IP_THROTTLER,
   ipTracker,
+  SESSION_THROTTLER,
   THROTTLE_TTL,
 } from './common/guards/app-throttler.guard.js';
 import { InternalKeyGuard } from './common/guards/internal-key.guard.js';
@@ -37,6 +38,13 @@ import { UsersModule } from './users/users.module.js';
           getTracker: accountTracker,
           // Un cubo por correo o por sesión, compartido entre rutas (técnico terceros §12.5).
           generateKey: accountKey,
+        },
+        // Por sesión, un cubo por ruta. Solo donde la ruta lo declara.
+        {
+          name: SESSION_THROTTLER,
+          ttl: THROTTLE_TTL.quarterHour,
+          limit: 10,
+          getTracker: accountTracker,
         },
       ],
     }),

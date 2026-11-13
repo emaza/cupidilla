@@ -5,7 +5,9 @@ import {
   type OAuthCallbackRequest,
   type OAuthCallbackResponse,
   type OAuthFailureReason,
+  type OAuthEntryPoint,
   type OAuthProvider,
+  type OAuthSessionStartRequest,
   type OAuthStartRequest,
   type OAuthStartResponse,
 } from '@cupidilla/contracts';
@@ -17,11 +19,18 @@ import {
   randomPKCECodeVerifier,
   randomState,
 } from 'openid-client';
+import { assertRecent, markSessionAuthenticated } from '../auth/recent-auth.js';
 import { SessionsService } from '../auth/sessions.service.js';
 import { Clock } from '../common/clock.js';
-import { generateOpaqueToken, hashOpaqueToken } from '../common/crypto/opaque-token.js';
+import {
+  generateOpaqueToken,
+  hashOpaqueToken,
+  OPAQUE_TOKEN_PATTERN,
+} from '../common/crypto/opaque-token.js';
+import type { ActiveSession } from '../common/decorators/current-session.decorator.js';
 import { ApiException } from '../common/errors/api.exception.js';
 import { DB, type Database } from '../database/database.types.js';
+import { isUniqueViolation } from '../database/pg-errors.js';
 import { oauthStates } from '../database/schema/index.js';
 import { UsersService } from '../users/users.service.js';
 import { IdentitiesService } from './identities.service.js';
@@ -79,7 +88,55 @@ export class OAuthFlowService implements OnModuleInit {
   }
 
   /** POST /auth/oauth/:provider/authorization: empieza a entrar sin sesión. */
-  async start(provider: OAuthProvider, request: OAuthStartRequest): Promise<OAuthStartResponse> {
+  start(provider: OAuthProvider, request: OAuthStartRequest): Promise<OAuthStartResponse> {
+    return this.createFlow(provider, {
+      purpose: 'sign_in',
+      entryPoint: request.entryPoint,
+      sessionTokenHash: null,
+      returnPath: request.returnPath ?? null,
+    });
+  }
+
+  /**
+   * POST /users/me/oauth/:provider/authorization: reautenticarse o añadir un proveedor desde
+   * /account (§9.1, §9.3). Añadir exige una sesión reciente: una sesión robada no puede dejar
+   * unida una identidad del atacante. Reautenticarse exige tener ese proveedor unido.
+   */
+  async startWithSession(
+    provider: OAuthProvider,
+    session: ActiveSession,
+    request: OAuthSessionStartRequest,
+  ): Promise<OAuthStartResponse> {
+    this.client(provider);
+    let loginHint: string | undefined;
+    if (request.purpose === 'connect') {
+      assertRecent(session, this.clock.now());
+    } else {
+      const identity = (await this.identities.listRowsForUser(session.userId)).find(
+        (row) => row.provider === provider,
+      );
+      if (!identity) throw new ApiException('NOT_FOUND', 404, undefined, 'Provider not linked');
+      loginHint = identity.providerEmail ?? undefined;
+    }
+    return this.createFlow(provider, {
+      purpose: request.purpose,
+      entryPoint: null,
+      sessionTokenHash: session.tokenHash,
+      returnPath: request.returnPath ?? null,
+      loginHint,
+    });
+  }
+
+  private async createFlow(
+    provider: OAuthProvider,
+    flow: {
+      purpose: 'sign_in' | 'reauthenticate' | 'connect';
+      entryPoint: OAuthEntryPoint | null;
+      sessionTokenHash: string | null;
+      returnPath: string | null;
+      loginHint?: string;
+    },
+  ): Promise<OAuthStartResponse> {
     const client = this.client(provider);
     await this.deleteExpiredStates();
 
@@ -92,13 +149,13 @@ export class OAuthFlowService implements OnModuleInit {
     await this.db.insert(oauthStates).values({
       tokenHash: hashOpaqueToken(flowToken),
       provider,
-      purpose: 'sign_in',
-      entryPoint: request.entryPoint,
-      sessionTokenHash: null,
+      purpose: flow.purpose,
+      entryPoint: flow.entryPoint,
+      sessionTokenHash: flow.sessionTokenHash,
       state,
       codeVerifier,
       nonce,
-      returnPath: request.returnPath ?? null,
+      returnPath: flow.returnPath,
       createdAt: now,
       expiresAt,
     });
@@ -106,7 +163,8 @@ export class OAuthFlowService implements OnModuleInit {
       state,
       nonce,
       codeChallenge: await calculatePKCECodeChallenge(codeVerifier),
-      reauthenticate: false,
+      reauthenticate: flow.purpose === 'reauthenticate',
+      loginHint: flow.loginHint,
     });
     return {
       authorizationUrl: authorizationUrl.toString(),
@@ -139,15 +197,19 @@ export class OAuthFlowService implements OnModuleInit {
     return row;
   }
 
-  /** POST /auth/oauth/:provider/callback. */
+  /**
+   * POST /auth/oauth/:provider/callback. `sessionToken` es el `Bearer` que envía la web si hay
+   * sesión; los flujos de reautenticar y añadir lo exigen (§9.1).
+   */
   async callback(
     provider: OAuthProvider,
     request: OAuthCallbackRequest,
+    sessionToken?: string,
   ): Promise<OAuthCallbackResponse> {
     const client = this.client(provider);
     const row = await this.consume(provider, request);
-    // Los propósitos con sesión (reautenticar y añadir) llegan con la fase 5.
-    if (row.purpose !== 'sign_in' || row.entryPoint === null) throw flowInvalid();
+    if (row.purpose !== 'sign_in') return this.sessionCallback(client, row, request, sessionToken);
+    if (row.entryPoint === null) throw flowInvalid();
 
     const failed = (reason: OAuthFailureReason): OAuthCallbackResponse => {
       this.logger.log({ event: 'oauth_flow_failed', provider, reason });
@@ -227,5 +289,78 @@ export class OAuthFlowService implements OnModuleInit {
     if (!first) return failed('provider_failed'); // no debería existir: cuenta sin forma de entrar
     this.logger.log({ event: 'oauth_flow_failed', provider, reason: 'use_other_provider' });
     return { result: 'use_other_provider', providers: [first, ...rest] };
+  }
+
+  /**
+   * Vuelta de reautenticar o añadir (§9.1, §9.3). La fila va ligada al hash de la sesión que
+   * empezó el flujo: la web tiene que enviar el `Bearer` de esa misma sesión, y la sesión tiene
+   * que seguir viva.
+   */
+  private async sessionCallback(
+    client: ProviderClient,
+    row: OAuthStateRow,
+    request: OAuthCallbackRequest,
+    sessionToken: string | undefined,
+  ): Promise<OAuthCallbackResponse> {
+    const provider = client.provider;
+    if (!sessionToken || !OPAQUE_TOKEN_PATTERN.test(sessionToken)) throw flowInvalid();
+    const tokenHash = hashOpaqueToken(sessionToken);
+    if (row.sessionTokenHash === null || !sameString(tokenHash, row.sessionTokenHash)) {
+      throw flowInvalid();
+    }
+    const session = await this.sessions.validate(tokenHash);
+    if (!session) throw flowInvalid();
+
+    const failed = (reason: OAuthFailureReason): OAuthCallbackResponse => {
+      this.logger.log({ event: 'oauth_flow_failed', provider, reason });
+      return { result: 'failed', reason, entryPoint: 'account', returnPath: row.returnPath };
+    };
+
+    let identity: ProviderIdentity;
+    try {
+      identity = await client.exchange({
+        callbackQuery: request.callbackQuery,
+        state: row.state,
+        codeVerifier: row.codeVerifier,
+        nonce: row.nonce,
+      });
+    } catch (error) {
+      return failed(error instanceof ProviderCancelledError ? 'cancelled' : 'provider_failed');
+    }
+    const known = await this.identities.findByProviderSubject(provider, identity.subject);
+
+    if (row.purpose === 'reauthenticate') {
+      // Tiene que ser una identidad de esta cuenta (R5): si no, no se confirma nada.
+      if (!known || known.userId !== session.userId) return failed('identity_mismatch');
+      await markSessionAuthenticated(this.db, tokenHash, this.clock.now());
+      this.logger.log({ event: 'session_reauthenticated', method: 'provider' });
+      return { result: 'reauthenticated', returnPath: row.returnPath };
+    }
+
+    // connect (§9.3).
+    if (known) {
+      return known.userId === session.userId ? { result: 'connected' } : failed('identity_in_use');
+    }
+    try {
+      await this.identities.create(this.db, {
+        userId: session.userId,
+        provider,
+        subject: identity.subject,
+        providerEmail: identity.email,
+        emailVerified: identity.emailVerified,
+      });
+    } catch (error) {
+      if (isUniqueViolation(error, 'identities_user_provider_unique')) {
+        return failed('already_linked');
+      }
+      if (isUniqueViolation(error, 'identities_provider_subject_unique')) {
+        // Se unió a la vez desde otra pestaña o a otra cuenta.
+        const now = await this.identities.findByProviderSubject(provider, identity.subject);
+        return now?.userId === session.userId ? { result: 'connected' } : failed('identity_in_use');
+      }
+      throw error;
+    }
+    this.logger.log({ event: 'identity_connected', provider });
+    return { result: 'connected' };
   }
 }

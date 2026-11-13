@@ -116,7 +116,12 @@ export class OAuthController {
   callback(
     @Param('provider') provider: string,
     @Body({ schema: oauthCallbackRequestSchema }) body: OAuthCallbackRequest,
+    @Headers('authorization') authorization: string | undefined,
   ): Promise<OAuthCallbackResponse> {
-    return this.flow.callback(parseProvider(provider), body);
+    // Pública, pero lee el `Bearer` si viene: reautenticar y añadir lo exigen (§10.3).
+    const sessionToken = authorization?.startsWith('Bearer ')
+      ? authorization.slice('Bearer '.length)
+      : undefined;
+    return this.flow.callback(parseProvider(provider), body, sessionToken);
   }
 }
