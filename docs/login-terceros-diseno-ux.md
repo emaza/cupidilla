@@ -835,7 +835,7 @@ Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con l
 
 Las T1 a T12 anteriores y la T13 (valores de `from`, la pantalla de vuelta sale de `next`) y la T14 (valores de `?notice=` y `?error=`) están cerradas en el técnico. Se aceptan sus desacuerdos U1 a U6. Quedan:
 
-T16. **Reautenticación con contraseña** para cuentas con contraseña y sin proveedor que quieren añadir uno con sesión antigua (§3.5.2): endpoint que ponga `authenticated_at = now` tras verificar la contraseña, con el mismo contador de intentos que `/login`. Alternativa: pedirles que cierren sesión y vuelvan a entrar; UX lo considera peor.
+T16. ~~Reautenticación con contraseña para cuentas con contraseña que quieren añadir un proveedor con sesión antigua.~~ **Ya no aplica (decisión 20):** una cuenta con contraseña la escribe en el propio formulario de añadir, sea cual sea la antigüedad de la sesión (§3.5.1), y nunca ve el bloque de §3.5.2.
 T17. **Crear contraseña**: confirmar endpoint, 403 `REAUTHENTICATION_REQUIRED` con sesión antigua, 409 si la cuenta ya tiene contraseña, misma política que el registro.
 T18. **`authenticated_at` de una sesión creada con contraseña** vale `created_at`: confirmar que cuenta como reciente igual que una entrada con proveedor.
 
