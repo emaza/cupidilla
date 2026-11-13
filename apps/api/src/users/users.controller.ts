@@ -65,6 +65,6 @@ export class UsersController {
     @CurrentSession() session: ActiveSession,
     @Body({ schema: deleteAccountRequestSchema }) body: DeleteAccountRequest,
   ): Promise<void> {
-    await this.users.deleteAccount(session.userId, body.password);
+    await this.users.deleteAccount(session, body.password);
   }
 }

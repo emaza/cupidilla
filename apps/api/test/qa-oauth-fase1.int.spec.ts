@@ -148,9 +148,11 @@ describe('QA fase 1: login con password_hash nulo', () => {
     expect(row?.passwordHash).toBeNull();
   });
 
-  it('con la contraseña errónea y la cuenta sin hash, el borrado da 403 REAUTHENTICATION_REQUIRED y no distingue la contraseña', async () => {
+  it('con la sesión antigua y la cuenta sin hash, el borrado da 403 REAUTHENTICATION_REQUIRED y no distingue la contraseña', async () => {
     const user = await registerUser(t.app);
     await withoutPassword(user.userId);
+    // Desde la fase 5, con la sesión reciente el borrado sin contraseña se permite (§9.2).
+    t.clock.set(new Date(new Date(TEST_NOW).getTime() + 11 * 60_000));
     for (const body of [{}, { password: 'cualquiera' }, { password: user.password }]) {
       const response = await api(t.app)
         .post('/users/me/deletion')

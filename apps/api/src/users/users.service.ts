@@ -149,7 +149,11 @@ export class UsersService {
    * Borrado real (§10). Un único DELETE: ON DELETE CASCADE elimina en la misma sentencia
    * todas las sesiones y todos los consentimientos del usuario.
    */
-  async deleteAccount(userId: string, password: string | undefined): Promise<void> {
+  async deleteAccount(
+    session: Pick<ActiveSession, 'userId' | 'authenticatedAt'>,
+    password: string | undefined,
+  ): Promise<void> {
+    const userId = session.userId;
     const [row] = await this.db
       .select({ passwordHash: users.passwordHash })
       .from(users)
@@ -157,14 +161,12 @@ export class UsersService {
       .limit(1);
     if (!row) throw new ApiException('UNAUTHENTICATED', 401);
     if (row.passwordHash === null) {
-      // Cuenta sin contraseña: el borrado con sesión reciente llega con la fase 5 (§9.2).
-      // Hasta entonces se rechaza siempre, sin borrar nada.
-      throw new ApiException(
-        'REAUTHENTICATION_REQUIRED',
-        403,
-        undefined,
-        'Recent authentication required',
-      );
+      // Sin contraseña (§9.2): basta una sesión reciente. La palabra «ELIMINAR» la valida la web:
+      // es una confirmación de intención, no de identidad.
+      assertRecent(session, this.clock.now());
+      await this.db.delete(users).where(eq(users.id, userId));
+      this.logger.log({ event: 'account_deleted' });
+      return;
     }
     if (password === undefined) {
       // Con contraseña en la cuenta, H0 sin cambios: el campo es obligatorio.

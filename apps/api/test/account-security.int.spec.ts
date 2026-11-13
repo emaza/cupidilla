@@ -125,9 +125,10 @@ describe('Cuentas sin contraseña y sesión autenticada (fase 1)', () => {
     expect(await countRows(t.db, 'users')).toBe(1);
   });
 
-  it('borrado de una cuenta sin contraseña: rechazado sin borrar nada hasta la fase 5', async () => {
+  it('borrado de una cuenta sin contraseña con la sesión antigua: 403 sin borrar nada', async () => {
     const user = await registerUser(t.app);
     await withoutPassword(user.userId);
+    t.clock.advanceDays(1);
     const response = await api(t.app)
       .post('/users/me/deletion')
       .set('Authorization', `Bearer ${user.token}`)
