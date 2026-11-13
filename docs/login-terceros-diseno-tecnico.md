@@ -67,11 +67,11 @@ Este documento manda en código, datos, API y seguridad; el de UX manda en panta
 
 | Decisión | Quién | Consecuencia en este diseño |
 |---|---|---|
-| Borrado sin contraseña: «ELIMINAR» + sesión de menos de 10 min o volver a entrar con el proveedor | CTO | §9.2 |
+| Borrado sin contraseña: «ELIMINAR» + sesión de menos de 10 min o volver a entrar con el proveedor. **Sustituida por la decisión 20**: solo «ELIMINAR» | CTO | §9.2 |
 | El correo de Facebook se acepta como verificado | CTO | §6; riesgo R1 |
 | `openid-client` 6.8.8 con `jose` 6.2.14 | CTO | §2 |
 | Quien pierde su único proveedor sin contraseña pierde la cuenta hasta que haya recuperación por correo | CTO | Riesgo aceptado R4. Tiene que figurar en «Antes de la beta» de `decisiones.md` |
-| En `/account` se añade y se quita un proveedor, siempre que quede otra forma de entrar. Para añadir hace falta una sesión reciente | CEO | §9.3, §9.4 |
+| En `/account` se añade y se quita un proveedor, siempre que quede otra forma de entrar. Para añadir hace falta una sesión reciente. **Matizada por la decisión 20**: con contraseña, añadir y quitar la piden en el formulario; la sesión reciente queda solo para cuentas sin contraseña | CEO | §9.3, §9.4 |
 | En `/account` se puede crear una contraseña si no hay. Cambiarla queda fuera | CEO | §9.5 |
 | Las condiciones suben de versión para las altas nuevas; a quien aceptó la anterior no se le vuelve a pedir | CEO | §13 |
 | Las apps de Google y Meta las crea el CEO, solo para `localhost`; producción, pendiente de «Marca y dominio» | CEO | §15 |
@@ -80,8 +80,8 @@ Este documento manda en código, datos, API y seguridad; el de UX manda en panta
 
 | # | UX propone | Este diseño | Estado |
 |---|---|---|---|
-| U1 | Borrado sin contraseña solo con «ELIMINAR» | «ELIMINAR» + sesión reciente o reautenticación | **Resuelto**: decisión del CTO |
-| U2 | Añadir proveedor sin pedir nada, «porque ya hay sesión» | Exige una sesión reciente | **Resuelto**: decisión del CEO |
+| U1 | Borrado sin contraseña solo con «ELIMINAR» | Solo «ELIMINAR» | **Resuelto**: la decisión 20 vuelve a la propuesta de UX |
+| U2 | Añadir proveedor sin pedir nada, «porque ya hay sesión» | Con contraseña, la contraseña; sin ella, una sesión reciente | **Resuelto**: decisión del CEO, matizada por la decisión 20 |
 | U3 | `alta.error.resultado_incierto` y `union.error.resultado_incierto` dicen «se puede reintentar sin riesgo» | Reintentar es inocuo, pero si la primera petición se hizo, el reintento da «caducado» (T4) | **Resuelto**: los textos de UX §5.3 y §5.4 ya lo explican |
 | U4 | A la unión solo se llega si el proveedor asegura que el correo está verificado | Con Facebook, el correo se da por verificado por política nuestra; Meta no lo indica | **Resuelto**: UX §1.4 ya lo dice |
 | U5 | Que «atrás» no repita el aviso | El aviso va en la URL y puede repetirse | Aceptado por UX («se identifica por la URL») |
@@ -332,8 +332,8 @@ stateDiagram-v2
 1. El *throttler* va antes del controlador: `ip`, 10 cada 15 minutos, y `account`, 5 cada 15 minutos con bloqueo de 15. **El cubo `account` es el mismo que el de `/auth/login`** (§12.5). Por eso la acción de la web envía `email` (el que le dio `GET /auth/oauth/pending`): el `accountTracker` actual lo lee del cuerpo sin cambios.
 2. Se busca la fila (`kind = 'link'`, sin caducar) con el usuario. Si no existe, o si `email` no coincide con `users.email`, 400 `OAUTH_FLOW_INVALID`.
 3. Se verifica la contraseña con argon2id. El usuario tiene hash por definición de la fila, así que el tiempo es el de `/login`.
-4. Si falla: `UPDATE … SET failed_attempts = failed_attempts + 1 RETURNING failed_attempts`. Con menos de 5, 403 `PASSWORD_INCORRECT`, y la fila sigue. Con el 5.º fallo, se borra la fila y 403 `LINK_ATTEMPTS_EXCEEDED`; para reintentar hay que volver a pasar por el proveedor.
-5. Si acierta: rehash si toca (como el login); `Transactions.run`: `DELETE` de la fila `RETURNING` → `INSERT identities` → `SessionsService.create`; `deleteExpiredForUser`. Responde 200 `{ user, session, returnPath }`.
+4. Si falla: `UPDATE … SET failed_attempts = failed_attempts + 1 WHERE … AND failed_attempts < 5 RETURNING failed_attempts` (sin fila: `OAUTH_FLOW_INVALID`; así nunca se pasa de 5 con fallos simultáneos). Con menos de 5, 403 `PASSWORD_INCORRECT`, y la fila sigue. Con el 5.º fallo, se borra la fila y 403 `LINK_ATTEMPTS_EXCEEDED`; para reintentar hay que volver a pasar por el proveedor.
+5. Si acierta: rehash si toca (como el login); `Transactions.run`: `DELETE` de la fila `RETURNING`, solo si `failed_attempts < 5` (una unión bloqueada no se completa aunque su fila aún no se haya borrado) → `INSERT identities` → `SessionsService.create`; `deleteExpiredForUser`. Responde 200 `{ user, session, returnPath }`.
 
 La unión es `nonIdempotent` en la web. Un reintento tras `OUTCOME_UNKNOWN` no duplica nada (T4).
 

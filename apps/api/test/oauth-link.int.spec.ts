@@ -126,6 +126,45 @@ describe('Unión con una cuenta de correo y contraseña (fase 4)', () => {
     expect(await countRows(t.db, 'pending_identities')).toBe(0);
   });
 
+  it('una unión con 5 fallos está bloqueada aunque su fila no se haya borrado todavía', async () => {
+    const { account, token } = await pendingLink();
+    await t.db
+      .update(pendingIdentities)
+      .set({ failedAttempts: 5 })
+      .where(eq(pendingIdentities.tokenHash, hashOpaqueToken(token)));
+    const response = await link({
+      pendingToken: token,
+      email: account.email,
+      password: account.password,
+    });
+    expect(response.body.error.code).toBe('OAUTH_FLOW_INVALID');
+    expect(await countRows(t.db, 'identities')).toBe(0);
+  });
+
+  it('5.º fallo y contraseña correcta a la vez: nunca a la vez «bloqueada» y unida', async () => {
+    for (let round = 0; round < 5; round += 1) {
+      await truncateAll(t.db);
+      const { account, token } = await pendingLink();
+      await t.db
+        .update(pendingIdentities)
+        .set({ failedAttempts: 4 })
+        .where(eq(pendingIdentities.tokenHash, hashOpaqueToken(token)));
+      const [wrong, right] = await Promise.all([
+        link({ pendingToken: token, email: account.email, password: 'contraseña-mala-x' }),
+        link({ pendingToken: token, email: account.email, password: account.password }),
+      ]);
+      const linked = await countRows(t.db, 'identities');
+      if (wrong.body.error?.code === 'LINK_ATTEMPTS_EXCEEDED') {
+        expect(linked).toBe(0);
+        expect(right.status).toBe(400);
+      } else {
+        expect(right.status).toBe(200);
+        expect(linked).toBe(1);
+      }
+      expect([wrong.status, right.status]).not.toContain(500);
+    }
+  });
+
   it('O-8: el cubo por correo es el de /auth/login: 3 logins y 2 uniones fallidas → el siguiente da 429', async () => {
     const { account, token } = await pendingLink();
     for (let attempt = 0; attempt < 3; attempt += 1) {

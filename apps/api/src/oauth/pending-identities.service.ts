@@ -245,6 +245,8 @@ export class PendingIdentitiesService {
     let session: { token: string; expiresAt: Date };
     try {
       session = await this.transactions.run(async (tx) => {
+        // Una unión que ha llegado a 5 fallos está bloqueada aunque su fila aún no se haya borrado:
+        // una contraseña correcta simultánea al 5.º fallo no puede completarla.
         const [consumed] = await tx
           .delete(pendingIdentities)
           .where(
@@ -252,6 +254,7 @@ export class PendingIdentitiesService {
               eq(pendingIdentities.tokenHash, tokenHash),
               eq(pendingIdentities.kind, 'link'),
               gt(pendingIdentities.expiresAt, this.clock.now()),
+              lt(pendingIdentities.failedAttempts, OAUTH_LINK_MAX_FAILURES),
             ),
           )
           .returning();

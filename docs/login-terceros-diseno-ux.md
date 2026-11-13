@@ -183,7 +183,7 @@ Consultadas el 13 de noviembre de 2026: [Google](https://developers.google.com/i
 | Pedir solo los permisos necesarios | `public_profile` (implícito) y `email`; sin revisión de la app |
 | Ofrecer cerrar sesión, desvincular o eliminar la cuenta | Cerrar sesión, quitar (§3.5) y eliminar (§3.6) |
 
-Hover y pulsado: capa del 8 % y 12 % de `#1F1F1F`. Foco: anillo de H0 (3 px, `--color-foco`, margen 2 px) por fuera del borde de marca. Los botones de marca también se usan en `/account` y `/account/delete` para añadir o reautenticar (§3.5).
+Hover y pulsado: capa del 8 % y 12 % de `#1F1F1F`. Foco: anillo de H0 (3 px, `--color-foco`, margen 2 px) por fuera del borde de marca. Los botones de marca también se usan en `/account` y `/account/password` para añadir o reautenticar (§3.5).
 
 #### 3.1.3 Estados
 
@@ -364,7 +364,7 @@ Solo para cuentas **sin** contraseña (decisión 20): en `/account` (para añadi
 ```
 
 - Un botón de marca por cada proveedor unido (el que se use debe ser una identidad de esa cuenta; si no, `?error=identity-mismatch`). Es el formulario `POST /auth/{proveedor}` con `from=account` y `next` igual a la pantalla actual.
-- Mientras la sesión es antigua, la acción protegida (formulario, campo ELIMINAR, botón de añadir) **no se dibuja**: no hay botón que falle después.
+- Mientras la sesión es antigua, la acción protegida (formulario de crear contraseña, botón de añadir) **no se dibuja**: no hay botón que falle después. El campo ELIMINAR no depende de la sesión (decisión 20).
 - Al volver con éxito: misma página, con `?notice=reauthenticated` → `verificar.aviso.confirmada` (`role="status"`) y la acción ya disponible.
 - Cancelar en el proveedor: `?notice=provider-cancelled` → `verificar.aviso.cancelado`. Otra cuenta del proveedor: `?error=identity-mismatch` → `verificar.error.otra_cuenta`. Falla: `?error=provider-failed` → `cuenta.error.proveedor_fallo`.
 - **Si la sesión caduca entre cargar la página y enviar** (el servidor da 403 `REAUTHENTICATION_REQUIRED`): 303 a la misma página con `?error=reauth-required` → `verificar.error.necesaria`, que se muestra junto al bloque. Nada se ha ejecutado.

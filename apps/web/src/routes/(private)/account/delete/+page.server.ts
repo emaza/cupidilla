@@ -76,7 +76,10 @@ export const actions = {
     return fail(result.status, { errors });
   },
 
-  /** Sin contraseña y con sesión reciente: escribir ELIMINAR (UX §3.6). La API no la necesita. */
+  /**
+   * Sin contraseña: escribir ELIMINAR, sin sesión reciente (UX §3.6, decisión 20). La API no
+   * necesita la palabra.
+   */
   confirm: async (event) => {
     const word = textField(await event.request.formData(), 'confirmation');
     if (word.trim().toUpperCase() !== CONFIRMATION_WORD) {
