@@ -24,6 +24,8 @@ Registro de lo que está decidido y de lo que sigue abierto. Cuando una decisió
 | 14 | **ORM: Drizzle.** Esquema en TypeScript y SQL explícito. Se usa la 0.45 estable, no la 1.0 candidata ([detalle](h0-diseno-tecnico.md#2-versiones-fijadas)) | 11 de noviembre de 2026, CTO con el arquitecto |
 | 15 | **Autenticación: correo y contraseña.** Sesiones opacas guardadas en PostgreSQL y cookie `httpOnly`, sin JWT. H0 no envía correo: sin verificación de correo ni recuperación de contraseña ([detalle](h0-diseno-tecnico.md#8-sesión-y-seguridad)) | 11 de noviembre de 2026, CTO con el arquitecto |
 | 16 | **Base técnica de H0**: npm workspaces, Node 24, todo en ESM, TypeScript 6.0 y PostgreSQL 18 en Docker. El navegador solo habla con SvelteKit, y SvelteKit con la API ([diseño técnico](h0-diseno-tecnico.md), [diseño UX](h0-diseno-ux.md)) | 11 de noviembre de 2026, CTO con el arquitecto |
+| 17 | **Aspecto de Cupidilla en H1: minimalista.** Interfaz solo de conversación con un avatar sencillo; el personaje ilustrado llega con la identidad visual | 12 de noviembre de 2026, el CEO |
+| 18 | **URLs y nombres internos de la web en inglés**: `/register`, `/login`, `/account`, `/account/delete`, `/legal/terms`, con parámetros, acciones y campos de formulario también en inglés. Los textos de la interfaz y sus claves siguen en español. Se hace en un PR aparte después de fusionar H0 y antes de H1 ([plan](plan-rutas-en-ingles.md)) | 13 de noviembre de 2026, el CEO |
 
 ## Abiertas
 
@@ -39,7 +41,6 @@ Ordenadas por cuándo bloquean. La recomendación es mía; quien decide aparece 
 
 | Decisión | Opciones | Recomendación | Decide |
 |---|---|---|---|
-| **Aspecto de Cupidilla** | Personaje ilustrado · interfaz minimalista solo conversación | Minimalista con un avatar sencillo en H1; la ilustración llega con la identidad visual, cuando la entrevista ya funcione | Tú, con el diseñador UX |
 | **Llamadas por turno** | Una (respuesta y extracción juntas) · dos (respuesta en streaming y extracción aparte) | Empezar con una; separar solo si la latencia molesta | Arquitecto |
 | **Nivel de esfuerzo del modelo** | `low` · `medium` | Empezar en `low` y confirmar con la evaluación | Lo decide la evaluación |
 | **Categorías de observación** | Las cinco de ChatGPT · añadir preferencias sobre la otra persona y límites | Añadirlas; sin ellas la fase 5 no tiene dónde guardar nada | Arquitecto |
@@ -75,4 +76,4 @@ Ordenadas por cuándo bloquean. La recomendación es mía; quien decide aparece 
 
 ## Siguiente paso
 
-Abrir una sesión nueva en esta carpeta —arrancará con el CTO como agente principal— y encargarle H0 y H1 con estos documentos como base. Lo primero que necesitará cerrar son las decisiones de «Antes de H0».
+H0 (base mínima) está implementado y verificado por QA el 11 de noviembre de 2026: ver el [diseño técnico](h0-diseno-tecnico.md), el [diseño UX](h0-diseno-ux.md) y el README para arrancarlo. Lo siguiente es H1, la [entrevista con Cupidilla](entrevista-cupidilla.md); antes de diseñarla hay que cerrar las decisiones de «Antes de diseñar H1».

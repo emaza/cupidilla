@@ -1,0 +1,11 @@
+package-lock.json
+**/dist
+**/build
+**/.svelte-kit
+**/coverage
+**/playwright-report
+**/test-results
+apps/api/drizzle/meta
+docs
+README.md
+.claude

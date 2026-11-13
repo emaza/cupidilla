@@ -1,0 +1,553 @@
+/* Estilo provisional de H0 (UX §7). Todo sale de estos tokens: cambiar uno cambia todas sus apariciones. */
+:root {
+  color-scheme: light;
+
+  --color-fondo: #ffffff;
+  --color-superficie: #f7f4f2;
+  --color-texto: #1e1b1d;
+  --color-texto-suave: #5b5558;
+  --color-primario: #6b2d5c;
+  --color-primario-hover: #4e2043;
+  --color-borde: #7a7377;
+  --color-borde-suave: #d9d3d0;
+  --color-error: #b3261e;
+  --color-exito: #1b6b3a;
+  --color-foco: #0b57d0;
+  --color-sobre-primario: #ffffff;
+
+  --fuente-base: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --texto-base: 1rem;
+  --texto-pequeno: 0.875rem;
+  --texto-h2: 1.25rem;
+  --texto-h1: 1.75rem;
+  --interlineado: 1.5;
+  --interlineado-titulos: 1.2;
+  --peso-fuerte: 600;
+
+  --espacio-1: 0.25rem;
+  --espacio-2: 0.5rem;
+  --espacio-3: 0.75rem;
+  --espacio-4: 1rem;
+  --espacio-6: 1.5rem;
+  --espacio-8: 2rem;
+  --espacio-12: 3rem;
+
+  --radio-s: 6px;
+  --radio-m: 12px;
+  --alto-control: 3rem;
+  --tactil-minimo: 2.75rem;
+  --casilla: 1.5rem;
+  --ancho-pagina: 40rem;
+  --ancho-formulario: 28rem;
+  --ancho-lectura: 40rem;
+  --ancho-dia: 4.5rem;
+  --ancho-anio: 6rem;
+
+  --borde-fino: 1px;
+  --borde-grueso: 2px;
+  --foco-anillo: 3px;
+  --foco-margen: 2px;
+  --transicion: 100ms;
+}
+
+@media (min-width: 48em) {
+  :root {
+    --texto-h1: 2.25rem;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-fondo);
+  color: var(--color-texto);
+  font-family: var(--fuente-base);
+  font-size: var(--texto-base);
+  line-height: var(--interlineado);
+  /* Con el texto ampliado, una palabra larga («Condiciones» en el h1) se parte en vez de desbordar. */
+  overflow-wrap: break-word;
+}
+
+/* Sustituye al style="display: contents" de la plantilla, que la CSP no admitiría (§4.3). */
+.app {
+  display: contents;
+}
+
+h1,
+h2 {
+  font-weight: var(--peso-fuerte);
+  line-height: var(--interlineado-titulos);
+  margin: 0 0 var(--espacio-4);
+}
+
+h1 {
+  font-size: var(--texto-h1);
+}
+
+h2 {
+  font-size: var(--texto-h2);
+}
+
+p {
+  margin: 0 0 var(--espacio-4);
+}
+
+a {
+  color: var(--color-primario);
+  text-decoration: underline;
+}
+
+a:hover {
+  color: var(--color-primario-hover);
+}
+
+:focus-visible {
+  outline: var(--foco-anillo) solid var(--color-foco);
+  outline-offset: var(--foco-margen);
+}
+
+[tabindex='-1']:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.visualmente-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Saltar al contenido: primer tabulable, visible al recibir el foco. */
+.saltar {
+  position: absolute;
+  left: var(--espacio-4);
+  top: var(--espacio-2);
+  transform: translateY(-200%);
+  background: var(--color-fondo);
+  padding: var(--espacio-2) var(--espacio-4);
+  border-radius: var(--radio-s);
+}
+
+.saltar:focus {
+  transform: none;
+}
+
+/* Estructura */
+.cabecera,
+.pie,
+main {
+  width: 100%;
+  max-width: var(--ancho-pagina);
+  margin-inline: auto;
+  padding-inline: var(--espacio-4);
+}
+
+.cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-2);
+  padding-block: var(--espacio-4);
+}
+
+.marca {
+  font-weight: var(--peso-fuerte);
+  color: var(--color-texto);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tactil-minimo);
+}
+
+.navegacion ul {
+  display: flex;
+  gap: var(--espacio-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.navegacion a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tactil-minimo);
+  padding-inline: var(--espacio-2);
+}
+
+main {
+  padding-block: var(--espacio-6) var(--espacio-12);
+}
+
+main:focus {
+  outline: none;
+}
+
+.pie {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  padding-block: var(--espacio-6);
+  background: var(--color-superficie);
+  font-size: var(--texto-pequeno);
+  color: var(--color-texto-suave);
+}
+
+.pie a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tactil-minimo);
+}
+
+@media (min-width: 48em) {
+  .pie {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--espacio-6);
+  }
+}
+
+/* Avisos y errores: el color va en el borde y el icono; el texto, en --color-texto. */
+.aviso,
+.resumen-errores {
+  border: var(--borde-grueso) solid var(--color-borde);
+  border-radius: var(--radio-m);
+  background: var(--color-superficie);
+  padding: var(--espacio-4);
+  margin-bottom: var(--espacio-6);
+}
+
+.aviso {
+  display: flex;
+  gap: var(--espacio-2);
+}
+
+.aviso p {
+  margin: 0;
+}
+
+.aviso-exito {
+  border-color: var(--color-exito);
+}
+
+.aviso-exito .icono {
+  color: var(--color-exito);
+}
+
+.aviso-info {
+  border-color: var(--color-primario);
+}
+
+.resumen-errores {
+  border-color: var(--color-error);
+}
+
+.resumen-errores h2 {
+  margin-bottom: var(--espacio-2);
+}
+
+.resumen-errores ul {
+  margin: 0;
+  padding-left: var(--espacio-6);
+}
+
+.resumen-errores li a {
+  display: inline-block;
+  padding-block: var(--espacio-3);
+  /* `break-word` no reduce el ancho mínimo de un inline-block; `anywhere` sí (C44). */
+  overflow-wrap: anywhere;
+}
+
+.resumen-errores p {
+  margin: 0;
+}
+
+.error-campo {
+  margin: 0 0 var(--espacio-2);
+  color: var(--color-texto);
+  font-weight: var(--peso-fuerte);
+}
+
+.error-campo .icono {
+  color: var(--color-error);
+  margin-right: var(--espacio-1);
+}
+
+/* Formularios */
+.tarjeta {
+  width: 100%;
+}
+
+@media (min-width: 48em) {
+  .tarjeta {
+    max-width: var(--ancho-formulario);
+    margin-inline: auto;
+    border: var(--borde-fino) solid var(--color-borde-suave);
+    border-radius: var(--radio-m);
+    padding: var(--espacio-8);
+  }
+}
+
+.campo,
+.fecha,
+.casilla-bloque {
+  margin: 0 0 var(--espacio-6);
+}
+
+.campo label,
+.fecha legend,
+.fecha label {
+  display: block;
+  font-weight: var(--peso-fuerte);
+  margin-bottom: var(--espacio-1);
+}
+
+.ayuda {
+  color: var(--color-texto-suave);
+  margin: 0 0 var(--espacio-2);
+}
+
+input[type='email'],
+input[type='password'],
+input[type='text'] {
+  width: 100%;
+  min-height: var(--alto-control);
+  padding: var(--espacio-2) var(--espacio-3);
+  font: inherit;
+  font-size: var(--texto-base);
+  color: var(--color-texto);
+  background: var(--color-fondo);
+  border: var(--borde-fino) solid var(--color-borde);
+  border-radius: var(--radio-s);
+}
+
+input[aria-invalid='true'] {
+  border: var(--borde-grueso) solid var(--color-error);
+}
+
+.control-contrasena {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+}
+
+.control-contrasena input {
+  flex: 1 1 12rem;
+}
+
+.fecha {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.fecha legend {
+  padding: 0;
+}
+
+/* Una fila con texto normal; con el texto ampliado, se parte en líneas en vez de desbordar. */
+.fecha-partes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+}
+
+.fecha-partes .parte input {
+  width: var(--ancho-dia);
+}
+
+.fecha-partes .parte-anio input {
+  width: var(--ancho-anio);
+}
+
+.casilla {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--espacio-3);
+  min-height: var(--tactil-minimo);
+  padding-block: var(--espacio-2);
+  cursor: pointer;
+}
+
+.casilla input {
+  flex: none;
+  width: var(--casilla);
+  height: var(--casilla);
+  margin: 0;
+  accent-color: var(--color-primario);
+}
+
+.casilla input[aria-invalid='true'] {
+  outline: var(--borde-grueso) solid var(--color-error);
+  outline-offset: var(--foco-margen);
+}
+
+.enlace-bloque {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tactil-minimo);
+}
+
+/* Separación entre objetivos táctiles (UX §6): la fila de la casilla y el enlace de debajo. */
+.casilla + .enlace-bloque {
+  margin-top: var(--espacio-2);
+}
+
+/* Botones */
+.acciones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  margin-bottom: var(--espacio-4);
+}
+
+@media (min-width: 30em) {
+  .acciones {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+}
+
+.boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: var(--alto-control);
+  padding: var(--espacio-2) var(--espacio-6);
+  font: inherit;
+  font-weight: var(--peso-fuerte);
+  text-align: center;
+  text-decoration: none;
+  border-radius: var(--radio-s);
+  border: var(--borde-grueso) solid transparent;
+  cursor: pointer;
+  transition:
+    background-color var(--transicion),
+    color var(--transicion),
+    border-color var(--transicion);
+}
+
+@media (min-width: 30em) {
+  .boton {
+    width: auto;
+  }
+}
+
+.boton-primario {
+  background: var(--color-primario);
+  border-color: var(--color-primario);
+  color: var(--color-sobre-primario);
+}
+
+.boton-primario:hover {
+  background: var(--color-primario-hover);
+  border-color: var(--color-primario-hover);
+  color: var(--color-sobre-primario);
+}
+
+.boton-secundario {
+  background: var(--color-fondo);
+  border-color: var(--color-primario);
+  color: var(--color-primario);
+}
+
+.boton-secundario:hover {
+  border-color: var(--color-primario-hover);
+  color: var(--color-primario-hover);
+}
+
+.boton-peligro {
+  background: var(--color-error);
+  border-color: var(--color-error);
+  color: var(--color-sobre-primario);
+}
+
+.boton-peligro:hover {
+  color: var(--color-sobre-primario);
+}
+
+.boton-peligro-secundario {
+  background: var(--color-fondo);
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.boton-peligro-secundario:hover {
+  color: var(--color-error);
+}
+
+.boton[aria-disabled='true'] {
+  cursor: progress;
+}
+
+.boton-texto {
+  min-height: var(--alto-control);
+  padding: var(--espacio-2) var(--espacio-3);
+  font: inherit;
+  color: var(--color-primario);
+  background: var(--color-fondo);
+  border: var(--borde-fino) solid var(--color-borde);
+  border-radius: var(--radio-s);
+  cursor: pointer;
+}
+
+/* Contenido */
+.pequeno {
+  font-size: var(--texto-pequeno);
+  color: var(--color-texto-suave);
+}
+
+.seccion {
+  margin-bottom: var(--espacio-8);
+}
+
+.datos {
+  margin: 0;
+}
+
+.datos dt {
+  font-weight: var(--peso-fuerte);
+}
+
+.datos dd {
+  margin: 0 0 var(--espacio-3);
+  overflow-wrap: anywhere;
+}
+
+.lectura {
+  max-width: var(--ancho-lectura);
+}
+
+.borrador {
+  border: var(--borde-grueso) solid var(--color-texto);
+  border-radius: var(--radio-m);
+  background: var(--color-superficie);
+  padding: var(--espacio-4);
+  margin-bottom: var(--espacio-6);
+}
+
+.borrador p {
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boton {
+    transition: none;
+  }
+}
