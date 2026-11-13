@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hashSessionToken } from '../../auth/sessions.service.js';
+import { hashOpaqueToken } from '../crypto/opaque-token.js';
 import { accountTracker, ipTracker } from './app-throttler.guard.js';
 
 describe('trackers del límite de intentos', () => {
@@ -19,7 +19,7 @@ describe('trackers del límite de intentos', () => {
   it('account: sin correo, usa el hash del token de sesión', () => {
     const token = 'a'.repeat(43);
     expect(accountTracker({ headers: { authorization: `Bearer ${token}` }, body: {} })).toBe(
-      `session:${hashSessionToken(token)}`,
+      `session:${hashOpaqueToken(token)}`,
     );
   });
 });

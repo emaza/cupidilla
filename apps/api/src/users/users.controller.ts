@@ -18,7 +18,7 @@ export class UsersController {
 
   @Get('me')
   getAccount(@CurrentSession() session: ActiveSession): Promise<AccountResponse> {
-    return this.users.getAccount(session.userId);
+    return this.users.getAccount(session.userId, session);
   }
 
   @Post('me/deletion')

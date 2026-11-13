@@ -3,6 +3,7 @@ import type { AccountResponse, PublicUser } from '@cupidilla/contracts';
 import { eq } from 'drizzle-orm';
 import { ApiException } from '../common/errors/api.exception.js';
 import { Clock } from '../common/clock.js';
+import type { ActiveSession } from '../common/decorators/current-session.decorator.js';
 import { ConsentsService } from '../consents/consents.service.js';
 import { DB, type Database, type Executor } from '../database/database.types.js';
 import { isUniqueViolation } from '../database/pg-errors.js';
@@ -17,7 +18,8 @@ export interface NewUser {
 
 export interface UserCredentials {
   user: PublicUser;
-  passwordHash: string;
+  /** `null` en una cuenta creada con un proveedor que todavía no tiene contraseña. */
+  passwordHash: string | null;
 }
 
 type UserRow = typeof users.$inferSelect;
@@ -69,12 +71,18 @@ export class UsersService {
       .where(eq(users.id, userId));
   }
 
-  async getAccount(userId: string): Promise<AccountResponse> {
+  async getAccount(
+    userId: string,
+    session: Pick<ActiveSession, 'authenticatedAt'>,
+  ): Promise<AccountResponse> {
     const [row] = await this.db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (!row) throw new ApiException('UNAUTHENTICATED', 401);
     return {
       user: { ...toPublicUser(row), birthDate: row.birthDate },
       consents: await this.consents.listForUser(userId),
+      // Las identidades se listan cuando exista IdentitiesService (fase 2 del diseño).
+      signInMethods: { password: row.passwordHash !== null, identities: [] },
+      session: { authenticatedAt: session.authenticatedAt.toISOString() },
     };
   }
 
@@ -82,13 +90,32 @@ export class UsersService {
    * Borrado real (§10). Un único DELETE: ON DELETE CASCADE elimina en la misma sentencia
    * todas las sesiones y todos los consentimientos del usuario.
    */
-  async deleteAccount(userId: string, password: string): Promise<void> {
+  async deleteAccount(userId: string, password: string | undefined): Promise<void> {
     const [row] = await this.db
       .select({ passwordHash: users.passwordHash })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
     if (!row) throw new ApiException('UNAUTHENTICATED', 401);
+    if (row.passwordHash === null) {
+      // Cuenta sin contraseña: el borrado con sesión reciente llega con la fase 5 (§9.2).
+      // Hasta entonces se rechaza siempre, sin borrar nada.
+      throw new ApiException(
+        'REAUTHENTICATION_REQUIRED',
+        403,
+        undefined,
+        'Recent authentication required',
+      );
+    }
+    if (password === undefined) {
+      // Con contraseña en la cuenta, H0 sin cambios: el campo es obligatorio.
+      throw new ApiException(
+        'VALIDATION_FAILED',
+        400,
+        [{ path: 'password', issue: 'required' }],
+        'Request validation failed',
+      );
+    }
     if (!(await this.passwords.verify(row.passwordHash, password))) {
       throw new ApiException('PASSWORD_INCORRECT', 403, undefined, 'Password does not match');
     }

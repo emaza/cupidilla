@@ -11,6 +11,9 @@ export const sessions = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    // Última vez que se demostró la identidad en esta sesión (§9.1). Sin DEFAULT a propósito:
+    // la migración rellenó las sesiones existentes con created_at, no con now().
+    authenticatedAt: timestamp('authenticated_at', { withTimezone: true }).notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   },
   (t) => [

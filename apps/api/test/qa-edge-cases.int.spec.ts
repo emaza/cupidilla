@@ -1,6 +1,6 @@
 import { DrizzleQueryError, sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { hashSessionToken } from '../src/auth/sessions.service.js';
+import { hashOpaqueToken } from '../src/common/crypto/opaque-token.js';
 import { UsersService } from '../src/users/users.service.js';
 import {
   api,
@@ -132,7 +132,7 @@ describe('QA: casos límite de la API', () => {
         .send({ password: user.password });
       expect(deleted.status).toBe(204);
 
-      for (const needle of ['rastro.adulto', user.userId, hashSessionToken(user.token)]) {
+      for (const needle of ['rastro.adulto', user.userId, hashOpaqueToken(user.token)]) {
         expect(await tablesContaining(needle), `«${needle}» sigue en alguna tabla`).toEqual([]);
       }
       expect(await tablesContaining(other.userId)).toContain('users');
@@ -477,7 +477,7 @@ describe('QA: los logs, en los caminos de error', () => {
     vi.restoreAllMocks();
     const log = output.join('');
     expect(log).toContain('"route":"/auth/session"');
-    for (const secret of [ip, user.token, hashSessionToken(user.token), 'Bearer', user.email]) {
+    for (const secret of [ip, user.token, hashOpaqueToken(user.token), 'Bearer', user.email]) {
       expect(log, `el log contiene «${secret}»`).not.toContain(secret);
     }
   });

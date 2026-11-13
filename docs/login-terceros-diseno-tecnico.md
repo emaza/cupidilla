@@ -246,7 +246,7 @@ Restricciones: `UNIQUE (provider, subject)` (`identities_provider_subject_unique
 | `return_path` | `text` | `NULL`, `CHECK (char_length(return_path) <= 64)` |
 | `created_at`, `expires_at` | `timestamptz` | `NOT NULL`; `expires_at = created_at + 10 min` |
 
-`CHECK ((purpose = 'sign_in') = (entry_point IS NOT NULL AND session_token_hash IS NULL))` (`oauth_states_purpose_shape`). Índice en `expires_at`. `state` y `code_verifier` van en claro: duran 10 minutos, son de un solo uso y por sí solos no sirven sin el código, que solo llega al navegador de la persona.
+`CHECK ((purpose = 'sign_in') = (entry_point IS NOT NULL) AND (purpose = 'sign_in') = (session_token_hash IS NULL))` (`oauth_states_purpose_shape`). Con `sign_in` exige `entry_point` y prohíbe `session_token_hash`; con `reauthenticate` y `connect`, al revés. Índice en `expires_at`. `state` y `code_verifier` van en claro: duran 10 minutos, son de un solo uso y por sí solos no sirven sin el código, que solo llega al navegador de la persona.
 
 ### 5.4 `pending_identities` (alta o unión pendiente)
 
@@ -269,6 +269,7 @@ Restricciones: `UNIQUE (provider, subject)` (`identities_provider_subject_unique
 
 - Esquemas Drizzle nuevos en `database/schema/identities.ts`, `oauth-states.ts` y `pending-identities.ts`, exportados en `index.ts`. En `users.ts` se quita `.notNull()` de `passwordHash`. En `sessions.ts` se añade `authenticatedAt`.
 - `npm run db:generate -- --name oauth_identities`. **Hay que editar el SQL a mano** antes de aplicarlo: `ADD COLUMN authenticated_at timestamptz;`, después `UPDATE sessions SET authenticated_at = created_at;` y por último `ALTER … SET NOT NULL`. Con un `DEFAULT now()` las sesiones antiguas parecerían recién autenticadas.
+- **Despliegue: parar la API antigua antes de migrar.** Tras la migración, `sessions.authenticated_at` es `NOT NULL` y sin `DEFAULT`. La API de H0 no escribe esa columna, así que fallaría al crear sesiones (registro y login). El orden es: parar la API, `npm run db:migrate` y arrancar la versión nueva. No se pone un `DEFAULT`: la aplicación escribe siempre la columna con el `Clock`, y un `DEFAULT now()` taparía que algún `INSERT` la olvide. Como todavía no hay producción ni varias instancias, parar unos segundos no cuesta nada.
 - El test I-16 de H0 recorre las tablas con FK a `users`, así que cubre solo `identities` y `pending_identities`. `oauth_states` cuelga de `sessions`, y su comprobación se añade explícitamente (O-17).
 
 ---
@@ -473,7 +474,8 @@ export const OAUTH_LINK_MAX_FAILURES = 5;
 export const RECENT_AUTH_MAX_AGE_MINUTES = 10;
 
 const opaqueToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
-const returnPath = z.string().max(64).regex(/^\/[a-z/-]*$/);   // la web aplica además safeReturnPath
+const returnPath = z.string().max(64).regex(/^\/[a-z/-]*$/)
+  .refine((v) => !v.includes('//'), 'invalid_format');          // la regex sola acepta «//x»; la web aplica además safeReturnPath
 
 export const oauthStartRequestSchema = z.strictObject({ entryPoint: z.enum(OAUTH_ENTRY_POINTS), returnPath: returnPath.optional() });
 export const oauthSessionStartRequestSchema = z.strictObject({ purpose: z.enum(['reauthenticate', 'connect']), returnPath: returnPath.optional() });
@@ -674,7 +676,7 @@ Se construye en un único sitio de la API con `OAUTH_REDIRECT_BASE_URL`. Se regi
 ### 12.2 Redirección abierta
 
 - `next` pasa por `safeReturnPath` (lista cerrada de H0) al entrar y al salir.
-- La API además limita `returnPath` a 64 caracteres con `^/[a-z/-]*$`.
+- La API además limita `returnPath` a 64 caracteres con `^/[a-z/-]*$` y rechaza cualquier valor que contenga `//`, porque la regex sola acepta `//x`.
 - Las páginas de destino tras un error son una lista fija.
 - `authorizationUrl` la construye la API con *endpoints* de configuración, nunca a partir de la petición.
 

@@ -4,13 +4,19 @@ import { z } from 'zod';
 export const ERROR_CODES = [
   'VALIDATION_FAILED', // 400
   'MALFORMED_REQUEST', // 400  JSON ilegible, cuerpo demasiado grande
+  'OAUTH_FLOW_INVALID', // 400  flujo o estado pendiente inexistente, caducado, ya usado o ajeno
   'UNAUTHENTICATED', // 401  sin sesión, sesión inválida o caducada
   'INVALID_CREDENTIALS', // 401  login: correo o contraseña incorrectos (indistinguibles)
-  'PASSWORD_INCORRECT', // 403  borrado de cuenta con contraseña errónea (la sesión sigue válida)
+  'PASSWORD_INCORRECT', // 403  contraseña errónea con sesión o estado pendiente (borrado, unión…)
+  'LINK_ATTEMPTS_EXCEEDED', // 403  5.º fallo de contraseña en una unión; el estado pendiente ya no existe
+  'REAUTHENTICATION_REQUIRED', // 403  la operación exige una sesión autenticada hace menos de 10 min
   'FORBIDDEN', // 403  falta la clave interna o no es válida
   'NOT_FOUND', // 404
   'EMAIL_TAKEN', // 409
   'TERMS_VERSION_OUTDATED', // 409
+  'ACCOUNT_USES_OTHER_PROVIDER', // 409  alta con proveedor contra una cuenta sin contraseña
+  'LAST_SIGN_IN_METHOD', // 409  quitar la última forma de entrar
+  'PASSWORD_ALREADY_SET', // 409  crear una contraseña cuando ya hay una
   'UNDERAGE', // 422
   'RATE_LIMITED', // 429  con cabecera Retry-After
   'INTERNAL_ERROR', // 500

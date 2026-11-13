@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { hashSessionToken } from '../src/auth/sessions.service.js';
+import { hashOpaqueToken } from '../src/common/crypto/opaque-token.js';
 import { NO_ROUTE } from '../src/common/logging/request-logging.middleware.js';
 import {
   api,
@@ -102,7 +102,7 @@ describe('Los logs no contienen datos personales ni secretos (I-21)', () => {
       adult.birthDate,
       minor.birthDate,
       token,
-      hashSessionToken(token),
+      hashOpaqueToken(token),
       registered.body.user.id as string,
       process.env.INTERNAL_API_KEY ?? 'clave-interna',
       '$argon2id$',
