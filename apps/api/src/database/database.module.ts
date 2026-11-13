@@ -3,10 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import type { Env } from '../config/env.schema.js';
-import { DB } from './database.types.js';
+import { DB, PG_POOL } from './database.types.js';
 import * as schema from './schema/index.js';
-
-const PG_POOL = Symbol('PG_POOL');
+import { markNotSent } from './pg-errors.js';
+import { Transactions } from './transactions.js';
 
 /**
  * Margen del límite del cliente (`query_timeout`) sobre `statement_timeout`: normalmente cancela
@@ -43,6 +43,24 @@ export function createPool(settings: PoolSettings): pg.Pool {
     query_timeout: settings.DB_STATEMENT_TIMEOUT_MS + QUERY_TIMEOUT_MARGIN_MS,
     idle_in_transaction_session_timeout: settings.DB_IDLE_IN_TRANSACTION_TIMEOUT_MS,
   });
+  // Todo error al conseguir un cliente (también el de un `query` suelto, que pasa por aquí) se
+  // marca: no se llegó a enviar nada, así que nunca es «resultado incierto» (§6.3).
+  type ConnectCallback = Parameters<pg.Pool['connect']>[0] & {};
+  const connect = pool.connect.bind(pool) as (
+    callback?: ConnectCallback,
+  ) => Promise<pg.PoolClient> | undefined;
+  pool.connect = ((callback?: ConnectCallback) => {
+    if (callback) {
+      void connect((error, client, done) => {
+        callback(markNotSent(error), client, done);
+      });
+      return undefined;
+    }
+    return (connect() as Promise<pg.PoolClient>).catch((error: unknown) => {
+      throw markNotSent(error);
+    });
+  }) as pg.Pool['connect'];
+
   const logger = new Logger('Database');
   pool.on('error', (error: Error & { code?: unknown }) => {
     logger.error({
@@ -74,8 +92,9 @@ export function createPool(settings: PoolSettings): pg.Pool {
       inject: [PG_POOL],
       useFactory: (pool: pg.Pool) => drizzle(pool, { schema }),
     },
+    Transactions,
   ],
-  exports: [DB],
+  exports: [DB, Transactions],
 })
 export class DatabaseModule implements OnApplicationShutdown {
   constructor(@Inject(PG_POOL) private readonly pool: pg.Pool) {}

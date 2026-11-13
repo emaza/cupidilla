@@ -9,7 +9,8 @@ import {
 import { ThrottlerException } from '@nestjs/throttler';
 import type { ApiErrorBody } from '@cupidilla/contracts';
 import { DrizzleQueryError } from 'drizzle-orm';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { isConnectionLost } from '../../database/pg-errors.js';
 import { ApiException } from './api.exception.js';
 
 const BODY_PARSER_ERROR_TYPES = new Set([
@@ -62,8 +63,15 @@ function isMalformedRequest(error: unknown): boolean {
   );
 }
 
-/** Traduce cualquier excepción a la forma única de error de §6.3. */
-export function toErrorResponse(exception: unknown): { status: number; body: ApiErrorBody } {
+/**
+ * Traduce cualquier excepción a la forma única de error de §6.3. `method` es el de la petición:
+ * si no es GET y se perdió la conexión con PostgreSQL con la consulta en marcha, la escritura
+ * pudo hacerse o no, y se responde 503 `OUTCOME_UNKNOWN` en lugar de 500.
+ */
+export function toErrorResponse(
+  exception: unknown,
+  method = 'GET',
+): { status: number; body: ApiErrorBody } {
   if (exception instanceof ApiException) {
     return { status: exception.getStatus(), body: exception.toBody() };
   }
@@ -77,6 +85,12 @@ export function toErrorResponse(exception: unknown): { status: number; body: Api
     return {
       status: 400,
       body: { error: { code: 'MALFORMED_REQUEST', message: 'Malformed request body' } },
+    };
+  }
+  if (method !== 'GET' && method !== 'HEAD' && isConnectionLost(exception)) {
+    return {
+      status: 503,
+      body: { error: { code: 'OUTCOME_UNKNOWN', message: 'Outcome unknown' } },
     };
   }
   return { status: 500, body: { error: { code: 'INTERNAL_ERROR', message: 'Internal error' } } };
@@ -109,8 +123,9 @@ export class ApiExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(ApiExceptionFilter.name);
 
   catch(exception: unknown, host: ArgumentsHost): void {
-    const response = host.switchToHttp().getResponse<Response>();
-    const { status, body } = toErrorResponse(exception);
+    const http = host.switchToHttp();
+    const response = http.getResponse<Response>();
+    const { status, body } = toErrorResponse(exception, http.getRequest<Request>().method);
     if (status >= 500) {
       this.logger.error(describeErrorForLog(exception));
     }

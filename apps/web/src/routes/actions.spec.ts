@@ -218,6 +218,14 @@ describe('entrar: respuestas de la API (criterios 31, 32, 8 y 10)', () => {
     });
   });
 
+  it('OUTCOME_UNKNOWN de la API en el login → entrar.error.servidor, nunca resultado incierto (criterio 65)', async () => {
+    api.login.mockResolvedValue(apiFailure(503, 'OUTCOME_UNKNOWN'));
+    expect((await submit()).result).toMatchObject({
+      status: 503,
+      data: { errors: { general: 'entrar.error.servidor' } },
+    });
+  });
+
   it('API caída → entrar.error.servidor', async () => {
     api.login.mockResolvedValue(apiFailure(503, 'API_UNAVAILABLE'));
     expect((await submit()).result).toMatchObject({
@@ -275,6 +283,7 @@ describe('/cuenta: salir (acuerdo A14)', () => {
 
   it.each([
     ['la API no responde', apiFailure(503, 'API_UNAVAILABLE')],
+    ['la API da OUTCOME_UNKNOWN', apiFailure(503, 'OUTCOME_UNKNOWN')],
     ['la API da 500', apiFailure(500, 'INTERNAL_ERROR')],
   ])('%s: NO borra la cookie y muestra cuenta.error.servidor', async (_, failure) => {
     api.logout.mockResolvedValue(failure);

@@ -438,7 +438,9 @@ describe('QA: los logs, en los caminos de error', () => {
       new DrizzleQueryError(
         'insert into "users" ("email", "password_hash", "birth_date") values ($1, $2, $3)',
         [body.email, '$argon2id$v=19$m=65536,t=3,p=4$salsalsal$hashhashhash', body.birthDate],
-        Object.assign(new Error('connection terminated'), { code: '57P01' }),
+        // XX000 (internal_error) y no 57P01: una conexión perdida en un POST ya es 503
+        // OUTCOME_UNKNOWN (§6.3), y este test es del 500.
+        Object.assign(new Error('connection terminated'), { code: 'XX000' }),
       ),
     );
 

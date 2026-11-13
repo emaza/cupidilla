@@ -2,13 +2,14 @@ import { ERROR_CODES, FIELD_ISSUES, type ErrorCode, type FieldIssue } from '@cup
 import type { TextKey } from '#lib/texts.ts';
 
 /**
- * Códigos propios de la web; la API nunca los emite.
- * - `API_UNAVAILABLE`: la petición no llegó a la API (conexión rechazada) o la API respondió
- *   un 5xx sin cuerpo válido. Sabemos que no se hizo nada.
- * - `OUTCOME_UNKNOWN`: una escritura no idempotente (registro, borrado) se envió y no hubo
- *   respuesta (tiempo agotado o conexión cortada). No sabemos si se hizo.
+ * Código propio de la web, que la API nunca emite. `API_UNAVAILABLE`: la petición no llegó a la
+ * API (conexión rechazada) o la API respondió un 5xx sin cuerpo válido.
+ *
+ * `OUTCOME_UNKNOWN` es un código del contrato (la API lo emite si pierde la conexión con la base
+ * de datos durante una escritura), y la web lo usa también cuando una escritura no idempotente
+ * se envió y no hubo respuesta. En los dos casos no sabemos si se hizo.
  */
-export const WEB_ERROR_CODES = ['API_UNAVAILABLE', 'OUTCOME_UNKNOWN'] as const;
+export const WEB_ERROR_CODES = ['API_UNAVAILABLE'] as const;
 export type WebErrorCode = ErrorCode | (typeof WEB_ERROR_CODES)[number];
 
 /** Formularios de H0. Cada uno tiene sus propios textos de error (UX §5). */

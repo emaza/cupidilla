@@ -77,7 +77,7 @@ test('[QA-3] borrado incierto: el enlace a /cuenta es de la misma pestaña, sin 
 
   const link = page.locator('main > .resumen-errores a');
   await expect(link).toHaveCount(1);
-  await expect(link).toHaveText('Comprobar si mi cuenta sigue activa');
+  await expect(link).toHaveText('Ir a mi cuenta para comprobarlo');
   await expect(link).not.toHaveAttribute('target', /.+/);
   await expect(link).toHaveAttribute('data-sveltekit-reload', /.*/);
   // Pasar el ratón por encima no debe dejar datos de /cuenta precargados: se comprueba que, al

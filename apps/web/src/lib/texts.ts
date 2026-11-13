@@ -140,8 +140,8 @@ export const texts = {
   'eliminar.error.servidor':
     'Algo ha fallado por nuestra parte y no hemos podido eliminar tu cuenta. Tu cuenta sigue como estaba. Inténtalo de nuevo en unos minutos.',
   'eliminar.error.resultado_incierto':
-    'No sabemos si tu cuenta se ha eliminado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta. Si te lleva a la pantalla de entrada, la cuenta ya no existe. Si ves tu cuenta, sigue activa y puedes volver a intentarlo.',
-  'eliminar.enlace.comprobar': 'Comprobar si mi cuenta sigue activa',
+    'No sabemos si tu cuenta se ha eliminado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta. Si la ves, sigue activa y puedes volver a intentarlo. Si te pide entrar, entra con tu correo y tu contraseña: si entras, la cuenta sigue activa. Si no puedes entrar con la contraseña correcta, lo más probable es que se haya eliminado.',
+  'eliminar.enlace.comprobar': 'Ir a mi cuenta para comprobarlo',
 
   // 5.7 Errores de página
   'error404.titulo': 'No encontramos esta página',

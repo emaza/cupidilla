@@ -35,6 +35,26 @@ describe('toErrorResponse', () => {
     expect(toErrorResponse(wrapped).body.error.code).toBe('MALFORMED_REQUEST');
   });
 
+  it('conexión con la BD perdida en una petición que no es GET → 503 OUTCOME_UNKNOWN', () => {
+    const lost = new DrizzleQueryError('commit', [], new Error('Query read timeout'));
+    for (const method of ['POST', 'DELETE', 'PUT', 'PATCH']) {
+      expect(toErrorResponse(lost, method)).toEqual({
+        status: 503,
+        body: { error: { code: 'OUTCOME_UNKNOWN', message: 'Outcome unknown' } },
+      });
+    }
+    // Una lectura no cambia nada: sigue siendo un 500.
+    expect(toErrorResponse(lost, 'GET').status).toBe(500);
+    expect(toErrorResponse(lost).status).toBe(500);
+    // statement_timeout: lo cancela el servidor y deshace; no es incierto.
+    const canceled = new DrizzleQueryError(
+      'select',
+      [],
+      Object.assign(new Error('canceling statement'), { code: '57014' }),
+    );
+    expect(toErrorResponse(canceled, 'POST').body.error.code).toBe('INTERNAL_ERROR');
+  });
+
   it('todo lo demás es 500 INTERNAL_ERROR', () => {
     expect(toErrorResponse(new Error('boom'))).toEqual({
       status: 500,
@@ -87,7 +107,7 @@ describe('ApiExceptionFilter', () => {
     const json = vi.fn();
     const response = { headersSent: false, status: vi.fn(() => ({ json })) };
     const host = {
-      switchToHttp: () => ({ getResponse: () => response }),
+      switchToHttp: () => ({ getResponse: () => response, getRequest: () => ({ method: 'POST' }) }),
     } as unknown as ArgumentsHost;
     const filter = new ApiExceptionFilter();
     const logged = vi

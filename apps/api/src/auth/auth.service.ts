@@ -12,6 +12,7 @@ import { Clock } from '../common/clock.js';
 import { ApiException } from '../common/errors/api.exception.js';
 import { ConsentsService } from '../consents/consents.service.js';
 import { DB, type Database } from '../database/database.types.js';
+import { Transactions } from '../database/transactions.js';
 import { PasswordService } from '../users/password.service.js';
 import { UsersService } from '../users/users.service.js';
 import { SessionsService } from './sessions.service.js';
@@ -33,6 +34,7 @@ export class AuthService {
     private readonly passwords: PasswordService,
     private readonly consents: ConsentsService,
     private readonly sessions: SessionsService,
+    private readonly transactions: Transactions,
   ) {}
 
   async register(request: RegisterRequest): Promise<AuthResponse> {
@@ -55,7 +57,7 @@ export class AuthService {
 
     // El hash va fuera de la transacción: no la alarga y el tiempo no depende del correo.
     const passwordHash = await this.passwords.hash(request.password);
-    return this.db.transaction(async (tx) => {
+    return this.transactions.run(async (tx) => {
       const user = await this.users.create(tx, {
         email: request.email,
         passwordHash,

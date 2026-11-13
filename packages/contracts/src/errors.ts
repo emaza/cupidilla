@@ -14,6 +14,7 @@ export const ERROR_CODES = [
   'UNDERAGE', // 422
   'RATE_LIMITED', // 429  con cabecera Retry-After
   'INTERNAL_ERROR', // 500
+  'OUTCOME_UNKNOWN', // 503  se perdió la conexión con la BD durante una escritura: pudo hacerse o no
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ConsentsService } from '../src/consents/consents.service.js';
 import { isUniqueViolation } from '../src/database/pg-errors.js';
+import { Transactions } from '../src/database/transactions.js';
 import {
   createTestApp,
   registerUser,
@@ -37,7 +38,7 @@ describe('ConsentsService (I-18)', () => {
   it('revocar y volver a conceder conserva el histórico', async () => {
     const user = await registerUser(t.app);
     t.clock.advanceDays(1);
-    await t.db.transaction(async (tx) => {
+    await t.app.get(Transactions).run(async (tx) => {
       await service.revoke(tx, user.userId, 'service_use');
       await service.grant(tx, user.userId, 'service_use', '2026-12-nueva');
     });

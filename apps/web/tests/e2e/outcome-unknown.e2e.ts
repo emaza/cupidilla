@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { startApiProxy, type ApiProxy } from './helpers/api-proxy.ts';
-import { closeDb, rowsForEmail } from './helpers/db.ts';
+import { closeDb, revokeSessionsForEmail, rowsForEmail } from './helpers/db.ts';
 import { fillRegister, login, PASSWORD, uniqueEmail } from './helpers/forms.ts';
 import { startStack, type Stack } from './helpers/stack.ts';
 
@@ -15,8 +15,8 @@ const INCIERTO_REGISTRO =
   'No sabemos si tu cuenta se ha creado: se ha perdido la conexión antes de recibir la respuesta. Antes de volver a registrarte, prueba a entrar con este correo y esta contraseña. Si entras, la cuenta ya existe. Si no puedes entrar, pulsa «Crear cuenta» otra vez.';
 const COMPROBAR_ENTRADA = 'Probar a entrar con este correo (se abre en una pestaña nueva)';
 const INCIERTO_ELIMINAR =
-  'No sabemos si tu cuenta se ha eliminado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta. Si te lleva a la pantalla de entrada, la cuenta ya no existe. Si ves tu cuenta, sigue activa y puedes volver a intentarlo.';
-const COMPROBAR_CUENTA = 'Comprobar si mi cuenta sigue activa';
+  'No sabemos si tu cuenta se ha eliminado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta. Si la ves, sigue activa y puedes volver a intentarlo. Si te pide entrar, entra con tu correo y tu contraseña: si entras, la cuenta sigue activa. Si no puedes entrar con la contraseña correcta, lo más probable es que se haya eliminado.';
+const COMPROBAR_CUENTA = 'Ir a mi cuenta para comprobarlo';
 const SERVIDOR_ENTRAR =
   'Algo ha fallado por nuestra parte y no hemos podido iniciar tu sesión. Inténtalo de nuevo en unos minutos.';
 const SERVIDOR_SALIR =
@@ -277,6 +277,39 @@ test('C62, C63, C64: el borrado no llega a responder (tiempo agotado); comprobar
   await page.locator('main > .resumen-errores').getByRole('link').click();
   await expect(page).toHaveURL('/cuenta');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tu cuenta');
+
+  await context.close();
+});
+
+test('C62, C63: borrado incierto sin borrar y con la sesión revocada: /entrar no confirma nada y se puede entrar', async ({
+  browser,
+  javaScriptEnabled,
+}) => {
+  const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
+  const page = await context.newPage();
+  const email = await signedInOnDeletePage(page);
+  proxy.setFault(DELETION, 'hang');
+  const before = proxy.count(DELETION);
+
+  expect(await submitDeletion(page)).toBe(503);
+  const summary = page.locator('main > .resumen-errores');
+  await expect(summary).toContainText(INCIERTO_ELIMINAR);
+  // El texto no afirma que ir a /entrar signifique que la cuenta se borró.
+  await expect(page.locator('main')).not.toContainText('la cuenta ya no existe');
+  expect((await rowsForEmail(email)).users).toBe(1);
+
+  // La sesión caduca o se cierra con la cuenta activa.
+  expect(await revokeSessionsForEmail(email)).toBe(1);
+  await summary.getByRole('link', { name: COMPROBAR_CUENTA }).click();
+  await expect(page).toHaveURL(/\/entrar/);
+  await expect(page.locator('main')).not.toContainText('la cuenta ya no existe');
+
+  // Con el correo y la contraseña correctos se entra: la cuenta sigue activa.
+  await login(page, email);
+  await expect(page).toHaveURL('/cuenta');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tu cuenta');
+  await expect(page.locator('main')).toContainText(email);
+  expect(proxy.count(DELETION) - before).toBe(1); // sin reintento automático
 
   await context.close();
 });

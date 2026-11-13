@@ -591,6 +591,7 @@ export const ERROR_CODES = [
   'UNDERAGE',               // 422
   'RATE_LIMITED',           // 429  con cabecera Retry-After
   'INTERNAL_ERROR',         // 500
+  'OUTCOME_UNKNOWN',        // 503  se perdió la conexión con la BD durante una escritura: pudo hacerse o no
 ] as const;
 
 export const FIELD_ISSUES = [
@@ -598,10 +599,22 @@ export const FIELD_ISSUES = [
 ] as const;
 ```
 
-La web añade dos códigos propios que la API nunca emite (`WEB_ERROR_CODES` en `messages.ts`):
+**`OUTCOME_UNKNOWN` en la API** (503): en una petición que no es GET, la API perdió la conexión con PostgreSQL (o dejó de responder) con una sentencia ya enviada, así que no sabe si se hizo. Es el caso de un COMMIT del registro, o del DELETE con autocommit del borrado, cuya respuesta no llega. Lo decide `isConnectionLost` (`database/pg-errors.ts`) en `ApiExceptionFilter`:
+
+- Sí es incierto: `query_timeout` del cliente («Query read timeout»), «Connection terminated…», `ECONNRESET`, `EPIPE`, `ETIMEDOUT`, los códigos `57P01` y `57P02` y la clase `08` (`08xxx`). También dentro de un `DrizzleQueryError`.
+- No es incierto, y sigue en 500 `INTERNAL_ERROR`:
+  - los errores normales de la base de datos (unicidad, sintaxis…);
+  - un `statement_timeout` (`57014`), porque lo cancela el servidor y deshace la transacción;
+  - **cualquier error de la adquisición del cliente**, porque no se llegó a enviar nada: no conseguir conexión a tiempo, un rechazo al conectar (`ECONNREFUSED`, DNS), o un `57P01`, `57P03` o `08xxx` en el saludo. El pool de `createPool` envuelve su `connect` y marca esos errores (`markNotSent`), tanto en `Transactions.run` como en la conexión que abre el pool para un `query` suelto, así que la fase sí se distingue;
+  - `57P03` (cannot_connect_now) en cualquier caso, porque solo ocurre al conectar;
+  - `25P03` (idle in transaction) y un cliente que ya no admite consultas («is not queryable»): el servidor ya cerró la sesión y deshizo, y la sentencia no salió.
+- En un GET se responde siempre 500: una lectura no cambia nada.
+- Un `57P01` con el cliente ya conectado (PostgreSQL apagándose a mitad de una sentencia) sigue siendo incierto: no se puede saber si un COMMIT en marcha llegó a confirmarse. Es lo prudente.
+
+La web añade un código propio que la API nunca emite (`WEB_ERROR_CODES` en `messages.ts`), y usa además `OUTCOME_UNKNOWN` en un segundo caso:
 
 - `API_UNAVAILABLE`: la petición no llegó a la API (conexión rechazada), o la API respondió un 5xx sin cuerpo válido. Sabemos que no se hizo nada. Es también lo que dan las lecturas, `login` y `logout` ante cualquier fallo de red o tiempo agotado.
-- `OUTCOME_UNKNOWN` (HTTP 503 en la acción): una escritura no idempotente (registro, borrado de la cuenta) se envió y no llegó respuesta. No sabemos si la API la hizo. La web muestra `registro.error.resultado_incierto` o `eliminar.error.resultado_incierto` con su enlace de comprobación (UX §3.2, §3.5 y criterios 60 a 65), y nunca un texto que afirme que no se hizo nada.
+- `OUTCOME_UNKNOWN` (HTTP 503 en la acción): lo emite la API (arriba), o lo genera la web cuando una escritura no idempotente (registro, borrado de la cuenta) se envió y no llegó respuesta. No sabemos si se hizo. En `/entrar` y al cerrar sesión, `messages.ts` lo traduce a su texto de servidor (UX, criterio 65). La web muestra `registro.error.resultado_incierto` o `eliminar.error.resultado_incierto` con su enlace de comprobación (UX §3.2, §3.5 y criterios 60 a 65), y nunca un texto que afirme que no se hizo nada.
 
 `apps/web/src/lib/errors/messages.ts` es un `Record<ErrorCode | WebErrorCode, string>` y un mapa `(campo, issue) → texto`, en español. Un test comprueba que cubre **todos** los códigos. Los textos son los de la tabla de [UX §5](h0-diseno-ux.md#5-textos-de-interfaz), palabra por palabra (acuerdo A12).
 
@@ -631,7 +644,7 @@ El borrado es `POST .../deletion`, y no `DELETE` con cuerpo, porque la semántic
 
 | Módulo | Contiene | Depende de |
 |---|---|---|
-| `DatabaseModule` (global) | Proveedor `DB` (`NodePgDatabase<typeof schema>`) creado con un `pg.Pool` desde `DATABASE_URL` (ver «Límites de tiempo de la base de datos», abajo). Cierra el pool en `onApplicationShutdown`. Exporta los tipos `Database` y `Tx` | `ConfigService` |
+| `DatabaseModule` (global) | Proveedor `DB` (`NodePgDatabase<typeof schema>`) creado con un `pg.Pool` desde `DATABASE_URL` (ver «Límites de tiempo de la base de datos», abajo), y `Transactions` («Transacciones», abajo). Cierra el pool en `onApplicationShutdown`. Exporta los tipos `Database` y `Tx` | `ConfigService` |
 | `UsersModule` | `UsersService`: `create(tx, data)`, `findCredentialsByEmail`, `getAccount(userId)`, `deleteAccount(userId, password)`, `updatePasswordHash`. `PasswordService`: argon2id. Las credenciales son columnas de `users`, y por eso el hash vive aquí. `UsersController` | `DatabaseModule`, `ConsentsModule` (para `getAccount`) |
 | `ConsentsModule` | `ConsentsService`: `grant(tx, userId, purpose, version)`, `listForUser(userId)`, `revoke(tx, userId, purpose)` (sin endpoint en H0, pero con test) | `DatabaseModule` |
 | `AuthModule` | `AuthService` (registro, login, logout), `SessionsService` (crear, validar/renovar, revocar), `SessionGuard` registrado como `APP_GUARD`, `AuthController` | `UsersModule`, `ConsentsModule` |
@@ -649,7 +662,19 @@ El borrado es `POST .../deletion`, y no `DELETE` con cuerpo, porque la semántic
 
 El pool escucha su evento `error`: si un cliente inactivo pierde la conexión (por ejemplo, porque PostgreSQL se reinicia), el proceso no cae, y el `Logger` de Nest registra solo `{ event: 'pg_pool_error', code }`. El mensaje no se registra porque puede llevar la cadena de conexión (§8.9).
 
-Las transacciones las orquesta el servicio que coordina; los demás reciben el `tx`. Los métodos de escritura aceptan `db: Database | Tx` como primer argumento, y la transacción se abre con `this.db.transaction(async (tx) => ...)`.
+**Los límites son por operación, no por petición.** Una petición que hace varias consultas, o que espera conexión y después consulta, puede tardar en el peor caso más que los 5 s de la web. Entonces la web aborta y muestra «resultado incierto» en el registro y el borrado, o su error de servidor en lo demás. Es intencionado: cada límite corta una espera concreta y ninguna es infinita, y la web no afirma un resultado que no conoce. `idle_in_transaction_session_timeout` se queda en 10 s porque argon2 se calcula fuera de la transacción del registro: dentro solo hay tres INSERT.
+
+**Transacciones.** Las orquesta el servicio que coordina; los demás reciben el `tx`. Los métodos de escritura aceptan `db: Database | Tx` como primer argumento.
+- La transacción se abre con `Transactions.run(async (tx) => ...)` (`database/transactions.ts`, inyectable), **nunca** con `db.transaction` de Drizzle. En Drizzle 0.45.4, `transaction()` ejecuta BEGIN fuera del `try`: si falla, no libera el cliente y el pool se agota. Además devuelve al pool clientes rotos y deja que un fallo del ROLLBACK tape el error original.
+- Una regla de ESLint (`no-restricted-syntax` en `apps/api`) impide volver a usar `.transaction(`.
+- `Transactions.run`:
+  - obtiene un cliente con `pool.connect()` y crea `drizzle(client, { schema })` como `tx`; `Tx` es `Database`;
+  - ejecuta BEGIN, `fn` y COMMIT dentro de un `try`;
+  - con un error normal (por ejemplo, de unicidad) hace ROLLBACK y devuelve el cliente con `release()`;
+  - si `isConnectionLost(error)`, no intenta el ROLLBACK, que esperaría en vano a un servidor mudo, y descarta el cliente con `release(error)`; PostgreSQL deshace la transacción al ver la conexión cerrada;
+  - si el ROLLBACK falla, también descarta el cliente;
+  - el error que sale es siempre el original.
+- **Clientes prestados** (`withPoolClient`, en el mismo archivo; es el único sitio de `src` que llama a `pool.connect()`). El listener `error` del pool solo cubre los clientes libres. Mientras un cliente está prestado, `withPoolClient` le pone su propio listener: si PostgreSQL cierra la sesión entre dos sentencias (reinicio, `pg_terminate_backend`, 25P03), `pg` emite `error` en el cliente y sin listener la API moriría con una excepción no capturada (BUG-QA-9). El listener registra solo `{ event: 'pg_client_error', code }`, marca el cliente como roto (sin ROLLBACK) y se quita con `client.off` antes del `release(error)`, que lo descarta.
 
 `Clock` es un proveedor (`now(): Date`) que se sustituye en los tests. Toda comparación con «ahora» (edad, caducidad, `granted_at`) usa `Clock`, nunca `new Date()` directamente.
 
@@ -772,6 +797,7 @@ Todas las llamadas pasan por `#lib/server/api-client.ts`:
 - Añade `X-Internal-Api-Key`, `X-Client-Ip: event.getClientAddress()` y, si procede, `Authorization`.
 - Valida la respuesta con el esquema de `contracts`.
 - Devuelve `{ ok: true, data } | { ok: false, status, error: ApiError }`.
+- Un 503 `OUTCOME_UNKNOWN` de la API (§6.3) se devuelve tal cual, en cualquier petición. En el registro y el borrado se muestra «resultado incierto»; en `login` y `logout`, el texto de servidor.
 - **Nunca reintenta.** Si `fetch` falla, distingue por la causa (§6.3):
   - Antes de enviar (`error.cause.code` en `ECONNREFUSED`, `ENOTFOUND`, `EAI_AGAIN`, `EHOSTUNREACH`, `ENETUNREACH`, `EADDRNOTAVAIL` o `UND_ERR_CONNECT_TIMEOUT`, también dentro de un `AggregateError`) → `API_UNAVAILABLE`.
   - Cualquier otro fallo (tiempo agotado `TimeoutError`, conexión cortada tras enviar: `ECONNRESET`, `UND_ERR_SOCKET` «other side closed»…) → `OUTCOME_UNKNOWN`, **solo** si la petición lleva la opción `nonIdempotent`, que activan `register` y `deleteAccount`. En las demás (`login`, `logout`, los GET) sigue siendo `API_UNAVAILABLE`.
@@ -1172,6 +1198,8 @@ Tests: con `npm run db:up` hecho, `npm test`. La primera vez, `npm run e2e:insta
 - I-20. Ruta inexistente → 404 `NOT_FOUND` con la forma de §6.3.
 - I-21. **Logs**: se captura la salida del logger durante el registro (adulto y menor), el login fallido, la violación de unicidad y el borrado. Se comprueba que no aparecen la contraseña, el token, su hash, la fecha de nacimiento, el correo ni la clave interna. Además, las respuestas que cortan los guards y el *parser* (403 sin clave interna, 401 sin sesión, 429, 400 de JSON ilegible) y el 404 dejan su entrada de log, con la ruta declarada o `'(sin ruta)'` y nunca la URL real con su *query*.
 - I-22. **Límites de la base de datos** (§7.2): `select pg_sleep(2)` con un `statement_timeout` de 200 ms falla con `57014` y el pool sigue sirviendo; una transacción inactiva más que `idle_in_transaction_session_timeout` se aborta; `/health` con la base colgada responde 503 dentro del plazo de adquisición. El unitario del módulo comprueba que `query_timeout` es `statement_timeout` + 500, y `qa-db-hang.int.spec.ts` (BUG-QA-8), que una consulta sobre una conexión abierta cuya red deja de pasar datos falla en pocos segundos.
+- I-23. **Transacciones** (`transactions.int.spec.ts`, con el relé TCP de `test/helpers/tcp-relay.ts`): un BEGIN sin respuesta falla en el plazo de `query_timeout`; tras más BEGIN colgados que el máximo del pool, el pool sigue sirviendo, sin clientes prestados; un COMMIT cuya respuesta se pierde descarta el cliente (y la fila existe); un error normal y una violación de unicidad hacen ROLLBACK, no dejan nada y el cliente vuelve al pool.
+- I-24. **`OUTCOME_UNKNOWN`** (`outcome-unknown.int.spec.ts`, la app entera a través del relé): si se pierde la respuesta del COMMIT del registro, o la del DELETE del borrado, se responde 503 `OUTCOME_UNKNOWN` y la operación sí se hizo; después la API sigue funcionando; un `statement_timeout` (`57014`, tabla bloqueada por otra conexión) da 500 `INTERNAL_ERROR` y no deja nada. El clasificador `isConnectionLost` tiene su unitario (`pg-errors.spec.ts`).
 
 **Web (unitarios)**
 

@@ -54,6 +54,20 @@ export default defineConfig(
     rules: { 'no-console': 'error' },
   },
   {
+    // Las transacciones se abren con Transactions.run, nunca con db.transaction de Drizzle (§7.2).
+    files: ['apps/api/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression[callee.property.name='transaction']",
+          message:
+            'Usa Transactions.run (apps/api/src/database/transactions.ts), no db.transaction.',
+        },
+      ],
+    },
+  },
+  {
     // La web no toca la base de datos ni las contraseñas.
     files: ['apps/web/src/**'],
     rules: {

@@ -43,3 +43,19 @@ describe('createPool', () => {
     await pool.end();
   });
 });
+
+describe('createPool: errores de adquisición', () => {
+  it('un 57P01 al conectar (en connect() o en un query suelto) no es «resultado incierto»', async () => {
+    const { isConnectionLost } = await import('./pg-errors.js');
+    const pool = createPool(settings); // puerto 1: la conexión se rechaza
+    const fromConnect = await pool.connect().catch((error: unknown) => error);
+    const fromQuery = await pool.query('select 1').catch((error: unknown) => error);
+    for (const error of [fromConnect, fromQuery]) {
+      expect(error).toBeInstanceOf(Error);
+      // Aunque llevara un código de sesión terminada, viene de la adquisición: no se envió nada.
+      Object.assign(error as Error, { code: '57P01' });
+      expect(isConnectionLost(error)).toBe(false);
+    }
+    await pool.end();
+  });
+});

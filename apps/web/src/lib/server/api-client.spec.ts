@@ -13,7 +13,7 @@ vi.mock('$app/env/private', () => ({
 
 const { api } = await import('./api-client.ts');
 
-type Mode = 'silent' | 'close' | 'reset' | 'truncated' | 'off-schema';
+type Mode = 'silent' | 'close' | 'reset' | 'truncated' | 'off-schema' | 'api-outcome-unknown';
 
 /** Respuestas 201 que llegan pero no se pueden usar. */
 const BROKEN_201: Partial<Record<Mode, string>> = {
@@ -22,6 +22,9 @@ const BROKEN_201: Partial<Record<Mode, string>> = {
     'HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: 200\r\n\r\n{"user":{"id":',
   'off-schema':
     'HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: 16\r\nConnection: close\r\n\r\n{"inesperado":1}',
+  // No es un 201: es la API diciendo que perdió la conexión con la base de datos (§6.3).
+  'api-outcome-unknown':
+    'HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\nContent-Length: 64\r\nConnection: close\r\n\r\n{"error":{"code":"OUTCOME_UNKNOWN","message":"Outcome unknown"}}',
 };
 
 let mode: Mode = 'silent';
@@ -134,6 +137,17 @@ describe('api-client: resultado incierto (OUTCOME_UNKNOWN)', () => {
       expect(received).toBe(2);
     },
   );
+
+  it('un 503 OUTCOME_UNKNOWN de la API llega tal cual en registro, borrado y login', async () => {
+    target.url = serverUrl;
+    mode = 'api-outcome-unknown';
+    const expected = { ok: false, status: 503, error: { code: 'OUTCOME_UNKNOWN' } };
+    expect(await register()).toEqual(expected);
+    expect(await deleteAccount()).toEqual(expected);
+    // En login, messages.ts lo convierte en entrar.error.servidor (criterio 65).
+    expect(await login()).toEqual(expected);
+    expect(received).toBe(3);
+  });
 
   it.each<Mode>(['silent', 'close', 'reset'])(
     'una petición no marcada (login) sigue dando API_UNAVAILABLE (%s)',

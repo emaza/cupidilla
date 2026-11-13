@@ -28,6 +28,15 @@ export async function rowsForEmail(
   };
 }
 
+/** Revoca todas las sesiones de un correo (ya normalizado), como si hubieran caducado. */
+export async function revokeSessionsForEmail(email: string): Promise<number> {
+  const { rowCount } = await getPool().query(
+    'delete from sessions where user_id in (select id from users where email = $1)',
+    [email],
+  );
+  return rowCount ?? 0;
+}
+
 export async function closeDb(): Promise<void> {
   await pool?.end();
   pool = undefined;
