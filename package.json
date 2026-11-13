@@ -42,5 +42,8 @@
     "prettier-plugin-svelte": "4.1.1",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.2"
+  },
+  "overrides": {
+    "jose": "6.2.14"
   }
 }
