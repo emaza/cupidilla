@@ -112,3 +112,15 @@ describe('W-O2: errores de contraseña en /account (decisión 20)', () => {
     expect(at('account-step', 'error=password-incorrect')).toBeNull();
   });
 });
+
+describe('W-O2: valores que coinciden con propiedades heredadas (CodeRabbit)', () => {
+  it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty'])(
+    '«%s» en error o notice no muestra nada y no lanza',
+    (value) => {
+      for (const page of ['entry', 'account', 'account-step'] as const) {
+        expect(urlMessage(page, new URLSearchParams(`error=${value}&provider=google`))).toBeNull();
+        expect(urlMessage(page, new URLSearchParams(`notice=${value}&provider=google`))).toBeNull();
+      }
+    },
+  );
+});

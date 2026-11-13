@@ -39,7 +39,7 @@ export const load: PageServerLoad = async (event) => {
 
 type Errors = FormErrors<DeleteAccountField | 'confirmation'>;
 
-/** Lo común tras pedir el borrado a la API: éxito, sesión perdida o sesión envejecida. */
+/** Lo común tras pedir el borrado a la API: éxito o sesión perdida. */
 function afterDeletion(event: RequestEvent, result: ApiResult<void> | null): void {
   if (!result || (!result.ok && result.status === 401)) {
     // Sesión caducada o cuenta ya eliminada en otra pestaña: como sin sesión (UX §1.7).
@@ -52,10 +52,6 @@ function afterDeletion(event: RequestEvent, result: ApiResult<void> | null): voi
     event.locals.user = null;
     event.locals.sessionToken = null;
     redirect(303, '/?notice=account-deleted');
-  }
-  if (result.error.code === 'REAUTHENTICATION_REQUIRED') {
-    // La sesión envejeció entre cargar y enviar: nada se ha borrado (UX §3.5.2).
-    redirect(303, `${PAGE}?error=reauth-required`);
   }
 }
 

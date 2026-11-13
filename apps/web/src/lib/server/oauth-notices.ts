@@ -92,6 +92,14 @@ const LISTS: Record<MessagePage, { notice: Record<string, Entry>; error: Record<
     },
   };
 
+/**
+ * Entrada de la lista para un valor de la URL. Solo propiedades propias: `constructor`,
+ * `toString` o `__proto__` no son avisos y no deben llegar a `resolve`.
+ */
+function ownEntry(list: Record<string, Entry>, value: string | null): Entry | undefined {
+  return value !== null && Object.hasOwn(list, value) ? list[value] : undefined;
+}
+
 function resolve(entry: Entry | undefined, provider: string | null): string | null {
   if (!entry) return null;
   const text = texts[entry.key];
@@ -112,10 +120,10 @@ export function urlMessage(page: MessagePage, params: URLSearchParams): UrlMessa
   const list = LISTS[page];
   const provider = params.get('provider');
   const errorValue = params.get('error');
-  const errorText = errorValue === null ? null : resolve(list.error[errorValue], provider);
+  const errorText = resolve(ownEntry(list.error, errorValue), provider);
   if (errorText) return { kind: 'error', text: errorText };
   const noticeValue = params.get('notice');
-  const notice = noticeValue === null ? undefined : list.notice[noticeValue];
+  const notice = ownEntry(list.notice, noticeValue);
   const noticeText = resolve(notice, provider);
   if (!noticeText) return null;
   return { kind: notice?.success ? 'success' : 'notice', text: noticeText };

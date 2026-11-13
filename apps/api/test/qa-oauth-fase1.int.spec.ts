@@ -120,6 +120,8 @@ describe('QA fase 1: login con password_hash nulo', () => {
       .where(eq(sessions.tokenHash, hashOpaqueToken(response.body.session.token as string)));
     expect(row?.authenticatedAt.toISOString()).toBe('2026-11-11T11:30:00.000Z');
     expect(row?.createdAt.toISOString()).toBe('2026-11-11T11:30:00.000Z');
+    // La sesión es de esta persona, no solo una sesión con la fecha correcta.
+    expect(row?.userId).toBe(user.userId);
     const [after] = await t.db.select().from(users).where(eq(users.id, user.userId));
     expect(after?.passwordHash).toBe(before?.passwordHash);
 

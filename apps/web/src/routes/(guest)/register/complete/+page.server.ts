@@ -40,8 +40,11 @@ export const load: PageServerLoad = async (event) => {
       minutes: OAUTH_PENDING_TTL_MINUTES,
     };
   }
-  // Tras la pantalla de menor ya no hay estado: la página la pinta `form`.
-  if (event.request.method === 'POST') return { pending: null, minutes: OAUTH_PENDING_TTL_MINUTES };
+  // Tras la pantalla de menor, la acción ya borró la cookie: la página la pinta `form`. Con la
+  // cookie todavía puesta, el estado caducó o falló: como en cualquier visita.
+  if (event.request.method === 'POST' && !getOAuthToken(event.cookies)) {
+    return { pending: null, minutes: OAUTH_PENDING_TTL_MINUTES };
+  }
   if (state.status === 'missing') {
     clearOAuthToken(event.cookies);
     redirect(303, EXPIRED);
@@ -51,7 +54,17 @@ export const load: PageServerLoad = async (event) => {
 
 /** Con un menor no se crea nada y se borra en el acto lo recibido del proveedor (UX §3.2.2). */
 async function underage(event: RequestEvent, token: string, provider: OAuthProvider | null) {
-  await api.oauthCancelPending(event, token);
+  // La cancelación es idempotente: si falla, se reintenta una vez. Si vuelve a fallar, la fila
+  // caduca sola en 30 minutos y la borra la siguiente limpieza (técnico §4, R6).
+  const first = await api.oauthCancelPending(event, token);
+  if (!first.ok) {
+    const second = await api.oauthCancelPending(event, token);
+    if (!second.ok) {
+      console.error(
+        JSON.stringify({ event: 'oauth_pending_cancel_failed', code: second.error.code }),
+      );
+    }
+  }
   clearOAuthToken(event.cookies);
   return fail(422, { underage: true as const, provider });
 }

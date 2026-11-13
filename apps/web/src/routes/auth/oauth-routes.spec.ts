@@ -255,7 +255,7 @@ describe('W-O3: GET /auth/{provider}/callback', () => {
     [failure(400, 'OAUTH_FLOW_INVALID'), '/login?error=provider-expired'],
     [failure(400, 'VALIDATION_FAILED'), '/login?error=provider-expired'],
     [failure(429, 'RATE_LIMITED'), '/login?error=rate-limited'],
-    [failure(503, 'API_UNAVAILABLE'), '/login?error=provider-failed'],
+    [failure(503, 'API_UNAVAILABLE'), '/login?error=provider-failed&provider=google'],
   ])('error de la API → %j', async (response, location) => {
     api.oauthCallback.mockResolvedValue(response);
     const cookies = jar({ cupidilla_oauth: FLOW });
@@ -286,6 +286,31 @@ describe('/register/complete', () => {
         )
       ).location,
     ).toBe('/login/link');
+  });
+
+  it('load tras un POST: sin cookie (menor) no redirige; con cookie y estado caducado, provider-expired', async () => {
+    const afterUnderage = await run(() => complete.load(event({ method: 'POST' })));
+    expect(afterUnderage.response).toMatchObject({ pending: null });
+    api.oauthPending.mockResolvedValue(failure(400, 'OAUTH_FLOW_INVALID'));
+    const expired = await run(() =>
+      complete.load(event({ method: 'POST', cookies: jar({ cupidilla_oauth: PENDING }) })),
+    );
+    expect(expired.location).toBe('/login?error=provider-expired');
+  });
+
+  it('menor: si la cancelación falla, se reintenta una vez y la pantalla de menor sale igual', async () => {
+    api.oauthPending.mockResolvedValue(pendingLookup);
+    api.oauthCancelPending.mockResolvedValue(failure(503, 'API_UNAVAILABLE'));
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const cookies = jar({ cupidilla_oauth: PENDING });
+    const result = await run(() =>
+      complete.actions.signup(event({ cookies, form: { ...adult, year: '2015' } })),
+    );
+    expect(api.oauthCancelPending).toHaveBeenCalledTimes(2);
+    expect(result.response).toMatchObject({ status: 422, data: { underage: true } });
+    expect(cookies.values.has('cupidilla_oauth')).toBe(false);
+    expect(errorLog.mock.calls.join(' ')).not.toContain(PENDING);
+    errorLog.mockRestore();
   });
 
   it('alta correcta: cookie de sesión, borra cupidilla_oauth y va a returnPath o /account', async () => {
@@ -627,8 +652,6 @@ describe('/account: formas de entrar (fase 5)', () => {
     api.deleteAccount.mockResolvedValue({ ok: true, status: 204, data: undefined });
     expect((await confirm('  eliminar ')).location).toBe('/?notice=account-deleted');
     expect(api.deleteAccount).toHaveBeenCalledWith(expect.anything(), SESSION, {});
-    api.deleteAccount.mockResolvedValue(failure(403, 'REAUTHENTICATION_REQUIRED'));
-    expect((await confirm('ELIMINAR')).location).toBe('/account/delete?error=reauth-required');
     api.deleteAccount.mockResolvedValue(failure(503, 'OUTCOME_UNKNOWN'));
     expect((await confirm('ELIMINAR')).response).toMatchObject({
       data: { errors: { general: 'eliminar.error.resultado_incierto_proveedor' } },

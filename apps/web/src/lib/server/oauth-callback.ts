@@ -47,7 +47,11 @@ export function callbackOutcome(
     if (result.error.code === 'RATE_LIMITED') {
       return { kind: 'redirect', location: '/login?error=rate-limited' };
     }
-    return { kind: 'redirect', location: '/login?error=provider-failed' };
+    // El texto lleva el nombre del proveedor: sin `provider` no se mostraría.
+    return {
+      kind: 'redirect',
+      location: withMessage('/login', { error: 'provider-failed' }, provider),
+    };
   }
 
   const data = result.data;

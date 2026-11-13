@@ -13,7 +13,7 @@ import {
   type PendingIdentityResponse,
   type PendingToken,
 } from '@cupidilla/contracts';
-import { and, eq, gt, lte, sql } from 'drizzle-orm';
+import { and, eq, gt, lt, lte, sql } from 'drizzle-orm';
 import { SessionsService } from '../auth/sessions.service.js';
 import { Clock } from '../common/clock.js';
 import {
@@ -219,7 +219,15 @@ export class PendingIdentitiesService {
       const [updated] = await this.db
         .update(pendingIdentities)
         .set({ failedAttempts: sql`${pendingIdentities.failedAttempts} + 1` })
-        .where(and(eq(pendingIdentities.tokenHash, tokenHash), eq(pendingIdentities.kind, 'link')))
+        // Nunca por encima del tope: con dos fallos a la vez sobre el 4.º, el segundo no encuentra
+        // fila (ya vale 5 o está borrada) y da OAUTH_FLOW_INVALID en lugar de violar la CHECK.
+        .where(
+          and(
+            eq(pendingIdentities.tokenHash, tokenHash),
+            eq(pendingIdentities.kind, 'link'),
+            lt(pendingIdentities.failedAttempts, OAUTH_LINK_MAX_FAILURES),
+          ),
+        )
         .returning({ failedAttempts: pendingIdentities.failedAttempts });
       if (!updated) throw flowInvalid();
       if (updated.failedAttempts >= OAUTH_LINK_MAX_FAILURES) {

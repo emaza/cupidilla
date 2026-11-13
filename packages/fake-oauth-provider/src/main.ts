@@ -18,17 +18,29 @@ const redirectBase = env('OAUTH_REDIRECT_BASE_URL');
 // En `npm run oauth:fake`, el puerto y el host salen de OAUTH_FAKE_PROVIDER_URL del .env.
 const fakeUrl = process.env.OAUTH_FAKE_PROVIDER_URL;
 const fromUrl = fakeUrl && URL.canParse(fakeUrl) ? new URL(fakeUrl) : undefined;
+/**
+ * Credenciales de un proveedor, o unas ficticias si no está configurado: la API no lo usará
+ * (solo activa un proveedor con su pareja completa), y así basta con configurar uno.
+ */
+const credentials = (idName: string, secretName: string, fallbackId: string) => {
+  const id = process.env[idName];
+  const secret = process.env[secretName];
+  return id && secret ? { id, secret } : { id: fallbackId, secret: `no-configurado-${fallbackId}` };
+};
+const google = credentials('GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'google-no-configurado');
+const facebook = credentials('FACEBOOK_APP_ID', 'FACEBOOK_APP_SECRET', '0');
+
 const provider = await startFakeOAuthProvider({
   port: Number(env('FAKE_OAUTH_PORT', fromUrl?.port || '4400')),
   host: env('FAKE_OAUTH_HOST', fromUrl?.hostname || '127.0.0.1'),
   google: {
-    clientId: env('GOOGLE_CLIENT_ID'),
-    clientSecret: env('GOOGLE_CLIENT_SECRET'),
+    clientId: google.id,
+    clientSecret: google.secret,
     redirectUris: [`${redirectBase}/auth/google/callback`],
   },
   facebook: {
-    appId: env('FACEBOOK_APP_ID'),
-    appSecret: env('FACEBOOK_APP_SECRET'),
+    appId: facebook.id,
+    appSecret: facebook.secret,
     redirectUris: [`${redirectBase}/auth/facebook/callback`],
   },
 });

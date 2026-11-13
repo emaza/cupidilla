@@ -111,6 +111,21 @@ describe('Unión con una cuenta de correo y contraseña (fase 4)', () => {
     expect(await countRows(t.db, 'identities')).toBe(0);
   });
 
+  it('carrera en el 5.º fallo: con 4 acumulados, dos a la vez dan LINK_ATTEMPTS_EXCEEDED y OAUTH_FLOW_INVALID, sin 500', async () => {
+    const { account, token } = await pendingLink();
+    await t.db
+      .update(pendingIdentities)
+      .set({ failedAttempts: 4 })
+      .where(eq(pendingIdentities.tokenHash, hashOpaqueToken(token)));
+    const body = { pendingToken: token, email: account.email, password: 'contraseña-mala-x' };
+    const responses = await Promise.all([link(body), link(body)]);
+    expect(responses.map((r) => r.body.error.code).sort()).toEqual([
+      'LINK_ATTEMPTS_EXCEEDED',
+      'OAUTH_FLOW_INVALID',
+    ]);
+    expect(await countRows(t.db, 'pending_identities')).toBe(0);
+  });
+
   it('O-8: el cubo por correo es el de /auth/login: 3 logins y 2 uniones fallidas → el siguiente da 429', async () => {
     const { account, token } = await pendingLink();
     for (let attempt = 0; attempt < 3; attempt += 1) {
