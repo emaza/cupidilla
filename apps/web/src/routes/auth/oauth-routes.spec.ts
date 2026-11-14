@@ -10,7 +10,6 @@ const api = vi.hoisted(() => ({
   oauthLink: vi.fn(),
   oauthSessionStart: vi.fn(),
   removeIdentity: vi.fn(),
-  createPassword: vi.fn(),
   deleteAccount: vi.fn(),
   account: vi.fn(),
 }));
@@ -238,6 +237,22 @@ describe('W-O3: GET /auth/{provider}/callback', () => {
       { result: 'failed', reason: 'email_unverified', entryPoint: 'login', returnPath: null },
       '/login?error=email-unverified&provider=google',
     ],
+    [
+      'failed connect_refused',
+      {
+        result: 'failed',
+        reason: 'connect_refused',
+        entryPoint: 'account',
+        returnPath: '/account',
+      },
+      '/account?error=connect-refused&provider=google',
+    ],
+    [
+      'failed email_missing desde /account',
+      { result: 'failed', reason: 'email_missing', entryPoint: 'account', returnPath: '/account' },
+      '/account?error=email-missing&provider=google',
+    ],
+    ['password_created', { result: 'password_created' }, '/account?notice=password-created'],
   ])('%s → %s', async (_case, data, location) => {
     api.oauthCallback.mockResolvedValue(ok(data));
     const cookies = jar({ cupidilla_oauth: FLOW });
@@ -249,6 +264,52 @@ describe('W-O3: GET /auth/{provider}/callback', () => {
     expect(cookies.values.get('cupidilla_session')).toBe(
       _case.startsWith('signed_in') ? SESSION : undefined,
     );
+  });
+
+  it('connect_confirmed → al proveedor nuevo con el flujo siguiente en la cookie (decisión 21)', async () => {
+    const NEXT = 'N'.repeat(43);
+    api.oauthCallback.mockResolvedValue(
+      ok({
+        result: 'connect_confirmed',
+        next: {
+          authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth?state=s',
+          flowToken: NEXT,
+          expiresAt: EXPIRES,
+        },
+      }),
+    );
+    const cookies = jar({ cupidilla_oauth: FLOW });
+    const result = await run(() =>
+      back.GET(
+        event<Parameters<typeof back.GET>[0]>({
+          url: 'http://localhost/auth/facebook/callback?code=x&state=s',
+          cookies,
+          method: 'GET',
+          user: { id: 'u' },
+        }),
+      ),
+    );
+    expect(result.status).toBe(303);
+    expect(result.location).toBe('https://accounts.google.com/o/oauth2/v2/auth?state=s');
+    expect(result.response?.headers?.get('cache-control')).toBe('no-store');
+    expect(cookies.values.get('cupidilla_oauth')).toBe(NEXT);
+  });
+
+  it('flujo caducado con sesión → /account?error=confirm-expired (decisión 21)', async () => {
+    api.oauthCallback.mockResolvedValue(failure(400, 'OAUTH_FLOW_INVALID'));
+    const cookies = jar({ cupidilla_oauth: FLOW });
+    const result = await run(() =>
+      back.GET(
+        event<Parameters<typeof back.GET>[0]>({
+          url: 'http://localhost/auth/google/callback?code=x&state=s',
+          cookies,
+          method: 'GET',
+          user: { id: 'u' },
+        }),
+      ),
+    );
+    expect(result.location).toBe('/account?error=confirm-expired&provider=google');
+    expect(cookies.values.has('cupidilla_oauth')).toBe(false);
   });
 
   it.each([
@@ -511,7 +572,7 @@ describe('/account: formas de entrar (fase 5)', () => {
     expect(cookies.values.get('cupidilla_oauth')).toBe(FLOW);
   });
 
-  it('desde /account sin sesión → /login?next; con la sesión envejecida → reauth-required', async () => {
+  it('desde /account sin sesión → /login?next; un intent desconocido → 400', async () => {
     expect(
       (
         await run(() =>
@@ -521,19 +582,6 @@ describe('/account: formas de entrar (fase 5)', () => {
         )
       ).location,
     ).toBe('/login?next=/account/delete');
-    api.oauthSessionStart.mockResolvedValue(failure(403, 'REAUTHENTICATION_REQUIRED'));
-    expect(
-      (
-        await run(() =>
-          start.POST(
-            event({
-              user: signedIn,
-              form: { from: 'account', intent: 'connect', next: '/account' },
-            }),
-          ),
-        )
-      ).location,
-    ).toBe('/account?error=reauth-required');
     await expect(
       start.POST(event({ user: signedIn, form: { from: 'account', intent: 'otra' } })),
     ).rejects.toMatchObject({ status: 400 });
@@ -619,25 +667,49 @@ describe('/account: formas de entrar (fase 5)', () => {
     });
   });
 
-  it('crear contraseña: validación local, éxito, sesión envejecida y ya creada', async () => {
-    const create = (password: string) =>
-      run(() => passwordPage.actions.create(event({ user: signedIn, form: { password } })));
+  it('crear contraseña (decisión 21): validación local, va al proveedor unido, ya creada', async () => {
+    const cookies = jar();
+    const create = (password: string, provider = 'google') =>
+      run(() =>
+        passwordPage.actions.create(
+          event({ cookies, user: signedIn, form: { password, provider } }),
+        ),
+      );
     expect((await create('corta')).response).toMatchObject({
       status: 400,
       data: { errors: { password: 'registro.error.contrasena_corta' } },
     });
-    expect(api.createPassword).not.toHaveBeenCalled();
-    api.createPassword.mockResolvedValue({ ok: true, status: 204, data: undefined });
-    expect((await create('una frase larga')).location).toBe('/account?notice=password-created');
-    api.createPassword.mockResolvedValue(failure(403, 'REAUTHENTICATION_REQUIRED'));
-    expect((await create('una frase larga')).location).toBe(
-      '/account/password?error=reauth-required',
+    expect(api.oauthSessionStart).not.toHaveBeenCalled();
+    await expect(
+      passwordPage.actions.create(
+        event({ user: signedIn, form: { password: 'una frase larga', provider: 'x' } }),
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+
+    api.oauthSessionStart.mockResolvedValue(
+      ok(
+        { authorizationUrl: 'https://accounts.google.com/x', flowToken: FLOW, expiresAt: EXPIRES },
+        201,
+      ),
     );
-    api.createPassword.mockResolvedValue(failure(409, 'PASSWORD_ALREADY_SET'));
+    expect((await create('una frase larga')).location).toBe('https://accounts.google.com/x');
+    expect(api.oauthSessionStart).toHaveBeenLastCalledWith(expect.anything(), SESSION, 'google', {
+      purpose: 'create_password',
+      password: 'una frase larga',
+      returnPath: '/account/password',
+    });
+    expect(cookies.values.get('cupidilla_oauth')).toBe(FLOW);
+
+    api.oauthSessionStart.mockResolvedValue(failure(409, 'PASSWORD_ALREADY_SET'));
     expect((await create('una frase larga')).location).toBe('/account');
-    api.createPassword.mockResolvedValue(failure(503, 'OUTCOME_UNKNOWN'));
+    api.oauthSessionStart.mockResolvedValue(failure(429, 'RATE_LIMITED'));
     expect((await create('una frase larga')).response).toMatchObject({
-      data: { errors: { general: 'contrasena.error.resultado_incierto' } },
+      status: 429,
+      data: { errors: { general: 'comun.error.limite' } },
+    });
+    api.oauthSessionStart.mockResolvedValue(failure(503, 'API_UNAVAILABLE'));
+    expect((await create('una frase larga')).response).toMatchObject({
+      data: { errors: { general: 'contrasena.error.servidor' } },
     });
   });
 

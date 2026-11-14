@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, index, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { users } from './users.js';
 
 /** Identidad de un proveedor unida a una cuenta (§5.2). No se guarda ningún token del proveedor. */
@@ -23,6 +23,9 @@ export const identities = pgTable(
     unique('identities_provider_subject_unique').on(t.provider, t.subject),
     // Su columna inicial (user_id) cubre también el borrado en cascada: no hace falta otro índice.
     unique('identities_user_provider_unique').on(t.userId, t.provider),
+    // Búsqueda por correo de proveedor (R7, R7b, `connect`): con la misma expresión que las
+    // consultas, para que la use el planificador.
+    index('identities_provider_email_normalized_idx').on(sql`lower(btrim(${t.providerEmail}))`),
     check('identities_provider_known', sql`${t.provider} in ('google', 'facebook')`),
     check('identities_subject_length', sql`char_length(${t.subject}) between 1 and 255`),
   ],

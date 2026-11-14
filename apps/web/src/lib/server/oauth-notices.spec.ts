@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { urlMessage } from './oauth-notices.ts';
+import type { SignInMethodsView } from './account-view.ts';
+import { connectMessages, urlMessage } from './oauth-notices.ts';
 
 const message = (query: string) => urlMessage('entry', new URLSearchParams(query));
 
@@ -83,17 +84,36 @@ describe('W-O2: /account, /account/password y /account/delete (técnico §11.4)'
     expect(at('account-step', 'notice=reauthenticated')?.kind).toBe('success');
   });
 
-  it('reauth-required lleva los minutos de la sesión reciente', () => {
-    expect(at('account-step', 'error=reauth-required')).toEqual({
+  it('reauth-required ya no existe (decisión 21)', () => {
+    expect(at('account-step', 'error=reauth-required')).toBeNull();
+    expect(at('account', 'error=reauth-required')).toBeNull();
+  });
+
+  it('/account resuelve email-missing, email-unverified, connect-refused y confirm-expired (decisión 21)', () => {
+    expect(at('account', 'error=email-missing&provider=facebook')).toMatchObject({
       kind: 'error',
-      text: 'Han pasado más de 10 minutos desde que entraste. Confirma que eres tú para continuar. No hemos hecho ningún cambio.',
+      text: expect.stringMatching(/^Facebook no nos ha enviado tu correo/),
     });
+    expect(at('account', 'error=email-unverified&provider=google')).toMatchObject({
+      kind: 'error',
+      text: expect.stringMatching(/^El correo de tu cuenta de Google todavía no está verificado/),
+    });
+    expect(at('account', 'error=connect-refused&provider=google')).toEqual({
+      kind: 'error',
+      text: 'No hemos podido unir esta cuenta de Google a la tuya. No hemos hecho ningún cambio. Prueba con otra cuenta de Google o sigue entrando como hasta ahora.',
+    });
+    expect(at('account', 'error=confirm-expired&provider=facebook')?.text).toMatch(
+      /Vuelve a confirmar con Facebook\.$/,
+    );
+    // Todos llevan {proveedor}: sin él no se muestra nada.
+    expect(at('account', 'error=connect-refused')).toBeNull();
   });
 
   it('cada página solo acepta su lista', () => {
     expect(at('account-step', 'error=last-method&provider=google')).toBeNull();
     expect(at('account-step', 'notice=password-created')).toBeNull();
-    expect(at('account', 'error=email-missing&provider=google')).toBeNull();
+    expect(at('account-step', 'error=email-missing&provider=google')).toBeNull();
+    expect(at('account', 'error=link-limit')).toBeNull();
     expect(at('account', 'error=last-method&provider=facebook')?.text).toBe(
       'No hemos quitado Facebook porque es la única forma que tienes de entrar.',
     );
@@ -123,4 +143,61 @@ describe('W-O2: valores que coinciden con propiedades heredadas (CodeRabbit)', (
       }
     },
   );
+});
+
+describe('/account sin contraseña: el resultado de añadir va al panel (decisión 21)', () => {
+  const signIn = (overrides: Partial<SignInMethodsView> = {}): SignInMethodsView => ({
+    hasPassword: false,
+    linked: [{ provider: 'facebook', linkedOn: null, lastUsedOn: null }],
+    addable: ['google'],
+    methods: 1,
+    confirmWith: 'facebook',
+    ...overrides,
+  });
+  const at = (query: string, view = signIn()) => connectMessages(view, new URLSearchParams(query));
+
+  it('un error del proveedor nuevo o del que confirma abre el panel del que se añade', () => {
+    expect(at('error=connect-refused&provider=google')).toEqual({
+      message: null,
+      connect: {
+        provider: 'google',
+        message: {
+          kind: 'error',
+          text: 'No hemos podido unir esta cuenta de Google a la tuya. No hemos hecho ningún cambio. Prueba con otra cuenta de Google o sigue entrando como hasta ahora.',
+        },
+      },
+    });
+    expect(at('error=identity-mismatch&provider=facebook').connect?.provider).toBe('google');
+    expect(at('notice=provider-cancelled&provider=facebook').connect?.message.kind).toBe('notice');
+  });
+
+  it('«caducada» nombra al proveedor que confirma, aunque la URL traiga el nuevo', () => {
+    expect(at('error=confirm-expired&provider=google').connect?.message.text).toMatch(
+      /Vuelve a confirmar con Facebook\.$/,
+    );
+  });
+
+  it('el éxito usa cuenta.confirmar.exito con el proveedor añadido, arriba', () => {
+    expect(at('notice=linked&provider=google', signIn({ addable: [] }))).toEqual({
+      message: {
+        kind: 'success',
+        text: 'Hemos añadido Google. Ya puedes entrar con cualquiera de tus formas de entrar.',
+      },
+      connect: null,
+    });
+  });
+
+  it('con contraseña, o con un aviso que no es de añadir, todo va arriba como siempre', () => {
+    expect(
+      at('error=connect-refused&provider=google', signIn({ hasPassword: true })),
+    ).toMatchObject({ message: { kind: 'error' }, connect: null });
+    expect(at('notice=linked&provider=google', signIn({ hasPassword: true })).message?.text).toBe(
+      'Hemos unido Google a tu cuenta. Ya puedes entrar con cualquiera de tus formas de entrar.',
+    );
+    expect(at('error=last-method&provider=facebook')).toMatchObject({
+      message: { kind: 'error' },
+      connect: null,
+    });
+    expect(at('')).toEqual({ message: null, connect: null });
+  });
 });

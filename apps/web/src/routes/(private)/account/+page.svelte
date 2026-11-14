@@ -2,7 +2,7 @@
   import { resolve } from '$app/paths';
   import { enhance } from '$app/forms';
   import type { OAuthProvider } from '@cupidilla/contracts';
-  import ConfirmIdentity from '#lib/components/ConfirmIdentity.svelte';
+  import ConfirmConnect from '#lib/components/ConfirmConnect.svelte';
   import ErrorSummary from '#lib/components/ErrorSummary.svelte';
   import FieldError from '#lib/components/FieldError.svelte';
   import ProviderButtons from '#lib/components/ProviderButtons.svelte';
@@ -30,7 +30,10 @@
     form && 'removeError' in form && form.removeError ? form.removeError : undefined,
   );
   const hasErrors = $derived(
-    general !== undefined || removeError !== undefined || data.message?.kind === 'error',
+    general !== undefined ||
+      removeError !== undefined ||
+      data.message?.kind === 'error' ||
+      data.connect?.message.kind === 'error',
   );
   const signIn = $derived(data.signIn);
   /** Proveedor en curso de quitar (solo con JavaScript). */
@@ -189,8 +192,8 @@
             <span class="access-name">{NAMES[provider]}</span>
             <span class="access-state">{t('cuenta.acceso.estado_no_unido')}</span>
           </div>
-          <!-- Con contraseña, siempre y escribiéndola; sin ella, solo con sesión reciente
-               (decisión 20, UX §3.5.1). -->
+          <!-- Con contraseña, escribiéndola (decisión 20); sin ella, confirmando antes con un
+               proveedor unido (decisión 21). -->
           {#if signIn.hasPassword}
             <ProviderButtons
               providers={[provider]}
@@ -199,26 +202,17 @@
               next="/account"
               withPassword
             />
-          {:else if signIn.recent}
-            <ProviderButtons
-              providers={[provider]}
-              from="account"
-              intent="connect"
-              next="/account"
+          {:else if signIn.confirmWith}
+            <ConfirmConnect
+              {provider}
+              confirmWith={signIn.confirmWith}
+              message={data.connect?.provider === provider ? data.connect.message : null}
             />
           {/if}
         </li>
       {/each}
     </ul>
     <p class="help">{t('cuenta.acceso.nota')}</p>
-
-    {#if !signIn.hasPassword && !signIn.recent && signIn.addable.length > 0}
-      <ConfirmIdentity
-        action="verificar.accion.anadir"
-        providers={signIn.linked.map((item) => item.provider)}
-        next="/account"
-      />
-    {/if}
   </section>
 {/if}
 

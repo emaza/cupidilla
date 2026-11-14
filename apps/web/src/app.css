@@ -672,6 +672,7 @@ input[aria-invalid='true'] {
 @media (min-width: 48em) {
   .access-row {
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
   }
@@ -726,7 +727,17 @@ input[aria-invalid='true'] {
   font-size: var(--texto-pequeno);
 }
 
-.confirm-identity {
+/* Panel «Confirma que eres tú» al añadir un proveedor sin contraseña (decisión 21): bajo la fila,
+   a todo el ancho. */
+.connect-form-open {
+  flex: 1 1 100%;
+}
+
+.connect-form .provider-buttons {
+  margin-bottom: 0;
+}
+
+.confirm-panel {
   border-top: var(--borde-fino) solid var(--color-borde-suave);
   padding-top: var(--espacio-4);
 }

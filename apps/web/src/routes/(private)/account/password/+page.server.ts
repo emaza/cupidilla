@@ -1,10 +1,11 @@
-import { createPasswordRequestSchema } from '@cupidilla/contracts';
+import { oauthSessionStartRequestSchema } from '@cupidilla/contracts';
 import { error, fail, redirect } from '@sveltejs/kit';
 import { fieldMessages } from '#lib/errors/messages.ts';
 import { firstIssueByField, textField } from '#lib/forms/form-data.ts';
 import { signInMethodsView } from '#lib/server/account-view.ts';
 import { api } from '#lib/server/api-client.ts';
-import { urlMessage } from '#lib/server/oauth-notices.ts';
+import { setOAuthToken } from '#lib/server/oauth-cookie.ts';
+import { isProvider, urlMessage } from '#lib/server/oauth-notices.ts';
 import { clearSessionCookie } from '#lib/server/session-cookie.ts';
 import type { TextKey } from '#lib/texts.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -35,9 +36,19 @@ interface CreateErrors {
 }
 
 export const actions = {
+  /**
+   * Crear la contraseña (decisión 21): la API la cifra y la guarda en la fila de una
+   * reautenticación con el proveedor unido; se crea al volver de él. Formulario nativo: acaba en
+   * un 303 a otro origen.
+   */
   create: async (event) => {
-    const parsed = createPasswordRequestSchema.safeParse({
-      password: textField(await event.request.formData(), 'password'),
+    const data = await event.request.formData();
+    const provider = textField(data, 'provider');
+    if (!isProvider(provider)) error(400, 'Invalid provider');
+    const parsed = oauthSessionStartRequestSchema.safeParse({
+      purpose: 'create_password',
+      password: textField(data, 'password'),
+      returnPath: PAGE,
     });
     if (!parsed.success) {
       const issue = firstIssueByField(parsed.error.issues).get('password') ?? 'invalid';
@@ -47,20 +58,24 @@ export const actions = {
     const token = event.locals.sessionToken;
     if (!token) redirect(303, `/login?next=${PAGE}`);
 
-    const result = await api.createPassword(event, token, parsed.data);
-    if (result.ok) redirect(303, '/account?notice=password-created');
+    const result = await api.oauthSessionStart(event, token, provider, parsed.data);
+    if (result.ok) {
+      setOAuthToken(event.cookies, result.data.flowToken, result.data.expiresAt);
+      // La URL la construye la API con endpoints de configuración, nunca con la petición (§12.2).
+      redirect(303, result.data.authorizationUrl, { external: true });
+    }
     const fail_ = (status: number, errors: CreateErrors) => fail(status, { errors });
     switch (result.error.code) {
       case 'UNAUTHENTICATED':
         clearSessionCookie(event.cookies);
         redirect(303, `/login?next=${PAGE}`);
         break;
-      case 'REAUTHENTICATION_REQUIRED':
-        // La sesión envejeció mientras se escribía: nada se ha hecho (UX §3.5.2).
-        redirect(303, `${PAGE}?error=reauth-required`);
-        break;
       case 'PASSWORD_ALREADY_SET':
         redirect(303, '/account');
+        break;
+      case 'NOT_FOUND':
+        // El proveedor ya no está unido (otra pestaña): la página muestra el estado actual.
+        redirect(303, PAGE);
         break;
       case 'VALIDATION_FAILED': {
         const issue = result.error.fields?.find((field) => field.path === 'password')?.issue;
@@ -69,8 +84,6 @@ export const actions = {
       }
       case 'RATE_LIMITED':
         return fail_(429, { general: 'comun.error.limite' });
-      case 'OUTCOME_UNKNOWN':
-        return fail_(503, { general: 'contrasena.error.resultado_incierto' });
     }
     return fail_(result.status, { general: 'contrasena.error.servidor' });
   },

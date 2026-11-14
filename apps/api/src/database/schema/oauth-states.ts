@@ -23,6 +23,12 @@ export const oauthStates = pgTable(
     // En Facebook se genera igual y no se usa.
     nonce: text('nonce').notNull(),
     returnPath: text('return_path'),
+    // Decisión 21. En una reautenticación, el proveedor que se añade al volver de ella (cuenta sin
+    // contraseña): la vuelta crea la fila `connect` de ese proveedor.
+    connectProvider: text('connect_provider', { enum: ['google', 'facebook'] }),
+    // Decisión 21. En una reautenticación, el hash argon2id de la contraseña que se crea al volver
+    // de ella (cuenta sin contraseña). Es el mismo dato que luego vive en `users`.
+    newPasswordHash: text('new_password_hash'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   },
@@ -36,6 +42,20 @@ export const oauthStates = pgTable(
     ),
     check('oauth_states_entry_point_known', sql`${t.entryPoint} in ('login', 'register')`),
     check('oauth_states_return_path_length', sql`char_length(${t.returnPath}) <= 64`),
+    check(
+      'oauth_states_connect_provider_known',
+      sql`${t.connectProvider} in ('google', 'facebook')`,
+    ),
+    // Solo en una reautenticación y con otro proveedor: el que se añade no confirma nada.
+    check(
+      'oauth_states_connect_provider_shape',
+      sql`${t.connectProvider} is null or (${t.purpose} = 'reauthenticate' and ${t.connectProvider} <> ${t.provider})`,
+    ),
+    // Solo en una reautenticación, y nunca a la vez que un proveedor que añadir.
+    check(
+      'oauth_states_new_password_hash_shape',
+      sql`${t.newPasswordHash} is null or (${t.purpose} = 'reauthenticate' and ${t.connectProvider} is null)`,
+    ),
     // sign_in lleva pantalla de origen y ninguna sesión; los demás, sesión y ninguna pantalla.
     // Son dos igualdades: la forma `(purpose = 'sign_in') = (entry_point is not null and
     // session_token_hash is null)` de §5.3 admitiría reauthenticate y connect sin sesión.

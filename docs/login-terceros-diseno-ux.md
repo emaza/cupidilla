@@ -20,7 +20,7 @@ Principios (añaden a los de H0):
 3. **Sin sorpresas con el correo.** El correo del proveedor se muestra, no se edita y no se pide otra vez.
 4. **Salida siempre a la vista.** Toda pantalla intermedia tiene «Cancelar».
 5. **Nunca sin forma de entrar.** La interfaz y el servidor impiden quitar la última.
-6. **Los cambios se confirman** (decisión 20). Con contraseña, se escribe en el mismo formulario para añadir o quitar un proveedor y para borrar la cuenta. Sin contraseña, crear una contraseña y añadir un proveedor exigen haber entrado hace menos de 10 minutos; si no, un paso claro de «Confirma que eres tú» (§3.5.2). Quien acaba de entrar no ve ningún paso de más. Sin contraseña, quitar un proveedor no pide nada y borrar pide escribir ELIMINAR.
+6. **Los cambios se confirman** (decisión 20). Con contraseña, se escribe en el mismo formulario para añadir o quitar un proveedor y para borrar la cuenta. Sin contraseña (decisión 21), crear una contraseña y añadir un proveedor se confirman siempre con un proveedor ya unido, sea cual sea la antigüedad de la sesión (§3.5.2); no hay regla de tiempo. Sin contraseña, quitar un proveedor no pide nada y borrar pide escribir ELIMINAR.
 
 ## 1. Flujos
 
@@ -52,18 +52,14 @@ flowchart TD
     AC["/account"] -->|Quitar proveedor, queda otra forma; con contraseña, escribiéndola| AC
     AC -->|Añadir proveedor| R0{"¿Tiene contraseña?"}
     R0 -->|Sí, escrita en el formulario| PR
-    R0 -->|No| R1{"¿Sesión de menos de 10 min?"}
+    R0 -->|No| V["Panel 'Confirma que eres tú'"]
     AC -->|Crear contraseña| PW["/account/password"]
     AC -->|Eliminar mi cuenta| DL["/account/delete"]
-    R1 -->|Sí| PR["Pantalla del proveedor"] --> AC
-    R1 -->|No| V["Bloque 'Confirma que eres tú'"]
-    PW --> R2{"¿Sesión reciente?"}
-    R2 -->|Sí| F["Formulario: contraseña nueva"] --> AC
-    R2 -->|No| V
+    V -->|Proveedor ya unido, y al volver el nuevo| PR["Pantalla del proveedor"] --> AC
+    PW -->|Contraseña escrita; confirma con un proveedor unido| V2["Proveedor ya unido"] --> AC
     DL --> R3{"¿Tiene contraseña?"}
     R3 -->|Sí| H0["Contraseña (H0)"]
     R3 -->|No| E["Escribir ELIMINAR"]
-    V -->|Proveedor: vuelve a la misma pantalla| R1
 ```
 
 ### 1.2 Entrada con proveedor (cuenta ya unida)
@@ -183,7 +179,7 @@ Consultadas el 13 de noviembre de 2026: [Google](https://developers.google.com/i
 | Pedir solo los permisos necesarios | `public_profile` (implícito) y `email`; sin revisión de la app |
 | Ofrecer cerrar sesión, desvincular o eliminar la cuenta | Cerrar sesión, quitar (§3.5) y eliminar (§3.6) |
 
-Hover y pulsado: capa del 8 % y 12 % de `#1F1F1F`. Foco: anillo de H0 (3 px, `--color-foco`, margen 2 px) por fuera del borde de marca. Los botones de marca también se usan en `/account` y `/account/password` para añadir o reautenticar (§3.5).
+Hover y pulsado: capa del 8 % y 12 % de `#1F1F1F`. Foco: anillo de H0 (3 px, `--color-foco`, margen 2 px) por fuera del borde de marca. Los botones de marca también se usan en `/account` para añadir un proveedor (§3.5.1).
 
 #### 3.1.3 Estados
 
@@ -320,9 +316,9 @@ Reglas:
    <ul>
      Correo y contraseña   No tienes contraseña                 Crear contraseña  (enlace a /account/password)
      Google                Unido el 13 de noviembre de 2026     [ Quitar Google ]
-     Facebook              No unido                             [ f  Continuar con Facebook ]   (con contraseña: siempre, tras su campo; sin ella: con sesión reciente)
+     Facebook              No unido                             [ f  Continuar con Facebook ]   (con contraseña: tras su campo; sin ella: abre el panel de confirmar)
    Si quitas una forma de entrar no se borra tu cuenta, ni tu cuenta en ese servicio. Siempre debe quedarte al menos una.
-   [bloque «Confirma que eres tú», solo con sesión antigua y algo que añadir]
+   [panel «Confirma que eres tú», al pulsar un proveedor no unido en una cuenta sin contraseña]
 <section> <h2> Cupidilla ...
 <section> <h2> Sesión
 <section> <h2> Eliminar tu cuenta
@@ -334,7 +330,7 @@ Va entre «Tus datos» y «Cupidilla». Lista `<ul>`, una fila por forma, con no
 |---|---|
 | Correo y contraseña | «Activa» si hay contraseña; «No tienes contraseña» y el enlace «Crear contraseña» si no la hay |
 | Proveedor unido | «Unido el {fecha}» (en español) y «Quitar {proveedor}». Con contraseña en la cuenta, el formulario lleva antes el campo `cuenta.acceso.campo_quitar` |
-| Proveedor no unido | «No unido» y el botón de marca para añadirlo: con contraseña en la cuenta, siempre, con el campo `cuenta.acceso.campo_anadir` antes del botón; sin contraseña, solo con sesión reciente |
+| Proveedor no unido | «No unido» y el botón de marca para añadirlo: con contraseña en la cuenta, siempre, con el campo `cuenta.acceso.campo_anadir` antes del botón; sin contraseña, el botón abre el panel «Confirma que eres tú» (§3.5.2) |
 
 **Desvincular: sí, con un límite estricto: nunca puede quedar la cuenta sin forma de entrar.**
 
@@ -346,36 +342,66 @@ Va entre «Tus datos» y «Cupidilla». Lista `<ul>`, una fila por forma, con no
 
 #### 3.5.1 Añadir un proveedor
 
-- **Con contraseña en la cuenta**, se muestra siempre, con el campo `cuenta.acceso.campo_anadir` antes del botón en el mismo formulario. Vacía: `?error=password-required` → `cuenta.error.contrasena_vacia`; errónea: `?error=password-incorrect` → `cuenta.error.contrasena`. **Sin contraseña**, solo si la sesión es de menos de 10 minutos. Es el botón de marca («f Continuar con Facebook»), **sin** «Añadir»: las guías de marca solo permiten sus textos. El contexto lo da la fila («Facebook, No unido»).
-- Es el formulario `POST /auth/facebook` con `from=account`. Si va bien: 303 a `/account?notice=linked&provider=facebook` → `cuenta.aviso.unida`. El correo del proveedor puede ser distinto del de la cuenta.
+Es el botón de marca («f Continuar con Facebook»), **sin** «Añadir»: las guías de marca solo permiten sus textos. El contexto lo da la fila («Facebook, No unido»). El formulario es siempre `POST /auth/{proveedor}` con `from=account`, `intent=connect` y `next=/account`. Qué se pide antes depende de la cuenta:
+
+**Con contraseña en la cuenta** (decisión 20). El botón se muestra siempre, con el campo `cuenta.acceso.campo_anadir` antes, en el mismo formulario. Vacía: `?error=password-required` → `cuenta.error.contrasena_vacia`; errónea: `?error=password-incorrect` → `cuenta.error.contrasena`. Sin salir al proveedor mientras haya error de contraseña.
+
+**Sin contraseña** (decisión 21). Se confirma siempre con un proveedor ya unido, sea cual sea la antigüedad de la sesión; ya no hay regla de tiempo. Es un solo clic que encadena dos viajes: primero al proveedor ya unido (confirmar que eres tú) y, al volver, sin parar en `/account`, al proveedor nuevo. El proveedor que confirma es el unido que se usó más recientemente (se nombra en el panel). Con JavaScript, el botón de marca no sale directo: abre antes el panel «Confirma que eres tú» de §3.5.2, que explica los dos pasos. Sin JavaScript, el mismo botón envía el formulario sin panel (el texto de la fila y los avisos de vuelta bastan).
+
+- Si va bien: 303 a `/account?notice=linked&provider=…`. En una cuenta sin contraseña se muestra `cuenta.confirmar.exito` (nombra el proveedor añadido), como aviso de éxito arriba en `<main>`; en una cuenta con contraseña, `cuenta.aviso.unida`. El correo del proveedor puede ser distinto del de la cuenta.
 - Si la identidad ya es de otra cuenta: `?error=identity-in-use` → `cuenta.error.proveedor_en_uso`. Si ya estaba unida a esta misma cuenta (otra pestaña): `?error=already-linked` → `cuenta.error.ya_unido`.
-- Errores del proveedor: §3.4, en `/account`.
-- Sin contraseña y con la sesión antigua no se dibuja el botón: se muestra el bloque de §3.5.2 en su lugar.
+- Si el proveedor no da correo o no lo verifica: `?error=email-missing` → `cuenta.error.sin_correo`; `?error=email-unverified` → `cuenta.error.correo_sin_verificar`. Si el correo de esa cuenta pertenece a otra cuenta de Cupidilla: `?error=connect-refused` → `cuenta.error.union_rechazada`, genérico a propósito para no revelar si existe otra cuenta.
+- Errores del proveedor: §3.4, en `/account`. Todos los resultados de este flujo, salvo el éxito, salen **dentro del panel** del proveedor que se intentaba añadir (§3.5.2).
+- Una cuenta sin contraseña siempre tiene algún proveedor unido; si por un caso límite no lo tuviera, no se dibuja el botón.
 
-#### 3.5.2 Bloque «Confirma que eres tú» (sesión antigua)
+#### 3.5.2 Panel «Confirma que eres tú» (cuentas sin contraseña)
 
-Solo para cuentas **sin** contraseña (decisión 20): en `/account` (para añadir) y en `/account/password`. Es el mismo componente con distinto texto de acción.
+Decisión 21. Solo para cuentas **sin** contraseña y solo al añadir un proveedor en `/account`; crear una contraseña no usa panel, sino un texto en su propia pantalla (§3.7). Es el componente de la fila del proveedor que se añade, no una sección aparte de la página.
 
 ```
-<h2> Confirma que eres tú                 (en /account/delete y /account/password: dentro de la página, tras el h1)
-<p>  Por seguridad, para añadir una forma de entrar tienes que haber entrado hace menos de 10 minutos.
-     Vuelve a entrar y continuarás en esta página.
-  [ G  Continuar con Google ]  [ f  Continuar con Facebook ]   (solo los unidos)
+Facebook        No unido
+  Cerrado:   [ f  Continuar con Facebook ]
+  Abierto (JS):
+  ┌ <div role="region" aria-labelledby> ───────────────────────────────┐
+  │ <h3> Confirma que eres tú                                          │
+  │ <p>  Como no tienes contraseña, para añadir Facebook primero       │
+  │      entrarás con Google para confirmar que eres tú y después      │
+  │      con Facebook. No cambiamos nada en tus cuentas de esos        │
+  │      servicios.                                                    │
+  │ [resultado: error o aviso, solo si vuelve de un intento]           │
+  │ [ Confirmar con Google ]   Cancelar                                │
+  └────────────────────────────────────────────────────────────────────┘
 ```
 
-- Un botón de marca por cada proveedor unido (el que se use debe ser una identidad de esa cuenta; si no, `?error=identity-mismatch`). Es el formulario `POST /auth/{proveedor}` con `from=account` y `next` igual a la pantalla actual.
-- Mientras la sesión es antigua, la acción protegida (formulario de crear contraseña, botón de añadir) **no se dibuja**: no hay botón que falle después. El campo ELIMINAR no depende de la sesión (decisión 20).
-- Al volver con éxito: misma página, con `?notice=reauthenticated` → `verificar.aviso.confirmada` (`role="status"`) y la acción ya disponible.
-- Cancelar en el proveedor: `?notice=provider-cancelled` → `verificar.aviso.cancelado`. Otra cuenta del proveedor: `?error=identity-mismatch` → `verificar.error.otra_cuenta`. Falla: `?error=provider-failed` → `cuenta.error.proveedor_fallo`.
-- **Si la sesión caduca entre cargar la página y enviar** (el servidor da 403 `REAUTHENTICATION_REQUIRED`): 303 a la misma página con `?error=reauth-required` → `verificar.error.necesaria`, que se muestra junto al bloque. Nada se ha ejecutado.
+```mermaid
+flowchart TD
+    B["Fila 'Facebook, No unido': botón de marca"] -->|JS| PA["Panel abierto"]
+    B -->|Sin JS| S
+    PA -->|Confirmar con Google| S["POST /auth/facebook (from=account, intent=connect)"]
+    PA -->|Cancelar o Esc| B
+    S --> G["Pantalla de Google: confirma"]
+    G -->|Cuenta unida| F["Pantalla de Facebook, sin parar en /account"]
+    G -->|Otra cuenta, cancela, falla, caduca| E["/account con el panel abierto y el resultado dentro"]
+    F -->|Autoriza| OK["/account con aviso de éxito"]
+    F -->|Cancela, falla, sin correo, en uso, ya unido, rechazada| E
+```
+
+- El botón principal del panel es el ciruela de H0, con texto «Confirmar con {proveedor}» y **sin logo**: no es un botón de marca, así que no le aplican las guías de §3.1.2. «Cancelar» es un enlace a `/account`.
+- Es **un solo formulario nativo** (sin `use:enhance`): acaba en una redirección a otro sitio. El botón del panel y el de la fila envían el mismo formulario.
+- Con JavaScript: pulsar el botón de marca abre el panel (no envía) y el foco pasa al `<h3>`. «Cancelar» y la tecla Esc cierran el panel y devuelven el foco al botón de marca. Cerrar se ignora mientras se está enviando. Sin JavaScript no hay panel: «Cancelar» solo existe como enlace de vuelta a `/account` y el botón de marca envía directamente.
+- Al enviar (JS): el botón del panel pasa a «Conectando con {proveedor}…», con `aria-disabled` y `aria-busy`; un segundo clic se ignora. Si la persona vuelve con «atrás» desde el proveedor y la página sale de la caché, el estado de envío se reinicia.
+- **El resultado vuelve dentro del panel**, que sale abierto, con el texto de §5.8 para ese valor de la URL. Los errores llevan `role="alert"` y reciben el foco con JavaScript; la cancelación se muestra como aviso informativo. Si hay dos proveedores por añadir, se abre el panel del proveedor que viene en `&provider=` (o el primero si no vale). El éxito no va en el panel: sale arriba en `<main>` como aviso (§3.5.1), y la fila pasa a «Unido».
+- Cancelar en el proveedor: `?notice=provider-cancelled` → `verificar.aviso.cancelado`. Otra cuenta del proveedor de confirmación: `?error=identity-mismatch` → `verificar.error.otra_cuenta`. Falla: `?error=provider-failed` → `cuenta.error.proveedor_fallo`.
+- **Si el flujo caduca** entre pasos, con sesión iniciada la vuelta no va a `/login` sino a `/account?error=confirm-expired` → `cuenta.confirmar.error.caducada`, que nombra al proveedor que confirma (no al de la URL). Nada se ha cambiado y puede empezarse de nuevo con el mismo botón. Si no hay ningún proveedor que añadir (flujo de crear contraseña), el mensaje sale arriba en `<main>`.
+- Se dibuja siempre que la cuenta no tenga contraseña y haya algún proveedor sin unir y otro unido con el que confirmar. No depende de la antigüedad de la sesión: no hay botón que falle después por ese motivo. El campo ELIMINAR tampoco depende de la sesión (decisión 20).
 
 | Estado de `/account` | Comportamiento |
 |---|---|
 | Normal | Como arriba |
-| Aviso (unida, quitada, contraseña creada, confirmada, cancelada) | `role="status"`, borde verde (o neutro si cancelada), primero en `<main>` |
-| Error (última forma, servidor, proveedor en uso, ya unido, fallo, otra cuenta, límite) | `role="alert"` primero; el resto se muestra |
-| Enviando (JS) | El botón pulsado: «Quitando…», `aria-disabled` |
-| Sesión antigua | Sin botones de añadir; el enlace de crear contraseña lleva a una pantalla con el bloque de §3.5.2 |
+| Aviso (unida, quitada, contraseña creada, cancelada) | `role="status"`, borde verde (o neutro si cancelada), primero en `<main>`. La cancelación de un intento de añadir va dentro del panel |
+| Error (última forma, servidor, proveedor en uso, ya unido, fallo, otra cuenta, sin correo, sin verificar, rechazada, caducada, límite) | `role="alert"`; los del flujo de añadir, dentro del panel; el resto, primero en `<main>`. El resto de la página se muestra |
+| Enviando (JS) | Quitar: el botón pulsado, «Quitando…». Añadir: «Conectando con {proveedor}…». `aria-disabled` |
+| Cuenta sin contraseña | Panel de confirmación en cada proveedor por añadir; nunca botones que pidan una sesión reciente |
 
 ### 3.6 `/account/delete`
 
@@ -422,25 +448,32 @@ Solo para cuentas sin contraseña. Cambiar una contraseña existente queda fuera
 Contraseña   [ ________ ] [Mostrar contraseña]
   Mínimo 10 caracteres, sin más reglas: una frase larga vale.
   De momento no podemos recuperarla, así que guárdala en un gestor de contraseñas o donde no se te pierda.
+<p>  Por seguridad, al pulsar «Crear contraseña» entrarás con Google para confirmar que eres tú
+     y, al volver, tu contraseña quedará creada. No cambiamos nada en tu cuenta de Google.
 [ Crear contraseña ]
 Cancelar     (enlace a /account)
 ```
 
+**Cómo funciona (decisión 21).** Sin contraseña, crear una se confirma siempre con un proveedor ya unido (el usado más recientemente, que nombra el texto). No hay bloque aparte ni paso previo: la persona escribe la contraseña, pulsa «Crear contraseña» y el mismo envío la lleva al proveedor; la contraseña se crea al volver. La pantalla se queda en el formulario hasta entonces. La validación de longitud ocurre antes de salir de Cupidilla, con los errores de siempre, sin ir al proveedor.
+
 - Campo: `type="password"`, `name="password"`, `autocomplete="new-password"`, `autocapitalize="none"`, `spellcheck="false"`. **Mismas reglas que el registro** (H0 §2.3 y §3.2): 10 a 128 caracteres, sin más reglas, sin segundo campo de repetición, se permite pegar, botón «Mostrar contraseña» solo con JavaScript. Errores: `registro.error.contrasena_vacia`, `contrasena_corta`, `contrasena_larga`.
 - El aviso de efecto va **antes del campo**, siempre visible (no en un tooltip ni como ayuda del campo). Dice qué se gana y que de ahora en adelante hay otra puerta a la cuenta.
+- `contrasena.confirmar.texto` va **tras el campo y antes del botón**, siempre visible, para que se lea antes de pulsar. Es un formulario nativo (sin `use:enhance`) y el proveedor que confirma viaja en un campo oculto.
 - El correo se muestra como texto: es el que se usará para entrar. Ayuda a los gestores de contraseñas.
 - Orden de tabulación: saltar → encabezado → (resumen) → contraseña → mostrar (JS) → Crear contraseña → Cancelar → pie.
-- Con sesión antigua: el bloque de §3.5.2 (acción «crear una contraseña») y sin campo.
+- Si por un caso límite no hubiera ningún proveedor unido con el que confirmar, no se dibuja el formulario: solo el enlace «Cancelar».
+- Con JavaScript, al enviar el botón pasa a «Conectando con {proveedor}…» (`aria-disabled`), un segundo clic se ignora y «atrás» desde el proveedor reinicia el estado.
 
 | Estado | Comportamiento |
 |---|---|
 | Inicial | Campo vacío, sin `autofocus` |
-| Enviando (JS) | «Creando contraseña…», `aria-disabled` |
-| Contraseña vacía, corta o larga | Error de campo y resumen |
-| Error general | `comun.error.limite` o `contrasena.error.servidor` |
-| Resultado incierto (503) | Bloque general con `contrasena.error.resultado_incierto` y enlace `contrasena.enlace.comprobar` a `/account` (misma pestaña): si ahí se lee «Correo y contraseña: Activa», ya está creada. Campo vacío |
-| Sesión envejecida al enviar | `?error=reauth-required` (§3.5.2) |
+| Enviando (JS) | «Conectando con {proveedor}…», `aria-disabled` |
+| Contraseña vacía, corta o larga | Error de campo y resumen; no se sale a ningún proveedor |
+| Error general | `comun.error.limite` o `contrasena.error.servidor` (también si la API falla antes de salir al proveedor: no se ha creado nada). Campo vacío |
+| Falla, cancela o es otra cuenta del proveedor | Vuelve a `/account/password` con `cuenta.error.proveedor_fallo`, `verificar.aviso.cancelado` o `verificar.error.otra_cuenta`; la contraseña no se ha creado y el campo queda vacío |
+| Flujo caducado al volver | 303 a `/account?error=confirm-expired` (§3.5.2): nada creado |
 | La cuenta ya tiene contraseña (otra pestaña) | 303 a `/account` |
+| El proveedor ya no está unido (otra pestaña) | Recarga la misma pantalla con el estado actual |
 | Éxito | 303 a `/account?notice=password-created` → `contrasena.aviso.creada` |
 
 Después de crear la contraseña: el borrado pide la contraseña (H0), se puede entrar con correo y contraseña, y se puede quitar el único proveedor.
@@ -455,13 +488,13 @@ Después de crear la contraseña: el borrado pide la contraseña (H0), se puede 
 | `/login/link` | vacío | «Uniendo cuentas…» | contraseña vacía o incorrecta | límite, 5 fallos, servidor, resultado incierto | pantalla de `next` con aviso |
 | `/account` | formas de entrar | «Quitando…» | n/a | última forma, servidor, en uso, ya unido, fallo, límite, otra cuenta | aviso |
 | `/account/delete` (sin contraseña) | ELIMINAR | «Eliminando…» | confirmación | límite, servidor, incierto | `/` con aviso |
-| `/account/password` | campo o bloque de confirmar | «Creando contraseña…» | vacía, corta, larga | límite, servidor, incierto, sesión antigua | `/account` con aviso |
+| `/account/password` | campo y texto de confirmar | «Creando contraseña…» | vacía, corta, larga | límite, servidor, incierto, proveedor falla, cancelado, otra cuenta | `/account` con aviso |
 
-Casos límite: correo de 254 caracteres (se parte); zoom 200 % y 320 px; sin JavaScript; doble envío; «atrás» tras unir, tras el alta y tras cerrar sesión; dos pestañas con el mismo estado temporal (la segunda recibe `provider-expired`); repetir el enlace de retorno; sesión que cumple 10 minutos mientras se escribe.
+Casos límite: correo de 254 caracteres (se parte); zoom 200 % y 320 px; sin JavaScript; doble envío; «atrás» tras unir, tras el alta y tras cerrar sesión; dos pestañas con el mismo estado temporal (la segunda recibe `provider-expired`); repetir el enlace de retorno.
 
 ## 5. Textos de interfaz
 
-Convención de H0 §5. `{proveedor}` es «Google» o «Facebook»; `{minutos}`, el límite vigente (10 para la sesión reciente; 30 para el estado pendiente).
+Convención de H0 §5. `{proveedor}` es «Google» o «Facebook»; `{minutos}`, el límite vigente (30 para el estado pendiente).
 
 ### 5.1 Proveedores (botones y errores compartidos)
 
@@ -581,20 +614,26 @@ Se reutilizan de H0 §5.3 sin cambios: `registro.campo.nacimiento`, `registro.ay
 | `cuenta.error.proveedor_en_uso` | Esa cuenta de {proveedor} ya está unida a otra cuenta de Cupidilla. Si es tuya, entra en esa cuenta y quítala desde allí. |
 | `cuenta.error.ya_unido` | Esa cuenta de {proveedor} ya está unida a tu cuenta. No hemos hecho ningún cambio. |
 | `cuenta.error.proveedor_fallo` | {proveedor} no ha respondido como esperábamos y no hemos podido completar el paso. No hemos hecho ningún cambio. Inténtalo de nuevo en unos minutos. |
+| `cuenta.error.sin_correo` | {proveedor} no nos ha enviado tu correo y lo necesitamos para unir {proveedor} a tu cuenta. Comprueba en {proveedor} que tu cuenta tiene un correo y que has dado permiso para compartirlo, e inténtalo de nuevo. No hemos hecho ningún cambio. |
+| `cuenta.error.correo_sin_verificar` | El correo de tu cuenta de {proveedor} todavía no está verificado y no podemos usarlo. Verifícalo en {proveedor} e inténtalo de nuevo. No hemos hecho ningún cambio. |
+| `cuenta.error.union_rechazada` | No hemos podido unir esta cuenta de {proveedor} a la tuya. No hemos hecho ningún cambio. Prueba con otra cuenta de {proveedor} o sigue entrando como hasta ahora. |
 
 «Con él» vale para Google y Facebook; con otros proveedores se sustituye por «con esa forma». `cuenta.aviso.unida` se usa también en `/account/password` y `/account/delete` cuando llega `?notice=linked` (tras una unión por contraseña con `next` a esas pantallas).
 
 ### 5.6 Confirmar que eres tú
 
+Decisión 21: sin contraseña en la cuenta, añadir un proveedor o crear una contraseña se confirma siempre con un proveedor ya unido (ya no hay regla de 10 minutos). `{proveedor}` es el proveedor unido con el que se confirma (el usado más recientemente) y `{proveedorNuevo}`, el que se añade.
+
 | Clave | Texto |
 |---|---|
-| `verificar.titulo` | Confirma que eres tú |
-| `verificar.texto` | Por seguridad, para {accion} tienes que haber entrado hace menos de {minutos} minutos. Vuelve a entrar y continuarás en esta página. |
-| `verificar.accion.anadir` | añadir una forma de entrar |
-| `verificar.accion.contrasena` | crear una contraseña |
+| `cuenta.confirmar.titulo` | Confirma que eres tú |
+| `cuenta.confirmar.texto` | Como no tienes contraseña, para añadir {proveedorNuevo} primero entrarás con {proveedor} para confirmar que eres tú y después con {proveedorNuevo}. No cambiamos nada en tus cuentas de esos servicios. |
+| `cuenta.confirmar.boton` | Confirmar con {proveedor} |
+| `cuenta.confirmar.cancelar` | Cancelar |
+| `cuenta.confirmar.error.caducada` | Ha pasado demasiado tiempo desde que empezaste y la confirmación ha caducado. No hemos hecho ningún cambio. Vuelve a confirmar con {proveedor}. |
+| `cuenta.confirmar.exito` | Hemos añadido {proveedorNuevo}. Ya puedes entrar con cualquiera de tus formas de entrar. |
 | `verificar.aviso.confirmada` | Listo, hemos confirmado que eres tú. |
 | `verificar.aviso.cancelado` | No has continuado con {proveedor}, así que no hemos confirmado nada ni hemos hecho ningún cambio. |
-| `verificar.error.necesaria` | Han pasado más de {minutos} minutos desde que entraste. Confirma que eres tú para continuar. No hemos hecho ningún cambio. |
 | `verificar.error.otra_cuenta` | Has entrado con una cuenta de {proveedor} distinta de la que tienes unida a Cupidilla. Vuelve a intentarlo con la cuenta correcta. |
 
 ### 5.7 Crear contraseña y eliminar sin contraseña
@@ -608,14 +647,11 @@ Crear contraseña reutiliza `registro.ayuda.contrasena` y `registro.error.contra
 | `contrasena.aviso.efecto` | Desde este momento también podrás entrar con tu correo y tu contraseña, además de con {proveedores}. Tu cuenta de {proveedores} no cambia. |
 | `contrasena.campo.correo` | Tu correo |
 | `contrasena.campo.contrasena` | Contraseña |
+| `contrasena.confirmar.texto` | Al pulsar «Crear contraseña», iremos a {proveedor} para que confirmes que eres tú. Cuando vuelvas, tu contraseña estará creada. No cambiamos nada en tu cuenta de {proveedor}. |
 | `contrasena.boton.enviar` | Crear contraseña |
-| `contrasena.boton.enviando` | Creando contraseña… |
-| `contrasena.estado.enviando` | Creando tu contraseña… |
 | `contrasena.enlace.cancelar` | Cancelar |
 | `contrasena.aviso.creada` | Hemos creado tu contraseña. Ya puedes entrar con tu correo y tu contraseña. |
 | `contrasena.error.servidor` | Algo ha fallado por nuestra parte y no hemos podido crear tu contraseña. Inténtalo de nuevo en unos minutos. |
-| `contrasena.error.resultado_incierto` | No sabemos si tu contraseña se ha creado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta: si en «Formas de entrar» pone «Correo y contraseña: Activa», ya está creada. Si no, vuelve a intentarlo. |
-| `contrasena.enlace.comprobar` | Ir a mi cuenta para comprobarlo |
 | `eliminar.texto.alcance_proveedor` | Se borrará de inmediato tu cuenta y todo lo que hemos guardado de ti: correo, fecha de nacimiento, consentimientos y las uniones con {proveedores}. No tocamos nada en tu cuenta de {proveedores}. |
 | `eliminar.texto.alcance_mixta` | Se borrará de inmediato tu cuenta y todo lo que hemos guardado de ti: correo, contraseña, fecha de nacimiento, consentimientos y las uniones con {proveedores}. No tocamos nada en tu cuenta de {proveedores}. |
 | `eliminar.campo.confirmacion` | Escribe ELIMINAR para confirmar |
@@ -650,8 +686,11 @@ Coincide con las listas cerradas del técnico (§11.4). `*` marca los valores qu
 | | `error=identity-in-use` | `cuenta.error.proveedor_en_uso` |
 | | `error=already-linked` | `cuenta.error.ya_unido` |
 | | `error=identity-mismatch` | `verificar.error.otra_cuenta` |
+| | `error=email-missing` | `cuenta.error.sin_correo` |
+| | `error=email-unverified` | `cuenta.error.correo_sin_verificar` |
+| | `error=connect-refused` | `cuenta.error.union_rechazada` |
+| | `error=confirm-expired` | `cuenta.confirmar.error.caducada` (con el proveedor que confirma) |
 | | `error=last-method` | `cuenta.error.ultima_forma` |
-| | `error=reauth-required` | `verificar.error.necesaria` |
 | | `error=password-required` | `cuenta.error.contrasena_vacia` |
 | | `error=password-incorrect` | `cuenta.error.contrasena` |
 | | `error=rate-limited` | `comun.error.limite` |
@@ -660,7 +699,6 @@ Coincide con las listas cerradas del técnico (§11.4). `*` marca los valores qu
 | | `notice=linked`* | `cuenta.aviso.unida` |
 | | `error=provider-failed` | `cuenta.error.proveedor_fallo` |
 | | `error=identity-mismatch` | `verificar.error.otra_cuenta` |
-| | `error=reauth-required` | `verificar.error.necesaria` |
 | | `error=rate-limited` | `comun.error.limite` |
 
 `verificar.aviso.cancelado` y `verificar.error.otra_cuenta` llevan `{proveedor}`: se toman de `&provider=`, que el técnico añade a `failed` (§11.3). `from` no aparece en ninguna URL de aviso.
@@ -690,32 +728,33 @@ Aplica H0 §6 y §7.4. Lo específico:
 **Estructura y nombres**
 - Botones de proveedor en `<div role="group" aria-label>`; nombre accesible = texto visible; logos decorativos.
 - Los formularios principal y «Cancelar» son independientes. Una `<h1>` por pantalla; correo del proveedor y de la cuenta en `<dl>`.
-- El separador es un `<p>` de texto. El bloque «Confirma que eres tú» es una `<section>` con `<h2>` y, en `/account/delete` y `/account/password`, va tras la `<h1>`.
-- El aviso de efecto de `/account/password` va antes del campo y se asocia con `aria-describedby` al campo de contraseña.
+- El separador es un `<p>` de texto. El panel «Confirma que eres tú» de `/account` es un `<div role="region">` con `aria-labelledby` apuntando a su `<h3>` (un id único por proveedor), dentro de la fila del proveedor que se añade. En `/account/password` no hay panel: el texto de confirmación es un párrafo del formulario.
+- El aviso de efecto de `/account/password` va antes del campo y, junto con `contrasena.confirmar.texto`, se asocia con `aria-describedby` al campo de contraseña.
 
 **Errores**
 - Errores de campo: patrón H0 §2.2. Errores del proveedor: `role="alert"`; la cancelación y las confirmaciones, `role="status"`; nunca solo color.
 
-**Teclado**
+**Teclado y foco**
 - Intro en un campo envía el formulario principal, nunca «Cancelar».
-- Con aviso o error por redirección, sin JavaScript el bloque es lo primero de `<main>`; con JavaScript recibe el foco.
-- Tras reautenticar, el foco va al aviso `verificar.aviso.confirmada`, y la acción habilitada es alcanzable con Tab inmediatamente después.
+- Con aviso o error por redirección, sin JavaScript el bloque es lo primero de `<main>` (o, en un intento de añadir un proveedor, lo primero del panel abierto); con JavaScript recibe el foco.
+- Panel de confirmación (JavaScript): al abrirlo, el foco va a su `<h3>` (`tabindex="-1"`); Esc y «Cancelar» lo cierran y devuelven el foco al botón de marca; si vuelve con un error, el panel sale abierto y el foco va al bloque de error. Orden de tabulación dentro del panel: título → (error) → «Confirmar con {proveedor}» → «Cancelar». Sin atrapar el foco: no es un diálogo modal.
+- Tras un añadido con éxito, el aviso `cuenta.confirmar.exito` es lo primero de `<main>` y sigue siendo el siguiente elemento al empezar a tabular desde arriba; la fila del proveedor ya aparece como «Unido».
 
-**Tiempo (2.2.1 y 2.2.6).** El estado pendiente (30 minutos) se avisa en pantalla. El límite de 10 minutos de sesión reciente se dice en el bloque de confirmar. Ambos son esenciales por seguridad. Quien pierde la sesión reciente mientras escribe no pierde nada: vuelve a la misma página con `verificar.error.necesaria` (en `/account/password`, el campo queda vacío, la contraseña nunca se conserva).
+**Tiempo (2.2.1 y 2.2.6).** El estado pendiente de alta y unión (30 minutos) se avisa en pantalla. Desde la decisión 21 no hay límite de sesión reciente: ninguna pantalla pide haber entrado hace poco, así que no hay cuenta atrás ni pérdida de lo escrito por ese motivo. El viaje encadenado de confirmar y añadir (o confirmar y crear la contraseña) es un solo clic y de corta duración; si caduca por quedarse parado en el proveedor, no se pierde nada: `cuenta.confirmar.error.caducada` lo explica, dice que no se ha cambiado nada y se repite con el mismo botón. Al crear una contraseña, la contraseña escrita no se conserva si hay que repetir (nunca reaparece rellena); es la única consecuencia.
 
-**Zonas táctiles**: 44×44 px mínimo, 8 px entre objetivos (12 px entre los botones de proveedor). El campo ELIMINAR y los de contraseña, igual que H0.
+**Zonas táctiles**: 44×44 px mínimo, 8 px entre objetivos (12 px entre los botones de proveedor). El campo ELIMINAR y los de contraseña, igual que H0. El botón y el enlace del panel de confirmación también.
 
 **Contraste**: según 3.1.2; QA lo comprueba con herramienta, sobre todo el botón de Facebook y el hover.
 
-**Móvil**: botones de proveedor a ancho completo y apilados, también a 48em (no en fila: el texto es largo). Las filas de `/account` se apilan.
+**Móvil**: botones de proveedor a ancho completo y apilados, también a 48em (no en fila: el texto es largo). Las filas de `/account` se apilan; el panel de confirmación ocupa el ancho de la fila, con el botón y «Cancelar» apilados si no caben.
 
-**Sin JavaScript**: todo funciona con formularios POST y redirecciones 303.
+**Sin JavaScript**: todo funciona con formularios POST y redirecciones 303. Sin panel: el botón de marca envía directamente y el resultado vuelve dentro de un panel abierto.
 
 **Privacidad de la interfaz**: pantallas con el correo del proveedor, `no-store`; logos y fuentes desde Cupidilla, sin peticiones a terceros antes de pulsar.
 
 ## 7. Criterios de aceptación
 
-Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con los ajustes marcados como «(revisado)». Del 62 en adelante: nuevos.
+Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con los ajustes marcados como «(revisado)». Del 62 en adelante: nuevos; del 62 al 77, revisados con la decisión 21 (sin regla de 10 minutos).
 
 ### Botones de proveedor
 
@@ -782,7 +821,7 @@ Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con l
 46. Tras quitar un proveedor no se puede entrar con él (va al flujo de alta o unión) y el resto sigue intacto.
 47. Si solo queda una forma no hay botón de quitar y se muestra `cuenta.acceso.ultima`.
 48. Un POST de quitar la última forma o dos peticiones simultáneas para quitar las dos últimas: queda al menos una; la primera da `?error=last-method`.
-49. (revisado, decisión 20) Con contraseña en la cuenta, cada proveedor no unido muestra siempre su botón de marca con `cuenta.acceso.campo_anadir` antes; sin contraseña, solo con sesión reciente. Contraseña vacía o errónea: `?error=password-required` o `?error=password-incorrect`, sin salir al proveedor. Al volver con éxito, `/account?notice=linked&provider=…` con `cuenta.aviso.unida`. El correo del proveedor puede ser distinto del de la cuenta. Si esa identidad es de otra cuenta, `?error=identity-in-use`; si ya es de esta, `?error=already-linked`.
+49. (revisado, decisión 21) Con contraseña en la cuenta, cada proveedor no unido muestra siempre su botón de marca con `cuenta.acceso.campo_anadir` antes; contraseña vacía o errónea: `?error=password-required` o `?error=password-incorrect`, sin salir al proveedor. Sin contraseña, el botón de marca está siempre disponible (con la sesión que sea) y lleva a la confirmación de 69 a 69e. Al volver con éxito, `/account?notice=linked&provider=…` con `cuenta.aviso.unida` (con contraseña) o `cuenta.confirmar.exito` (sin ella). El correo del proveedor puede ser distinto del de la cuenta. Si esa identidad es de otra cuenta, `?error=identity-in-use`; si ya es de esta, `?error=already-linked`.
 
 ### Eliminar sin contraseña (revisado)
 
@@ -802,26 +841,31 @@ Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con l
 60. Todos los flujos funcionan con JavaScript desactivado.
 61. Ninguna pantalla pide ni muestra datos del proveedor distintos del correo (y la fecha de unión en `/account`).
 
-### Sesión reciente y «Confirma que eres tú» (nuevos)
+### Confirmar con un proveedor (decisión 21)
 
-62. «Sesión reciente» es haber demostrado la identidad hace menos de 10 minutos (entrar con cualquier forma, o reautenticarse). Desde la decisión 20 solo la piden, en cuentas sin contraseña, crear una contraseña y añadir un proveedor.
+62. (revisado, decisión 21) Ya no existe la «sesión reciente»: ninguna pantalla, texto ni error habla de haber entrado hace menos de 10 minutos, y ninguna acción cambia según la antigüedad de la sesión. En una cuenta sin contraseña, solo añadir un proveedor y crear una contraseña exigen confirmar antes con un proveedor ya unido, siempre. Quitar un proveedor no pide nada y borrar pide ELIMINAR. Con contraseña, se escribe en el propio cambio (45, 49).
 63. (sustituido por la decisión 20) Borrar una cuenta sin contraseña ya no pide sesión reciente: ver 51.
-64. Al volver del proveedor con una identidad de esa cuenta: misma página con `verificar.aviso.confirmada` y la acción disponible; la sesión cuenta como reciente.
-65. Si vuelve con una cuenta del proveedor distinta de la unida: `verificar.error.otra_cuenta` (`identity-mismatch`), el bloque sigue y no cambia nada.
-66. Si cancela en el proveedor desde `/account` o `/account/password`: `verificar.aviso.cancelado` como aviso informativo, sin cambios.
-67. Si la sesión envejece entre cargar y enviar: vuelve a la misma pantalla con `verificar.error.necesaria`, sin ejecutar nada; los campos de contraseña quedan vacíos.
-68. (sustituido por la decisión 20) Una cuenta con contraseña no ve nunca el bloque de confirmar: escribe la contraseña en el propio cambio (45, 49).
-69. Cuenta sin contraseña con sesión antigua: `/account` no dibuja los botones de añadir proveedor; los sustituye el bloque de confirmar. Con sesión reciente, el bloque no aparece.
+64. (revisado, decisión 21) Al volver del proveedor de confirmación con una identidad de esa cuenta, el flujo continúa sin parar en `/account`: al añadir, se va directamente al proveedor nuevo con un solo clic de la persona; al crear la contraseña, se crea. No hay segundo formulario ni segundo clic entre los dos viajes.
+65. Si vuelve del proveedor de confirmación con una cuenta distinta de la unida: `verificar.error.otra_cuenta` (`identity-mismatch`); al añadir, dentro del panel; al crear la contraseña, en `/account/password`. No cambia nada.
+66. (revisado) Si cancela en el proveedor, en cualquiera de los dos viajes: `verificar.aviso.cancelado` como aviso informativo (dentro del panel al añadir; arriba en `/account/password`), sin cambios.
+67. (sustituido por la decisión 21) Si el flujo caduca entre un viaje y otro, o se deja demasiado tiempo en el proveedor: 303 a `/account?error=confirm-expired` con `cuenta.confirmar.error.caducada`, que nombra al proveedor que confirma y dice que no se ha cambiado nada; se muestra dentro del panel si hay un proveedor por añadir y arriba si no. Se puede volver a empezar con el mismo botón. Nada se ha ejecutado y no se envía a `/login`.
+68. (sustituido por la decisión 20) Una cuenta con contraseña no ve nunca el panel de confirmar: escribe la contraseña en el propio cambio (45, 49).
+69. (revisado, decisión 21) Cuenta sin contraseña, con JavaScript: en cada proveedor no unido, el botón de marca no sale al proveedor sino que abre el panel «Confirma que eres tú» (`cuenta.confirmar.titulo` y `cuenta.confirmar.texto` con ambos proveedores, «Confirmar con {proveedor}» y «Cancelar»), sea cual sea la antigüedad de la sesión. No existe ningún texto ni bloque de sesión antigua.
+69b. Panel (JS): al abrirse, el foco pasa a su título; Esc y «Cancelar» lo cierran y devuelven el foco al botón de marca; mientras se envía no se cierra. Es un `role="region"` con nombre accesible igual al título; no atrapa el foco.
+69c. Al pulsar «Confirmar con {proveedor}» se envía un solo formulario nativo (`POST /auth/{proveedor nuevo}` con `from=account` e `intent=connect`); el botón pasa a «Conectando con {proveedor}…» con `aria-disabled` y un segundo clic se ignora. El proveedor que confirma es el unido usado más recientemente.
+69d. Cualquier resultado de este flujo que no sea el éxito (cancelar, fallo, otra cuenta, en uso, ya unido, sin correo, sin verificar, rechazada, caducado) vuelve a `/account` con el panel de ese proveedor abierto y el mensaje de 5.8 dentro; los errores con `role="alert"` y foco, la cancelación como aviso informativo. `cuenta.error.union_rechazada` no dice por qué.
+69e. Éxito: `/account?notice=linked&provider=…` con `cuenta.confirmar.exito` (nombra el proveedor añadido) arriba en `<main>`, con `role="status"`, y la fila del proveedor ya como «Unido».
+69f. Sin JavaScript, el botón de marca envía directamente (sin panel) y todos los resultados de 69d y 69e se ven igual, con el panel abierto.
 
-### Crear contraseña (nuevos)
+### Crear contraseña (nuevos, revisados con la decisión 21)
 
 70. «Crear contraseña» aparece en `/account` solo si la cuenta no tiene contraseña; `/account/password` con una cuenta que ya la tiene redirige a `/account`; sin sesión, a `/login?next=/account/password`.
-71. Con sesión reciente, `/account/password` muestra: el correo de la cuenta como texto; un campo de contraseña (`type="password"`, `autocomplete="new-password"`, sin segundo campo); y, **antes del campo**, `contrasena.aviso.efecto` con los proveedores unidos.
-72. Reglas iguales a las del registro: 9 caracteres da `registro.error.contrasena_corta`; 10 se acepta; 128 se acepta; 129 da `registro.error.contrasena_larga`; vacío da `registro.error.contrasena_vacia`; se puede pegar; «Mostrar contraseña» solo con JavaScript.
-73. Con contraseña válida: se crea, la sesión sigue, 303 a `/account?notice=password-created` con `contrasena.aviso.creada`, y la fila muestra «Correo y contraseña: Activa» sin el enlace de crear.
+71. `/account/password` muestra: el correo de la cuenta como texto; **antes del campo**, `contrasena.aviso.efecto` con los proveedores unidos; un campo de contraseña (`type="password"`, `autocomplete="new-password"`, sin segundo campo); y, tras el campo y antes del botón, `contrasena.confirmar.texto` con el proveedor que confirma. Todo ello sea cual sea la antigüedad de la sesión.
+72. Reglas iguales a las del registro: 9 caracteres da `registro.error.contrasena_corta`; 10 se acepta; 128 se acepta; 129 da `registro.error.contrasena_larga`; vacío da `registro.error.contrasena_vacia`; se puede pegar; «Mostrar contraseña» solo con JavaScript. Con una contraseña no válida no se sale a ningún proveedor.
+73. Con una contraseña válida, «Crear contraseña» envía a confirmar con el proveedor unido (el botón pasa a «Conectando con {proveedor}…»). Al volver con la identidad correcta se crea, la sesión sigue, 303 a `/account?notice=password-created` con `contrasena.aviso.creada`, y la fila muestra «Correo y contraseña: Activa» sin el enlace de crear. Mientras no se vuelva, no existe la contraseña.
 74. Después se puede entrar en `/login` con ese correo y esa contraseña; el borrado pide la contraseña (no ELIMINAR); y se puede quitar el único proveedor.
-75. Con sesión antigua, `/account/password` muestra el bloque `verificar.*` con `verificar.accion.contrasena` y no el campo. La contraseña nunca reaparece rellena.
-76. Sin respuesta tras enviar: 503 con `contrasena.error.resultado_incierto` y enlace a `/account`; campo vacío.
+75. (sustituido por la decisión 21) No hay variante de esta pantalla para sesiones antiguas ni bloque aparte: con cualquier sesión se ve el formulario de 71. Si fallan, se cancelan o son otra cuenta, vuelve a `/account/password` con `cuenta.error.proveedor_fallo`, `verificar.aviso.cancelado` o `verificar.error.otra_cuenta`, sin crear nada y con el campo vacío; la contraseña nunca reaparece rellena. Si el flujo caduca, `/account?error=confirm-expired` (67).
+76. (revisado) Si la API falla antes de salir al proveedor: `contrasena.error.servidor` (o `comun.error.limite`), campo vacío y nada creado. Ya no hay un resultado incierto en este envío: la contraseña se crea al volver del proveedor, y un fallo ahí lo cubre 75.
 77. Ninguna pantalla ofrece cambiar una contraseña ya existente.
 
 ### Textos y condiciones (nuevos)
@@ -839,7 +883,7 @@ Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con l
 |---|---|
 | D1 | Quien olvidó su contraseña no puede unir cuentas hasta que haya recuperación por correo. Riesgo aceptado; el texto lo dice (`union.ayuda.olvido`) |
 | D2 | Cuenta sin contraseña de otro proveedor: entra con el que ya tiene y añade el otro desde `/account` |
-| D3 y D4 | En `/account` se puede añadir un proveedor, quitarlo si queda otra forma de entrar y crear una contraseña. Con contraseña, añadir y quitar la piden en el formulario; sin ella, añadir y crear contraseña exigen sesión reciente (decisión 20). Cambiar una contraseña existente, fuera |
+| D3 y D4 | En `/account` se puede añadir un proveedor, quitarlo si queda otra forma de entrar y crear una contraseña. Con contraseña, añadir y quitar la piden en el formulario; sin ella, añadir y crear contraseña se confirman siempre con un proveedor ya unido (decisión 21). Cambiar una contraseña existente, fuera |
 | D5 | Botón de Facebook blanco con «f» azul, pendiente de que Meta lo confirme (plan B en 3.1.2). Fuente del sistema |
 | D6 | Se sube la versión de las condiciones para las altas nuevas; nadie que ya aceptó vuelve a aceptar. Borrador en 5.9 |
 | D7 | Solo identificador y correo |
@@ -850,8 +894,8 @@ Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con l
 Las T1 a T12 anteriores y la T13 (valores de `from`, la pantalla de vuelta sale de `next`) y la T14 (valores de `?notice=` y `?error=`) están cerradas en el técnico. Se aceptan sus desacuerdos U1 a U6. Quedan:
 
 T16. ~~Reautenticación con contraseña para cuentas con contraseña que quieren añadir un proveedor con sesión antigua.~~ **Ya no aplica (decisión 20):** una cuenta con contraseña la escribe en el propio formulario de añadir, sea cual sea la antigüedad de la sesión (§3.5.1), y nunca ve el bloque de §3.5.2.
-T17. **Crear contraseña**: confirmar endpoint, 403 `REAUTHENTICATION_REQUIRED` con sesión antigua, 409 si la cuenta ya tiene contraseña, misma política que el registro.
-T18. **`authenticated_at` de una sesión creada con contraseña** vale `created_at`: confirmar que cuenta como reciente igual que una entrada con proveedor.
+T17. **Crear contraseña** (decisión 21): no hay endpoint propio ni 403 `REAUTHENTICATION_REQUIRED`. `create_password` guarda la contraseña ya cifrada en la fila de reautenticación y se crea en la vuelta; confirmar el 409 si la cuenta ya tiene contraseña y que se aplica la misma política que en el registro.
+T18. **`authenticated_at`** (decisión 21): se actualiza al reautenticarse y se muestra en `/account`, pero ya no decide ninguna acción ni hay «sesión reciente».
 
 ### 8.3 Para el CEO
 

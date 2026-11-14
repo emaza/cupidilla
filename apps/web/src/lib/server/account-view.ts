@@ -1,9 +1,4 @@
-import {
-  OAUTH_PROVIDERS,
-  RECENT_AUTH_MAX_AGE_MINUTES,
-  type AccountResponse,
-  type OAuthProvider,
-} from '@cupidilla/contracts';
+import { OAUTH_PROVIDERS, type AccountResponse, type OAuthProvider } from '@cupidilla/contracts';
 
 const TIME_ZONE = 'Europe/Madrid';
 
@@ -108,15 +103,15 @@ export interface SignInMethodsView {
   /** Formas de entrar en total: si es 1, no se puede quitar la que queda. */
   methods: number;
   /**
-   * La web decide con esto qué pintar; la API lo vuelve a comprobar siempre (técnico §10.2).
+   * Proveedor unido con el que se confirma una acción en una cuenta sin contraseña (decisión 21):
+   * el usado más recientemente, el mismo que elige la API. `null` si no hay ninguno unido.
    */
-  recent: boolean;
+  confirmWith: OAuthProvider | null;
 }
 
 export function signInMethodsView(
   account: AccountResponse,
   configured: readonly OAuthProvider[],
-  now = new Date(),
 ): SignInMethodsView {
   const { password, identities } = account.signInMethods;
   const linked = OAUTH_PROVIDERS.flatMap((provider) => {
@@ -130,12 +125,14 @@ export function signInMethodsView(
       },
     ];
   });
-  const age = now.getTime() - new Date(account.session.authenticatedAt).getTime();
+  const [lastUsed] = [...identities].sort(
+    (a, b) => new Date(b.lastUsedAt).getTime() - new Date(a.lastUsedAt).getTime(),
+  );
   return {
     hasPassword: password,
     linked,
     addable: configured.filter((provider) => !linked.some((item) => item.provider === provider)),
     methods: linked.length + (password ? 1 : 0),
-    recent: age < RECENT_AUTH_MAX_AGE_MINUTES * 60_000,
+    confirmWith: lastUsed?.provider ?? null,
   };
 }

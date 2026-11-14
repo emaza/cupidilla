@@ -1,5 +1,12 @@
-import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import {
+  Inject,
+  Injectable,
+  Logger,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from '@nestjs/common';
+import {
+  OAUTH_CONFIRMED_CONNECT_TTL_MINUTES,
   OAUTH_FLOW_TTL_MINUTES,
   OAUTH_PROVIDERS,
   type OAuthCallbackRequest,
@@ -19,7 +26,7 @@ import {
   randomPKCECodeVerifier,
   randomState,
 } from 'openid-client';
-import { assertRecent, markSessionAuthenticated } from '../auth/recent-auth.js';
+import { markSessionAuthenticated } from '../auth/recent-auth.js';
 import { SessionsService } from '../auth/sessions.service.js';
 import { Clock } from '../common/clock.js';
 import {
@@ -32,6 +39,7 @@ import { ApiException } from '../common/errors/api.exception.js';
 import { DB, type Database } from '../database/database.types.js';
 import { isUniqueViolation } from '../database/pg-errors.js';
 import { oauthStates } from '../database/schema/index.js';
+import { PasswordService } from '../users/password.service.js';
 import { UsersService } from '../users/users.service.js';
 import { IdentitiesService } from './identities.service.js';
 import { flowInvalid, PendingIdentitiesService } from './pending-identities.service.js';
@@ -43,6 +51,8 @@ import {
 import { PROVIDER_CLIENTS, type ProviderClients } from './providers/provider-clients.js';
 
 const MINUTE_MS = 60_000;
+/** Cada cuánto se borran las filas caducadas de `oauth_states` (pueden llevar un hash de contraseña). */
+const SWEEP_INTERVAL_MS = MINUTE_MS;
 
 type OAuthStateRow = typeof oauthStates.$inferSelect;
 
@@ -52,8 +62,9 @@ const sameString = (a: string, b: string): boolean =>
 
 /** Inicio y vuelta de un flujo con proveedor, con las reglas de §6. */
 @Injectable()
-export class OAuthFlowService implements OnModuleInit {
+export class OAuthFlowService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(OAuthFlowService.name);
+  private sweepTimer: NodeJS.Timeout | undefined;
 
   constructor(
     @Inject(DB) private readonly db: Database,
@@ -63,12 +74,32 @@ export class OAuthFlowService implements OnModuleInit {
     private readonly identities: IdentitiesService,
     private readonly pending: PendingIdentitiesService,
     private readonly sessions: SessionsService,
+    private readonly passwords: PasswordService,
   ) {}
 
   /** Al arrancar se limpian las filas caducadas de las dos tablas (§4). */
   async onModuleInit(): Promise<void> {
     await this.deleteExpiredStates();
     await this.pending.deleteExpired();
+    // En los tests no hay timers: llaman a `sweepExpiredStates` con el reloj falso.
+    if (process.env.NODE_ENV !== 'test') {
+      this.sweepTimer = setInterval(() => void this.sweepExpiredStates(), SWEEP_INTERVAL_MS);
+      this.sweepTimer.unref();
+    }
+  }
+
+  onModuleDestroy(): void {
+    clearInterval(this.sweepTimer);
+    this.sweepTimer = undefined;
+  }
+
+  /** Limpieza periódica de `oauth_states` caducadas; un fallo se registra y se reintenta en el siguiente ciclo. */
+  async sweepExpiredStates(): Promise<void> {
+    try {
+      await this.deleteExpiredStates();
+    } catch (error) {
+      this.logger.warn(`No se pudieron borrar los estados OAuth caducados: ${String(error)}`);
+    }
   }
 
   /** Proveedores con credenciales, en el orden de la interfaz. */
@@ -98,9 +129,14 @@ export class OAuthFlowService implements OnModuleInit {
   }
 
   /**
-   * POST /users/me/oauth/:provider/authorization: reautenticarse o añadir un proveedor desde
-   * /account (§9.1, §9.3). Añadir exige una sesión reciente: una sesión robada no puede dejar
-   * unida una identidad del atacante. Reautenticarse exige tener ese proveedor unido.
+   * POST /users/me/oauth/:provider/authorization (§9.1, §9.3, §9.5, decisión 21):
+   * - `connect` con contraseña: se escribe en el mismo formulario y empieza el flujo de añadir.
+   * - `connect` sin contraseña: no se crea ninguna fila `connect`. Empieza una reautenticación con
+   *   un proveedor ya unido y su vuelta crea la fila `connect` (`connect_provider`). Así una sesión
+   *   robada no puede dejar unida una identidad del atacante.
+   * - `create_password`: lo mismo, con la contraseña nueva ya cifrada en la fila de
+   *   reautenticación; se guarda en `users` a la vuelta. `:provider` es el proveedor unido.
+   * - `reauthenticate`: exige tener `:provider` unido.
    */
   async startWithSession(
     provider: OAuthProvider,
@@ -108,25 +144,48 @@ export class OAuthFlowService implements OnModuleInit {
     request: OAuthSessionStartRequest,
   ): Promise<OAuthStartResponse> {
     this.client(provider);
-    let loginHint: string | undefined;
-    if (request.purpose === 'connect') {
-      // Con contraseña, se escribe en el mismo formulario; sin ella, sesión reciente (decisión 20):
-      // una sesión robada no puede dejar unida una identidad del atacante.
-      const hasPassword = await this.users.confirmPassword(session.userId, request.password);
-      if (!hasPassword) assertRecent(session, this.clock.now());
-    } else {
-      const identity = (await this.identities.listRowsForUser(session.userId)).find(
-        (row) => row.provider === provider,
-      );
-      if (!identity) throw new ApiException('NOT_FOUND', 404, undefined, 'Provider not linked');
-      loginHint = identity.providerEmail ?? undefined;
-    }
-    return this.createFlow(provider, {
-      purpose: request.purpose,
+    const base = {
       entryPoint: null,
       sessionTokenHash: session.tokenHash,
       returnPath: request.returnPath ?? null,
-      loginHint,
+    };
+    if (request.purpose === 'connect') {
+      const hasPassword = await this.users.confirmPassword(session.userId, request.password);
+      if (hasPassword) return this.createFlow(provider, { ...base, purpose: 'connect' });
+      // Confirma el proveedor unido usado más recientemente; el que se añade no puede confirmar.
+      const confirmer = (await this.identities.listRowsForUser(session.userId))
+        .filter((row) => row.provider !== provider)
+        .sort((a, b) => b.lastUsedAt.getTime() - a.lastUsedAt.getTime())[0];
+      // Sin otro proveedor, `:provider` es el único unido: no hay nada que añadir.
+      if (!confirmer) throw new ApiException('NOT_FOUND', 404, undefined, 'Provider not found');
+      return this.createFlow(confirmer.provider, {
+        ...base,
+        purpose: 'reauthenticate',
+        connectProvider: provider,
+        loginHint: confirmer.providerEmail ?? undefined,
+      });
+    }
+
+    const identity = (await this.identities.listRowsForUser(session.userId)).find(
+      (row) => row.provider === provider,
+    );
+    if (request.purpose === 'create_password') {
+      await this.users.assertHasNoPassword(session.userId);
+      if (!identity) throw new ApiException('NOT_FOUND', 404, undefined, 'Provider not linked');
+      // El hash va fuera de cualquier transacción.
+      const newPasswordHash = await this.passwords.hash(request.password);
+      return this.createFlow(provider, {
+        ...base,
+        purpose: 'reauthenticate',
+        newPasswordHash,
+        loginHint: identity.providerEmail ?? undefined,
+      });
+    }
+    if (!identity) throw new ApiException('NOT_FOUND', 404, undefined, 'Provider not linked');
+    return this.createFlow(provider, {
+      ...base,
+      purpose: 'reauthenticate',
+      loginHint: identity.providerEmail ?? undefined,
     });
   }
 
@@ -138,6 +197,12 @@ export class OAuthFlowService implements OnModuleInit {
       sessionTokenHash: string | null;
       returnPath: string | null;
       loginHint?: string;
+      /** Reautenticación que confirma añadir este proveedor (decisión 21). */
+      connectProvider?: OAuthProvider;
+      /** Reautenticación que confirma crear esta contraseña (hash argon2id, decisión 21). */
+      newPasswordHash?: string;
+      /** Vida de la fila; por defecto `OAUTH_FLOW_TTL_MINUTES`. */
+      ttlMinutes?: number;
     },
   ): Promise<OAuthStartResponse> {
     const client = this.client(provider);
@@ -148,7 +213,8 @@ export class OAuthFlowService implements OnModuleInit {
     const codeVerifier = randomPKCECodeVerifier();
     const nonce = randomNonce();
     const now = this.clock.now();
-    const expiresAt = new Date(now.getTime() + OAUTH_FLOW_TTL_MINUTES * MINUTE_MS);
+    const ttlMinutes = flow.ttlMinutes ?? OAUTH_FLOW_TTL_MINUTES;
+    const expiresAt = new Date(now.getTime() + ttlMinutes * MINUTE_MS);
     await this.db.insert(oauthStates).values({
       tokenHash: hashOpaqueToken(flowToken),
       provider,
@@ -159,6 +225,8 @@ export class OAuthFlowService implements OnModuleInit {
       codeVerifier,
       nonce,
       returnPath: flow.returnPath,
+      connectProvider: flow.connectProvider ?? null,
+      newPasswordHash: flow.newPasswordHash ?? null,
       createdAt: now,
       expiresAt,
     });
@@ -270,8 +338,12 @@ export class OAuthFlowService implements OnModuleInit {
       returnPath: row.returnPath,
     };
     const account = await this.users.findCredentialsByEmail(identity.email);
-    // 8. Sin cuenta: alta pendiente.
     if (!account) {
+      // 7b (R7b). El correo es el de un proveedor de otra cuenta: siempre `use_other_provider`
+      // con los proveedores de esa cuenta, tenga o no contraseña. No se une nada.
+      const ownerId = await this.identities.findUserIdByProviderEmail(identity.email);
+      if (ownerId) return this.useOtherProvider(provider, ownerId, failed);
+      // 8. Sin cuenta: alta pendiente.
       const pending = await this.pending.create({ ...pendingBase, kind: 'signup', userId: null });
       return { result: 'signup_required', pending };
     }
@@ -285,9 +357,16 @@ export class OAuthFlowService implements OnModuleInit {
       return { result: 'link_required', pending };
     }
     // 7. Cuenta sin contraseña, creada con otro proveedor: no se une nada.
-    const providers = (await this.identities.listForUser(account.user.id)).map(
-      (item) => item.provider,
-    );
+    return this.useOtherProvider(provider, account.user.id, failed);
+  }
+
+  /** `use_other_provider` con los proveedores de la cuenta, en el orden de la interfaz. */
+  private async useOtherProvider(
+    provider: OAuthProvider,
+    userId: string,
+    failed: (reason: OAuthFailureReason) => OAuthCallbackResponse,
+  ): Promise<OAuthCallbackResponse> {
+    const providers = (await this.identities.listForUser(userId)).map((item) => item.provider);
     const [first, ...rest] = providers;
     if (!first) return failed('provider_failed'); // no debería existir: cuenta sin forma de entrar
     this.logger.log({ event: 'oauth_flow_failed', provider, reason: 'use_other_provider' });
@@ -337,6 +416,18 @@ export class OAuthFlowService implements OnModuleInit {
       if (!known || known.userId !== session.userId) return failed('identity_mismatch');
       await markSessionAuthenticated(this.db, tokenHash, this.clock.now());
       this.logger.log({ event: 'session_reauthenticated', method: 'provider' });
+      if (row.connectProvider !== null) {
+        return this.confirmConnect(row.connectProvider, row.returnPath, tokenHash, failed);
+      }
+      if (row.newPasswordHash !== null) {
+        const created = await this.users.setPasswordHashIfMissing(
+          session.userId,
+          row.newPasswordHash,
+        );
+        if (!created) return failed('password_already_set');
+        this.logger.log({ event: 'password_created' });
+        return { result: 'password_created' };
+      }
       return { result: 'reauthenticated', returnPath: row.returnPath };
     }
 
@@ -344,14 +435,19 @@ export class OAuthFlowService implements OnModuleInit {
     if (known) {
       return known.userId === session.userId ? { result: 'connected' } : failed('identity_in_use');
     }
+    // Las mismas exigencias de correo que al entrar (decisión 21): nunca se guarda un correo que
+    // nadie ha demostrado poseer. Facebook cuenta como verificado si lo envía (R1).
+    if (identity.email === null) return failed('email_missing');
+    if (!identity.emailVerified) return failed('email_unverified');
     try {
-      await this.identities.create(this.db, {
-        userId: session.userId,
+      const outcome = await this.identities.createForConnect(session.userId, {
         provider,
         subject: identity.subject,
         providerEmail: identity.email,
-        emailVerified: identity.emailVerified,
+        emailVerified: true,
       });
+      // El correo es el de otra cuenta: mensaje genérico, sin revelar el motivo.
+      if (outcome === 'email_in_other_account') return failed('connect_refused');
     } catch (error) {
       if (isUniqueViolation(error, 'identities_user_provider_unique')) {
         return failed('already_linked');
@@ -365,5 +461,28 @@ export class OAuthFlowService implements OnModuleInit {
     }
     this.logger.log({ event: 'identity_connected', provider });
     return { result: 'connected' };
+  }
+
+  /**
+   * Reautenticación confirmada para añadir un proveedor (decisión 21): crea la fila `connect` de
+   * ese proveedor, ligada a la misma sesión y con 5 minutos de vida. Esa fila es la confirmación:
+   * de un solo uso y sin ningún token aparte en el navegador.
+   */
+  private async confirmConnect(
+    connectProvider: OAuthProvider,
+    returnPath: string | null,
+    tokenHash: string,
+    failed: (reason: OAuthFailureReason) => OAuthCallbackResponse,
+  ): Promise<OAuthCallbackResponse> {
+    if (!this.clients.has(connectProvider)) return failed('provider_failed');
+    const next = await this.createFlow(connectProvider, {
+      purpose: 'connect',
+      entryPoint: null,
+      sessionTokenHash: tokenHash,
+      returnPath,
+      ttlMinutes: OAUTH_CONFIRMED_CONNECT_TTL_MINUTES,
+    });
+    this.logger.log({ event: 'connect_confirmed', provider: connectProvider });
+    return { result: 'connect_confirmed', next };
   }
 }

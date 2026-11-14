@@ -6,7 +6,9 @@ import { safeReturnPath } from './return-path.ts';
 export type CallbackOutcome =
   | { kind: 'session'; location: string; session: { token: string; expiresAt: string } }
   | { kind: 'pending'; location: string; pending: { token: string; expiresAt: string } }
-  | { kind: 'redirect'; location: string };
+  | { kind: 'redirect'; location: string }
+  /** Confirmación hecha: la web sigue sin parar hacia el proveedor que se añade (decisión 21). */
+  | { kind: 'provider'; location: string; flow: { token: string; expiresAt: string } };
 
 const FAILURE_VALUES: Record<OAuthFailureReason, { notice?: string; error?: string }> = {
   cancelled: { notice: 'provider-cancelled' },
@@ -16,6 +18,9 @@ const FAILURE_VALUES: Record<OAuthFailureReason, { notice?: string; error?: stri
   identity_mismatch: { error: 'identity-mismatch' },
   identity_in_use: { error: 'identity-in-use' },
   already_linked: { error: 'already-linked' },
+  connect_refused: { error: 'connect-refused' },
+  // La cuenta ya tenía contraseña (otra pestaña): /account/password lleva a /account sin más.
+  password_already_set: {},
 };
 
 /** Ruta con un aviso o un error de la lista cerrada y el proveedor. */
@@ -33,15 +38,24 @@ const withMessage = (
 
 /**
  * Redirección de la vuelta. La cookie `cupidilla_oauth` solo sigue viva, con el token pendiente,
- * en el alta y la unión; en todo lo demás se borra.
+ * en el alta y la unión, o con el flujo siguiente tras una confirmación; en todo lo demás se borra.
+ * `signedIn`: la petición llega con sesión, así que el flujo era de /account.
  */
 export function callbackOutcome(
   provider: string,
   result: ApiResult<OAuthCallbackResponse>,
+  signedIn = false,
 ): CallbackOutcome {
   if (!result.ok) {
-    // Flujo caducado, ya usado o con una cookie que no vale: «ha pasado demasiado tiempo».
+    // Flujo caducado, ya usado o con una cookie que no vale: «ha pasado demasiado tiempo». Con
+    // sesión, /login no se ve: el aviso va a /account (decisión 21).
     if (result.error.code === 'OAUTH_FLOW_INVALID' || result.error.code === 'VALIDATION_FAILED') {
+      if (signedIn) {
+        return {
+          kind: 'redirect',
+          location: withMessage('/account', { error: 'confirm-expired' }, provider),
+        };
+      }
       return { kind: 'redirect', location: '/login?error=provider-expired' };
     }
     if (result.error.code === 'RATE_LIMITED') {
@@ -77,6 +91,15 @@ export function callbackOutcome(
         kind: 'redirect',
         location: withMessage('/account', { notice: 'linked' }, provider),
       };
+    case 'connect_confirmed':
+      // La URL la construye la API con su configuración, nunca con la petición (§12.2).
+      return {
+        kind: 'provider',
+        location: data.next.authorizationUrl,
+        flow: { token: data.next.flowToken, expiresAt: data.next.expiresAt },
+      };
+    case 'password_created':
+      return { kind: 'redirect', location: '/account?notice=password-created' };
     case 'failed': {
       const page =
         data.entryPoint === 'account' ? safeReturnPath(data.returnPath) : `/${data.entryPoint}`;

@@ -1,10 +1,5 @@
 import { z } from 'zod';
-import {
-  newPasswordSchema,
-  passwordInputSchema,
-  publicUserSchema,
-  strictObjectError,
-} from './auth.js';
+import { passwordInputSchema, publicUserSchema, strictObjectError } from './auth.js';
 import { consentSchema } from './consents.js';
 import { OAUTH_PROVIDERS } from './oauth.js';
 
@@ -42,7 +37,7 @@ export const accountResponseSchema = z.object({
       }),
     ),
   }),
-  /** La web decide con esto si la sesión es reciente; la API lo vuelve a comprobar siempre. */
+  /** Última vez que esta sesión demostró la identidad (contraseña o proveedor). */
   session: z.object({ authenticatedAt: z.iso.datetime() }),
   /**
    * Sesiones sin caducar de la cuenta: primero la actual y después de la más nueva a la más
@@ -64,14 +59,6 @@ export const deleteAccountRequestSchema = z.strictObject(
 );
 
 export type DeleteAccountRequest = z.infer<typeof deleteAccountRequestSchema>;
-
-/** Cuerpo de POST /users/me/password: las mismas reglas que la contraseña del registro. */
-export const createPasswordRequestSchema = z.strictObject(
-  { password: newPasswordSchema },
-  { error: strictObjectError },
-);
-
-export type CreatePasswordRequest = z.infer<typeof createPasswordRequestSchema>;
 
 /** Cuerpo de POST /users/me/reauthentication. */
 export const reauthenticateRequestSchema = z.strictObject(

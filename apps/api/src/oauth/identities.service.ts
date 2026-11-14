@@ -1,13 +1,21 @@
 import { Inject, Injectable, Logger, Module } from '@nestjs/common';
 import { OAUTH_PROVIDERS, type OAuthProvider } from '@cupidilla/contracts';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import { ApiException } from '../common/errors/api.exception.js';
 import { Clock } from '../common/clock.js';
-import { DB, type Database, type Executor } from '../database/database.types.js';
+import { DB, type Database, type Tx } from '../database/database.types.js';
+import { lockEmail, normalizeEmail } from '../database/email-lock.js';
 import { identities, users } from '../database/schema/index.js';
 import { Transactions } from '../database/transactions.js';
 
 export type IdentityRow = typeof identities.$inferSelect;
+
+/**
+ * `provider_email` igual a este correo, en minúsculas y sin espacios. Usa el índice
+ * `identities_provider_email_normalized_idx`, que tiene la misma expresión.
+ */
+export const providerEmailIs = (email: string) =>
+  eq(sql`lower(btrim(${identities.providerEmail}))`, normalizeEmail(email));
 
 export interface NewIdentity {
   userId: string;
@@ -70,21 +78,89 @@ export class IdentitiesService {
     return row;
   }
 
-  /** Inserta sin consulta previa: las UNIQUE deciden (`identities_*_unique`). */
-  async create(db: Executor, identity: NewIdentity): Promise<void> {
-    const now = this.clock.now();
-    await db.insert(identities).values({ ...identity, createdAt: now, lastUsedAt: now });
+  /**
+   * Cuenta dueña de la identidad cuyo `provider_email` verificado es este correo (R7b),
+   * comparando en minúsculas y sin espacios. Si hay varias, la de la identidad usada más
+   * recientemente. Una fila no verificada (dato antiguo) no cuenta (decisión 21).
+   */
+  async findUserIdByProviderEmail(email: string): Promise<string | undefined> {
+    const [row] = await this.db
+      .select({ userId: identities.userId })
+      .from(identities)
+      .where(and(providerEmailIs(email), eq(identities.emailVerified, true)))
+      .orderBy(desc(identities.lastUsedAt))
+      .limit(1);
+    return row?.userId;
   }
 
-  /** Entrada con una identidad ya unida: guarda el último correo del proveedor (T10). */
+  /**
+   * Inserta sin consulta previa: las UNIQUE deciden (`identities_*_unique`). Toma antes el
+   * bloqueo del correo del proveedor (`lockEmail`) para no cruzarse con un alta con contraseña de
+   * ese correo (R7), así que va dentro de una transacción.
+   */
+  async create(tx: Tx, identity: NewIdentity): Promise<void> {
+    if (identity.providerEmail !== null) await lockEmail(tx, identity.providerEmail);
+    const now = this.clock.now();
+    await tx.insert(identities).values({ ...identity, createdAt: now, lastUsedAt: now });
+  }
+
+  /**
+   * Añadir un proveedor desde /account (§9.3, decisión 21). El correo, ya verificado, no puede
+   * ser el `users.email` de otra cuenta ni el `provider_email` verificado de una identidad de otra
+   * cuenta: entonces no se une nada. Comprobación e inserción van en una transacción con el
+   * bloqueo del correo, así que un alta simultánea con ese correo va antes o después, nunca a la
+   * vez. Las violaciones UNIQUE de `create` llegan tal cual a quien llama.
+   */
+  async createForConnect(
+    userId: string,
+    identity: {
+      provider: OAuthProvider;
+      subject: string;
+      providerEmail: string;
+      emailVerified: true;
+    },
+  ): Promise<'created' | 'email_in_other_account'> {
+    return this.transactions.run(async (tx) => {
+      await lockEmail(tx, identity.providerEmail);
+      const [account] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.email, normalizeEmail(identity.providerEmail)), ne(users.id, userId)))
+        .limit(1);
+      if (account) return 'email_in_other_account';
+      const [other] = await tx
+        .select({ id: identities.id })
+        .from(identities)
+        .where(
+          and(
+            providerEmailIs(identity.providerEmail),
+            eq(identities.emailVerified, true),
+            ne(identities.userId, userId),
+          ),
+        )
+        .limit(1);
+      if (other) return 'email_in_other_account';
+      // `create` vuelve a tomar el bloqueo: en la misma transacción no espera a nadie.
+      await this.create(tx, { userId, ...identity });
+      return 'created';
+    });
+  }
+
+  /**
+   * Entrada con una identidad ya unida: guarda el último correo del proveedor (T10), con el mismo
+   * bloqueo del correo que `create`.
+   */
   async touch(
     id: string,
     data: { providerEmail: string | null; emailVerified: boolean },
   ): Promise<void> {
-    await this.db
-      .update(identities)
-      .set({ ...data, lastUsedAt: this.clock.now() })
-      .where(eq(identities.id, id));
+    await this.transactions.run(async (tx) => {
+      if (data.providerEmail !== null) await lockEmail(tx, data.providerEmail);
+      await tx
+        .update(identities)
+        .set({ ...data, lastUsedAt: this.clock.now() })
+        .where(eq(identities.id, id));
+    });
   }
 
   async listRowsForUser(userId: string): Promise<IdentityRow[]> {

@@ -125,4 +125,29 @@ describe('vistas de /account', () => {
       },
     ]);
   });
+
+  it('confirmWith es el proveedor unido usado más recientemente (decisión 21)', () => {
+    expect(signInMethodsView(account, ['google', 'facebook']).confirmWith).toBe('google');
+    const both = {
+      ...account,
+      signInMethods: {
+        password: false,
+        identities: [
+          {
+            provider: 'google' as const,
+            linkedAt: '2026-11-01T08:00:00.000Z',
+            lastUsedAt: '2026-11-02T08:00:00.000Z',
+          },
+          {
+            provider: 'facebook' as const,
+            linkedAt: '2026-11-01T08:00:00.000Z',
+            lastUsedAt: '2026-11-03T08:00:00.000Z',
+          },
+        ],
+      },
+    };
+    expect(signInMethodsView(both, []).confirmWith).toBe('facebook');
+    const none = { ...account, signInMethods: { password: true, identities: [] } };
+    expect(signInMethodsView(none, []).confirmWith).toBeNull();
+  });
 });

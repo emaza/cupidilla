@@ -24,7 +24,7 @@ export const GET: RequestHandler = async (event) => {
     { flowToken, callbackQuery: event.url.search.slice(1) },
     event.locals.sessionToken ?? undefined,
   );
-  const outcome = callbackOutcome(provider, result);
+  const outcome = callbackOutcome(provider, result, event.locals.user !== null);
   switch (outcome.kind) {
     case 'session':
       clearOAuthToken(event.cookies);
@@ -35,6 +35,10 @@ export const GET: RequestHandler = async (event) => {
       break;
     case 'redirect':
       clearOAuthToken(event.cookies);
+      break;
+    case 'provider':
+      // Segundo viaje de añadir un proveedor sin contraseña (decisión 21): el flujo nuevo.
+      setOAuthToken(event.cookies, outcome.flow.token, outcome.flow.expiresAt);
       break;
   }
   return seeOther(outcome.location);

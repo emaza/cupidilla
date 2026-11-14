@@ -9,7 +9,6 @@ export const ERROR_CODES = [
   'INVALID_CREDENTIALS', // 401  login: correo o contraseña incorrectos (indistinguibles)
   'PASSWORD_INCORRECT', // 403  contraseña errónea con sesión o estado pendiente (borrado, unión…)
   'LINK_ATTEMPTS_EXCEEDED', // 403  5.º fallo de contraseña en una unión; el estado pendiente ya no existe
-  'REAUTHENTICATION_REQUIRED', // 403  la operación exige una sesión autenticada hace menos de 10 min
   'FORBIDDEN', // 403  falta la clave interna o no es válida
   'NOT_FOUND', // 404
   'EMAIL_TAKEN', // 409
