@@ -7,7 +7,7 @@ import { ApiException } from '../common/errors/api.exception.js';
 import { Clock } from '../common/clock.js';
 import type { ActiveSession } from '../common/decorators/current-session.decorator.js';
 import { ConsentsService } from '../consents/consents.service.js';
-import { DB, type Database, type Tx } from '../database/database.types.js';
+import { DB, type Database, type Executor, type Tx } from '../database/database.types.js';
 import { lockEmail } from '../database/email-lock.js';
 import { isUniqueViolation } from '../database/pg-errors.js';
 import { identities, users } from '../database/schema/index.js';
@@ -163,9 +163,14 @@ export class UsersService {
    * Crea la contraseña de una cuenta que no tiene (§9.5, decisión 21), al volver de la
    * reautenticación con un proveedor unido. Una sola sentencia atómica: devuelve `false` si ya
    * había contraseña (otra pestaña). No cierra otras sesiones ni cambia `authenticated_at` (T17).
+   * `db`: la transacción de quien llama, que tiene bloqueada la sesión que lo pidió.
    */
-  async setPasswordHashIfMissing(userId: string, passwordHash: string): Promise<boolean> {
-    const updated = await this.db
+  async setPasswordHashIfMissing(
+    userId: string,
+    passwordHash: string,
+    db: Executor = this.db,
+  ): Promise<boolean> {
+    const updated = await db
       .update(users)
       .set({ passwordHash, updatedAt: this.clock.now() })
       .where(and(eq(users.id, userId), isNull(users.passwordHash)))

@@ -18,7 +18,7 @@ import {
   type OAuthStartRequest,
   type OAuthStartResponse,
 } from '@cupidilla/contracts';
-import { eq, lte } from 'drizzle-orm';
+import { and, eq, gt, lte } from 'drizzle-orm';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import {
   calculatePKCECodeChallenge,
@@ -36,9 +36,10 @@ import {
 } from '../common/crypto/opaque-token.js';
 import type { ActiveSession } from '../common/decorators/current-session.decorator.js';
 import { ApiException } from '../common/errors/api.exception.js';
-import { DB, type Database } from '../database/database.types.js';
+import { DB, type Database, type Executor, type Tx } from '../database/database.types.js';
 import { isUniqueViolation } from '../database/pg-errors.js';
-import { oauthStates } from '../database/schema/index.js';
+import { oauthStates, sessions, users } from '../database/schema/index.js';
+import { Transactions } from '../database/transactions.js';
 import { PasswordService } from '../users/password.service.js';
 import { UsersService } from '../users/users.service.js';
 import { IdentitiesService } from './identities.service.js';
@@ -75,6 +76,7 @@ export class OAuthFlowService implements OnModuleInit, OnModuleDestroy {
     private readonly pending: PendingIdentitiesService,
     private readonly sessions: SessionsService,
     private readonly passwords: PasswordService,
+    private readonly transactions: Transactions,
   ) {}
 
   /** Al arrancar se limpian las filas caducadas de las dos tablas (§4). */
@@ -114,8 +116,8 @@ export class OAuthFlowService implements OnModuleInit, OnModuleDestroy {
     return client;
   }
 
-  private async deleteExpiredStates(): Promise<void> {
-    await this.db.delete(oauthStates).where(lte(oauthStates.expiresAt, this.clock.now()));
+  private async deleteExpiredStates(db: Executor = this.db): Promise<void> {
+    await db.delete(oauthStates).where(lte(oauthStates.expiresAt, this.clock.now()));
   }
 
   /** POST /auth/oauth/:provider/authorization: empieza a entrar sin sesión. */
@@ -204,9 +206,11 @@ export class OAuthFlowService implements OnModuleInit, OnModuleDestroy {
       /** Vida de la fila; por defecto `OAUTH_FLOW_TTL_MINUTES`. */
       ttlMinutes?: number;
     },
+    db: Executor = this.db,
   ): Promise<OAuthStartResponse> {
     const client = this.client(provider);
-    await this.deleteExpiredStates();
+    // Dentro de la transacción de quien llama, si la hay: no se pide otro cliente al pool.
+    await this.deleteExpiredStates(db);
 
     const flowToken = generateOpaqueToken();
     const state = randomState();
@@ -215,7 +219,7 @@ export class OAuthFlowService implements OnModuleInit, OnModuleDestroy {
     const now = this.clock.now();
     const ttlMinutes = flow.ttlMinutes ?? OAUTH_FLOW_TTL_MINUTES;
     const expiresAt = new Date(now.getTime() + ttlMinutes * MINUTE_MS);
-    await this.db.insert(oauthStates).values({
+    await db.insert(oauthStates).values({
       tokenHash: hashOpaqueToken(flowToken),
       provider,
       purpose: flow.purpose,
@@ -414,21 +418,26 @@ export class OAuthFlowService implements OnModuleInit, OnModuleDestroy {
     if (row.purpose === 'reauthenticate') {
       // Tiene que ser una identidad de esta cuenta (R5): si no, no se confirma nada.
       if (!known || known.userId !== session.userId) return failed('identity_mismatch');
-      await markSessionAuthenticated(this.db, tokenHash, this.clock.now());
-      this.logger.log({ event: 'session_reauthenticated', method: 'provider' });
-      if (row.connectProvider !== null) {
-        return this.confirmConnect(row.connectProvider, row.returnPath, tokenHash, failed);
-      }
-      if (row.newPasswordHash !== null) {
-        const created = await this.users.setPasswordHashIfMissing(
-          session.userId,
-          row.newPasswordHash,
-        );
-        if (!created) return failed('password_already_set');
-        this.logger.log({ event: 'password_created' });
-        return { result: 'password_created' };
-      }
-      return { result: 'reauthenticated', returnPath: row.returnPath };
+      const connectProvider = row.connectProvider;
+      const newPasswordHash = row.newPasswordHash;
+      return this.withLiveSession(session.userId, tokenHash, async (tx) => {
+        await markSessionAuthenticated(tx, tokenHash, this.clock.now());
+        this.logger.log({ event: 'session_reauthenticated', method: 'provider' });
+        if (connectProvider !== null) {
+          return this.confirmConnect(connectProvider, row.returnPath, tokenHash, failed, tx);
+        }
+        if (newPasswordHash !== null) {
+          const created = await this.users.setPasswordHashIfMissing(
+            session.userId,
+            newPasswordHash,
+            tx,
+          );
+          if (!created) return failed('password_already_set');
+          this.logger.log({ event: 'password_created' });
+          return { result: 'password_created' };
+        }
+        return { result: 'reauthenticated', returnPath: row.returnPath };
+      });
     }
 
     // connect (§9.3).
@@ -440,12 +449,14 @@ export class OAuthFlowService implements OnModuleInit, OnModuleDestroy {
     if (identity.email === null) return failed('email_missing');
     if (!identity.emailVerified) return failed('email_unverified');
     try {
-      const outcome = await this.identities.createForConnect(session.userId, {
-        provider,
-        subject: identity.subject,
-        providerEmail: identity.email,
-        emailVerified: true,
-      });
+      const providerEmail = identity.email;
+      const outcome = await this.withLiveSession(session.userId, tokenHash, (tx) =>
+        this.identities.createForConnect(
+          session.userId,
+          { provider, subject: identity.subject, providerEmail, emailVerified: true },
+          tx,
+        ),
+      );
       // El correo es el de otra cuenta: mensaje genérico, sin revelar el motivo.
       if (outcome === 'email_in_other_account') return failed('connect_refused');
     } catch (error) {
@@ -473,16 +484,58 @@ export class OAuthFlowService implements OnModuleInit, OnModuleDestroy {
     returnPath: string | null,
     tokenHash: string,
     failed: (reason: OAuthFailureReason) => OAuthCallbackResponse,
+    tx: Tx,
   ): Promise<OAuthCallbackResponse> {
     if (!this.clients.has(connectProvider)) return failed('provider_failed');
-    const next = await this.createFlow(connectProvider, {
-      purpose: 'connect',
-      entryPoint: null,
-      sessionTokenHash: tokenHash,
-      returnPath,
-      ttlMinutes: OAUTH_CONFIRMED_CONNECT_TTL_MINUTES,
-    });
+    const next = await this.createFlow(
+      connectProvider,
+      {
+        purpose: 'connect',
+        entryPoint: null,
+        sessionTokenHash: tokenHash,
+        returnPath,
+        ttlMinutes: OAUTH_CONFIRMED_CONNECT_TTL_MINUTES,
+      },
+      tx,
+    );
     this.logger.log({ event: 'connect_confirmed', provider: connectProvider });
     return { result: 'connect_confirmed', next };
+  }
+
+  /**
+   * Escrituras de la vuelta con sesión (contraseña, identidad, fila `connect`), en una
+   * transacción corta abierta después del intercambio con el proveedor, nunca durante él.
+   * La sesión se validó antes de ir al proveedor, pero puede haberse cerrado mientras tanto
+   * (logout, borrado desde /account, caducidad): sin este bloqueo, la revocación concurrente no
+   * impediría crear una forma de entrar. Bloquea primero la cuenta y luego la sesión viva, el
+   * mismo orden que el borrado de la cuenta (`users` y en cascada `sessions`), así que no hay
+   * interbloqueo; un logout simultáneo espera o ya no deja fila. Sin sesión, `OAUTH_FLOW_INVALID`,
+   * como si se hubiera cerrado antes de volver.
+   */
+  private async withLiveSession<T>(
+    userId: string,
+    tokenHash: string,
+    fn: (tx: Tx) => Promise<T>,
+  ): Promise<T> {
+    return this.transactions.run(async (tx) => {
+      await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, userId))
+        .for('no key update');
+      const [live] = await tx
+        .select({ tokenHash: sessions.tokenHash })
+        .from(sessions)
+        .where(
+          and(
+            eq(sessions.tokenHash, tokenHash),
+            eq(sessions.userId, userId),
+            gt(sessions.expiresAt, this.clock.now()),
+          ),
+        )
+        .for('update');
+      if (!live) throw flowInvalid();
+      return fn(tx);
+    });
   }
 }

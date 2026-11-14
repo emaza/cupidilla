@@ -109,7 +109,8 @@ export class IdentitiesService {
    * ser el `users.email` de otra cuenta ni el `provider_email` verificado de una identidad de otra
    * cuenta: entonces no se une nada. Comprobación e inserción van en una transacción con el
    * bloqueo del correo, así que un alta simultánea con ese correo va antes o después, nunca a la
-   * vez. Las violaciones UNIQUE de `create` llegan tal cual a quien llama.
+   * vez. Las violaciones UNIQUE de `create` llegan tal cual a quien llama. Con `tx`, va dentro
+   * de la transacción de quien llama (que tiene bloqueada la sesión que lo pidió).
    */
   async createForConnect(
     userId: string,
@@ -119,31 +120,31 @@ export class IdentitiesService {
       providerEmail: string;
       emailVerified: true;
     },
+    tx?: Tx,
   ): Promise<'created' | 'email_in_other_account'> {
-    return this.transactions.run(async (tx) => {
-      await lockEmail(tx, identity.providerEmail);
-      const [account] = await tx
-        .select({ id: users.id })
-        .from(users)
-        .where(and(eq(users.email, normalizeEmail(identity.providerEmail)), ne(users.id, userId)))
-        .limit(1);
-      if (account) return 'email_in_other_account';
-      const [other] = await tx
-        .select({ id: identities.id })
-        .from(identities)
-        .where(
-          and(
-            providerEmailIs(identity.providerEmail),
-            eq(identities.emailVerified, true),
-            ne(identities.userId, userId),
-          ),
-        )
-        .limit(1);
-      if (other) return 'email_in_other_account';
-      // `create` vuelve a tomar el bloqueo: en la misma transacción no espera a nadie.
-      await this.create(tx, { userId, ...identity });
-      return 'created';
-    });
+    if (!tx) return this.transactions.run((own) => this.createForConnect(userId, identity, own));
+    await lockEmail(tx, identity.providerEmail);
+    const [account] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.email, normalizeEmail(identity.providerEmail)), ne(users.id, userId)))
+      .limit(1);
+    if (account) return 'email_in_other_account';
+    const [other] = await tx
+      .select({ id: identities.id })
+      .from(identities)
+      .where(
+        and(
+          providerEmailIs(identity.providerEmail),
+          eq(identities.emailVerified, true),
+          ne(identities.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (other) return 'email_in_other_account';
+    // `create` vuelve a tomar el bloqueo: en la misma transacción no espera a nadie.
+    await this.create(tx, { userId, ...identity });
+    return 'created';
   }
 
   /**
