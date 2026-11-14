@@ -37,9 +37,12 @@ describe('Cuentas sin contraseña y sesión autenticada (fase 1)', () => {
   const login = (email: string, password: string) =>
     api(t.app).post('/auth/login').send({ email, password });
 
-  /** Simula una cuenta creada con un proveedor: sin contraseña. */
+  /** Simula una cuenta creada con un proveedor: sin contraseña y con el correo verificado (correo §3.1). */
   async function withoutPassword(userId: string): Promise<void> {
-    await t.db.update(users).set({ passwordHash: null }).where(eq(users.id, userId));
+    await t.db
+      .update(users)
+      .set({ passwordHash: null, emailVerifiedAt: t.clock.now() })
+      .where(eq(users.id, userId));
   }
 
   it('las sesiones nuevas nacen con authenticated_at = created_at (registro y login)', async () => {

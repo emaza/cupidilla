@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { AccountResponse, PublicUser } from '@cupidilla/contracts';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { listOpenSessions } from '../auth/open-sessions.js';
 import { markSessionAuthenticated } from '../auth/recent-auth.js';
 import { ApiException } from '../common/errors/api.exception.js';
@@ -10,7 +10,7 @@ import { ConsentsService } from '../consents/consents.service.js';
 import { DB, type Database, type Executor, type Tx } from '../database/database.types.js';
 import { lockEmail } from '../database/email-lock.js';
 import { isUniqueViolation } from '../database/pg-errors.js';
-import { identities, users } from '../database/schema/index.js';
+import { emailOutbox, identities, users } from '../database/schema/index.js';
 import { IdentitiesService, providerEmailIs } from '../oauth/identities.service.js';
 import { PasswordService } from './password.service.js';
 
@@ -19,6 +19,11 @@ export interface NewUser {
   /** `null` en una cuenta creada con un proveedor (§5.1). */
   passwordHash: string | null;
   birthDate: string;
+  /**
+   * Las cuentas creadas con un proveedor nacen con el correo verificado (correo §5.10); las del
+   * registro con contraseña, sin verificar.
+   */
+  emailVerified?: boolean;
 }
 
 export interface UserCredentials {
@@ -54,10 +59,16 @@ export class UsersService {
   async create(tx: Tx, data: NewUser): Promise<PublicUser> {
     await lockEmail(tx, data.email);
     const now = this.clock.now();
+    const { emailVerified = false, ...values } = data;
     try {
       const [row] = await tx
         .insert(users)
-        .values({ ...data, createdAt: now, updatedAt: now })
+        .values({
+          ...values,
+          emailVerifiedAt: emailVerified ? now : null,
+          createdAt: now,
+          updatedAt: now,
+        })
         .returning();
       if (!row) throw new Error('INSERT de users sin fila devuelta');
       return toPublicUser(row);
@@ -219,8 +230,10 @@ export class UsersService {
   }
 
   /**
-   * Borrado real (§10). Un único DELETE: ON DELETE CASCADE elimina en la misma sentencia
-   * todas las sesiones y todos los consentimientos del usuario.
+   * Borrado real (§10). ON DELETE CASCADE elimina con la fila de `users` todas sus sesiones,
+   * consentimientos, identidades y tokens de correo. En la misma transacción se borran las filas
+   * del *outbox* con su correo, pendientes o fallidas (correo §3.5): SQL directo sobre la tabla,
+   * sin `MailModule`, en la misma sentencia.
    */
   async deleteAccount(
     session: Pick<ActiveSession, 'userId'>,
@@ -228,7 +241,7 @@ export class UsersService {
   ): Promise<void> {
     const userId = session.userId;
     const [row] = await this.db
-      .select({ passwordHash: users.passwordHash })
+      .select({ passwordHash: users.passwordHash, email: users.email })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
@@ -236,7 +249,7 @@ export class UsersService {
     if (row.passwordHash === null) {
       // Sin contraseña (§9.2, decisión 20): no hay nada que pedir. La palabra «ELIMINAR» la valida
       // la web: es una confirmación de intención, no de identidad.
-      await this.db.delete(users).where(eq(users.id, userId));
+      await this.deleteUserAndMail(userId, row.email);
       this.logger.log({ event: 'account_deleted' });
       return;
     }
@@ -252,7 +265,17 @@ export class UsersService {
     if (!(await this.passwords.verify(row.passwordHash, password))) {
       throw new ApiException('PASSWORD_INCORRECT', 403, undefined, 'Password does not match');
     }
-    await this.db.delete(users).where(eq(users.id, userId));
+    await this.deleteUserAndMail(userId, row.email);
     this.logger.log({ event: 'account_deleted' });
+  }
+
+  /**
+   * Una sola sentencia, atómica y sin transacción explícita: si se pierde su respuesta, el
+   * resultado es incierto como en H0 (OUTCOME_UNKNOWN), nunca a medias.
+   */
+  private async deleteUserAndMail(userId: string, email: string): Promise<void> {
+    await this.db.execute(sql`
+      with deleted_mail as (delete from ${emailOutbox} where ${emailOutbox.toEmail} = ${email})
+      delete from ${users} where ${users.id} = ${userId}`);
   }
 }

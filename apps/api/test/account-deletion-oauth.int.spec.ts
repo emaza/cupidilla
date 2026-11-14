@@ -1,4 +1,6 @@
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import { emailOutbox } from '../src/database/schema/index.js';
+import { OutboxService } from '../src/mail/outbox.service.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { runFlow, signupBody } from './helpers/oauth.js';
 import {
@@ -61,10 +63,39 @@ describe('O-17: borrar una cuenta sin contraseña (§9.2, decisión 20)', () => 
     expect(deleted.status).toBe(204);
 
     const tables = await tablesReferencingUsers();
-    expect(tables.sort()).toEqual(['consents', 'identities', 'pending_identities', 'sessions']);
+    expect(tables.sort()).toEqual([
+      'consents',
+      'email_tokens',
+      'identities',
+      'pending_identities',
+      'sessions',
+    ]);
     for (const table of [...tables, 'users', 'oauth_states']) {
       expect(await countRows(t.db, table), table).toBe(0);
     }
+  });
+
+  /** Correo 3.5: filas del outbox (pendiente y fallida) de la cuenta y una de otra persona. */
+  async function seedOutbox(email: string): Promise<void> {
+    const outbox = t.app.get(OutboxService);
+    await outbox.enqueue(t.db, 'password_changed', email);
+    await t.db.update(emailOutbox).set({ failedAt: t.clock.now() });
+    await outbox.enqueue(t.db, 'password_changed', email);
+    await outbox.enqueue(t.db, 'signup_notice', email);
+    await outbox.enqueue(t.db, 'signup_notice', 'otra@example.com');
+  }
+  const outboxTo = async (email: string) =>
+    (await t.db.select().from(emailOutbox).where(eq(emailOutbox.toEmail, email))).length;
+
+  it('§3.5: sin contraseña, borrar la cuenta también borra sus filas del outbox', async () => {
+    const account = await googleAccount();
+    const email = account.identity.email!;
+    await seedOutbox(email);
+    expect(await outboxTo(email)).toBe(3);
+
+    expect((await authed(account.token).post('/users/me/deletion').send({})).status).toBe(204);
+    expect(await outboxTo(email)).toBe(0);
+    expect(await outboxTo('otra@example.com')).toBe(1);
   });
 
   it('con la sesión recién creada (alta), el borrado sin contraseña es directo', async () => {

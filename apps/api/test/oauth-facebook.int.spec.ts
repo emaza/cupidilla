@@ -1,7 +1,7 @@
 import { oauthCallbackResponseSchema } from '@cupidilla/contracts';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { pendingIdentities } from '../src/database/schema/index.js';
-import { FAKE_PROVIDER_URL, OAUTH_REDIRECT_BASE_URL, OAUTH_TEST_ENV } from './helpers/oauth-env.js';
+import { FAKE_PROVIDER_URL, PUBLIC_WEB_URL, OAUTH_TEST_ENV } from './helpers/oauth-env.js';
 import { authorize, callback, runFlow, signupBody, startFlow } from './helpers/oauth.js';
 import {
   api,
@@ -37,9 +37,7 @@ describe('Entrada con Facebook (fase 3)', () => {
     expect(response.status).toBe(201);
     const url = new URL(response.body.authorizationUrl as string);
     expect(url.origin + url.pathname).toBe(`${FAKE_PROVIDER_URL}/facebook/dialog/oauth`);
-    expect(url.searchParams.get('redirect_uri')).toBe(
-      `${OAUTH_REDIRECT_BASE_URL}/auth/facebook/callback`,
-    );
+    expect(url.searchParams.get('redirect_uri')).toBe(`${PUBLIC_WEB_URL}/auth/facebook/callback`);
     expect(url.searchParams.get('scope')).toBe('email');
     expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     expect(url.searchParams.has('nonce')).toBe(false);

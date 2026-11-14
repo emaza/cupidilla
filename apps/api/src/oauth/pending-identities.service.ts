@@ -176,6 +176,8 @@ export class PendingIdentitiesService {
           email: pending.providerEmail,
           passwordHash: null,
           birthDate: request.birthDate,
+          // El correo es el del proveedor, que lo da por verificado (correo §5.10, R-M14).
+          emailVerified: true,
         });
         await this.identities.create(tx, {
           userId: user.id,

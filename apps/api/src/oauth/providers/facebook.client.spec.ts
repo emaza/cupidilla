@@ -29,7 +29,7 @@ beforeAll(async () => {
     slowResponseMs: TIMEOUT_MS + 400,
   });
   const settings = providerSettings({
-    OAUTH_REDIRECT_BASE_URL: BASE,
+    PUBLIC_WEB_URL: BASE,
     GOOGLE_CLIENT_ID: undefined,
     GOOGLE_CLIENT_SECRET: undefined,
     FACEBOOK_APP_ID: '1234567890',
@@ -101,7 +101,7 @@ describe('FacebookClient con el proveedor falso', () => {
 
   it('los endpoints reales usan la Graph v27.0', () => {
     const real = providerSettings({
-      OAUTH_REDIRECT_BASE_URL: BASE,
+      PUBLIC_WEB_URL: BASE,
       GOOGLE_CLIENT_ID: undefined,
       GOOGLE_CLIENT_SECRET: undefined,
       FACEBOOK_APP_ID: '1',

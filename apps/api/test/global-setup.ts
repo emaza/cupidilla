@@ -5,7 +5,7 @@ import { loadEnv } from 'vite';
 import {
   FAKE_PROVIDER_PORT,
   FAKE_SLOW_RESPONSE_MS,
-  OAUTH_REDIRECT_BASE_URL,
+  PUBLIC_WEB_URL,
   OAUTH_TEST_ENV,
 } from './helpers/oauth-env.js';
 
@@ -30,12 +30,12 @@ export default async function setup(): Promise<() => Promise<void>> {
     google: {
       clientId: OAUTH_TEST_ENV.GOOGLE_CLIENT_ID,
       clientSecret: OAUTH_TEST_ENV.GOOGLE_CLIENT_SECRET,
-      redirectUris: [`${OAUTH_REDIRECT_BASE_URL}/auth/google/callback`],
+      redirectUris: [`${PUBLIC_WEB_URL}/auth/google/callback`],
     },
     facebook: {
       appId: OAUTH_TEST_ENV.FACEBOOK_APP_ID,
       appSecret: OAUTH_TEST_ENV.FACEBOOK_APP_SECRET,
-      redirectUris: [`${OAUTH_REDIRECT_BASE_URL}/auth/facebook/callback`],
+      redirectUris: [`${PUBLIC_WEB_URL}/auth/facebook/callback`],
     },
     slowResponseMs: FAKE_SLOW_RESPONSE_MS,
   });
