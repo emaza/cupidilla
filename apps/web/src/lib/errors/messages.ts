@@ -13,7 +13,7 @@ export const WEB_ERROR_CODES = ['API_UNAVAILABLE'] as const;
 export type WebErrorCode = ErrorCode | (typeof WEB_ERROR_CODES)[number];
 
 /** Formularios. Cada uno tiene sus propios textos de error (UX §5). */
-export type FormName = 'register' | 'login' | 'delete' | 'logout' | 'signup' | 'link';
+export type FormName = 'register' | 'login' | 'delete' | 'logout' | 'signup' | 'link' | 'verify';
 
 function byCode(
   fallback: TextKey,
@@ -35,8 +35,8 @@ function byIssue(
 
 /** Código de error de la API → clave del texto general de cada formulario. */
 export const errorMessages: Record<FormName, Record<WebErrorCode, TextKey>> = {
+  // El registro uniforme ya no da EMAIL_TAKEN (correo UX §7).
   register: byCode('registro.error.servidor', {
-    EMAIL_TAKEN: 'registro.error.correo_existente',
     TERMS_VERSION_OUTDATED: 'registro.error.condiciones_version',
     RATE_LIMITED: 'comun.error.limite',
     OUTCOME_UNKNOWN: 'registro.error.resultado_incierto',
@@ -67,6 +67,16 @@ export const errorMessages: Record<FormName, Record<WebErrorCode, TextKey>> = {
     LINK_ATTEMPTS_EXCEEDED: 'union.error.limite',
     RATE_LIMITED: 'comun.error.limite',
     OUTCOME_UNKNOWN: 'union.error.resultado_incierto',
+  }),
+  // /verify-email (correo UX §3.2, §7). Los dos códigos de enlace son pantallas enteras: la página
+  // redirige a ellas, y su texto aquí es el título de esa pantalla.
+  verify: byCode('confirmar.error.servidor', {
+    PASSWORD_INCORRECT: 'confirmar.error.contrasena',
+    VALIDATION_FAILED: 'confirmar.error.contrasena',
+    TOKEN_ATTEMPTS_EXCEEDED: 'enlace.intentos.titulo',
+    TOKEN_INVALID_OR_EXPIRED: 'enlace.titulo',
+    RATE_LIMITED: 'comun.error.limite',
+    OUTCOME_UNKNOWN: 'confirmar.error.resultado_incierto',
   }),
 };
 

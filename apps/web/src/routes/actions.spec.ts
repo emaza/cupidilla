@@ -14,6 +14,9 @@ const api = vi.hoisted(() => ({
   deleteAccount: vi.fn(),
   session: vi.fn(),
   account: vi.fn(),
+  requestEmailVerification: vi.fn(),
+  inspectEmailToken: vi.fn(),
+  verifyEmail: vi.fn(),
 }));
 const cookie = vi.hoisted(() => ({ set: vi.fn(), clear: vi.fn() }));
 
@@ -29,18 +32,39 @@ const registerPage = await import('./(guest)/register/+page.server.ts');
 const loginPage = await import('./(guest)/login/+page.server.ts');
 const accountPage = await import('./(private)/account/+page.server.ts');
 const deletePage = await import('./(private)/account/delete/+page.server.ts');
+const verifyPage = await import('./verify-email/+page.server.ts');
 
 const TERMS = SERVICE_TERMS_VERSION;
 
+/** Cookies en memoria: guardan el valor y las opciones de la última escritura. */
+function fakeCookies(initial: Record<string, string> = {}) {
+  const jar = new Map<string, { value: string; options: Record<string, unknown> }>(
+    Object.entries(initial).map(([name, value]) => [name, { value, options: {} }]),
+  );
+  return {
+    jar,
+    get: (name: string) => jar.get(name)?.value,
+    set: (name: string, value: string, options: Record<string, unknown>) =>
+      jar.set(name, { value, options }),
+    delete: (name: string) => jar.delete(name),
+  };
+}
+
+let cookies = fakeCookies();
+
 /** Evento de SvelteKit mínimo con un formulario. `E` lo fija el tipo que espera cada acción. */
-function formEvent<E>(fields: Record<string, string>, locals: Record<string, unknown> = {}): E {
+function formEvent<E>(
+  fields: Record<string, string>,
+  locals: Record<string, unknown> = {},
+  url = 'http://localhost/',
+): E {
   const data = new FormData();
   for (const [name, value] of Object.entries(fields)) data.set(name, value);
   return {
     request: { formData: () => Promise.resolve(data) },
-    cookies: {},
+    cookies,
     locals: { user: null, sessionToken: null, ...locals },
-    url: new URL('http://localhost/'),
+    url: new URL(url),
     getClientAddress: () => '127.0.0.1',
   } as unknown as E;
 }
@@ -78,6 +102,7 @@ const adultForm = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  cookies = fakeCookies();
 });
 
 describe('registro: respuestas de la API (criterios 31 y 32)', () => {
@@ -133,19 +158,19 @@ describe('registro: respuestas de la API (criterios 31 y 32)', () => {
     });
   });
 
-  it('con la API acierta: cookie y redirección 303 a /account, sin devolver el token', async () => {
-    api.register.mockResolvedValue({
-      ok: true,
-      status: 201,
-      data: {
-        user: {},
-        session: { token: 'TOKEN-SECRETO', expiresAt: '2026-12-11T00:00:00.000Z' },
-      },
-    });
-    const outcome = await submit();
-    expect(outcome.redirect).toEqual({ status: 303, location: '/account' });
-    expect(cookie.set).toHaveBeenCalledWith(expect.anything(), 'TOKEN-SECRETO', expect.any(String));
-  });
+  it.each(['ana@example.com', 'nadie@example.com'])(
+    'B7-4: con 202 (%s): 303 a /register/check-email con el correo en cupidilla_pending_email y sin sesión',
+    async (email) => {
+      api.register.mockResolvedValue({ ok: true, status: 202, data: undefined });
+      const outcome = await submit({ ...adultForm, email });
+      expect(outcome.redirect).toEqual({ status: 303, location: '/register/check-email' });
+      expect(cookies.jar.get('cupidilla_pending_email')).toEqual({
+        value: `signup:${email}`,
+        options: expect.objectContaining({ path: '/', httpOnly: true, sameSite: 'lax' }),
+      });
+      expect(cookie.set).not.toHaveBeenCalled();
+    },
+  );
 
   it('un menor: pantalla de cierre sin ningún valor y sin llamar a la API', async () => {
     const latest = latestAdultBirthDate(referenceToday(new Date()), DEFAULT_MIN_AGE);
@@ -312,6 +337,157 @@ describe('/account: salir (acuerdo A14)', () => {
     expect(redirect).toBeUndefined();
     expect(result).toMatchObject({ status: 503, data: { general: 'cuenta.error.servidor' } });
     expect(cookie.clear).not.toHaveBeenCalled();
+  });
+});
+
+describe('/account: reenviar la verificación (B7-7)', () => {
+  const submitResend = (user: Record<string, unknown>) =>
+    run(
+      () =>
+        accountPage.actions.resendVerification(
+          formEvent({}, { user, sessionToken: 'T'.repeat(43) }),
+        ) as Promise<unknown>,
+    );
+
+  it('con el correo ya confirmado no llama a la API: verification-already', async () => {
+    const outcome = await submitResend({ id: 'u', email: 'ana@example.com', emailVerified: true });
+    expect(outcome.redirect).toEqual({
+      status: 303,
+      location: '/account?notice=verification-already',
+    });
+    expect(api.requestEmailVerification).not.toHaveBeenCalled();
+  });
+
+  it('sin confirmar: pide el correo de la sesión y avisa', async () => {
+    api.requestEmailVerification.mockResolvedValue({ ok: true, status: 202, data: undefined });
+    const outcome = await submitResend({
+      id: 'u',
+      email: 'beto@example.com',
+      emailVerified: false,
+    });
+    expect(outcome.redirect).toEqual({
+      status: 303,
+      location: '/account?notice=verification-sent',
+    });
+    expect(api.requestEmailVerification).toHaveBeenCalledWith(
+      expect.anything(),
+      'beto@example.com',
+    );
+
+    api.requestEmailVerification.mockResolvedValue(apiFailure(429, 'RATE_LIMITED'));
+    expect(
+      (await submitResend({ id: 'u', email: 'beto@example.com', emailVerified: false })).redirect,
+    ).toEqual({ status: 303, location: '/account?error=rate-limited' });
+  });
+});
+
+describe('/verify-email (B7-2, B7-3)', () => {
+  const TOKEN = 'A'.repeat(43);
+  const load = (url: string, locals: Record<string, unknown> = {}) =>
+    run(() => verifyPage.load(formEvent({}, locals, url)) as Promise<unknown>);
+  const status = async (promise: Promise<unknown>) => {
+    try {
+      await promise;
+      return undefined;
+    } catch (thrown) {
+      return (thrown as { status?: number }).status;
+    }
+  };
+
+  it('B7-2: con un token de 43 caracteres, cookie de su ruta y 303 a /verify-email sin consulta', async () => {
+    const outcome = await load(`http://localhost/verify-email?token=${TOKEN}`);
+    expect(outcome.redirect).toEqual({ status: 303, location: '/verify-email' });
+    expect(cookies.jar.get('cupidilla_email_token')).toEqual({
+      value: TOKEN,
+      options: expect.objectContaining({ path: '/verify-email', httpOnly: true, sameSite: 'lax' }),
+    });
+    expect(api.inspectEmailToken).not.toHaveBeenCalled();
+  });
+
+  it('B7-2: con ?token=abc no hay cookie y es «Este enlace ya no sirve» (410)', async () => {
+    const code = await status(
+      verifyPage.load(
+        formEvent({}, {}, 'http://localhost/verify-email?token=abc'),
+      ) as Promise<unknown>,
+    );
+    expect(code).toBe(410);
+    expect(cookies.jar.has('cupidilla_email_token')).toBe(false);
+  });
+
+  it('B7-3: una cookie que la comprobación rechaza da 410 y se borra', async () => {
+    cookies = fakeCookies({ cupidilla_email_token: TOKEN });
+    api.inspectEmailToken.mockResolvedValue(apiFailure(400, 'TOKEN_INVALID_OR_EXPIRED'));
+    const code = await status(
+      verifyPage.load(formEvent({}, {}, 'http://localhost/verify-email')) as Promise<unknown>,
+    );
+    expect(code).toBe(410);
+    expect(cookies.jar.has('cupidilla_email_token')).toBe(false);
+  });
+
+  it('un enlace válido pide la contraseña si la sesión no es de esa cuenta (K3)', async () => {
+    cookies = fakeCookies({ cupidilla_email_token: TOKEN });
+    api.inspectEmailToken.mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { emailHint: 'b•••@example.com', sessionMatches: false },
+    });
+    const { result } = await load('http://localhost/verify-email', {
+      user: { id: 'a', email: 'ana@example.com', emailVerified: true },
+      sessionToken: 'S'.repeat(43),
+    });
+    expect(result).toEqual({
+      state: 'form',
+      emailHint: 'b•••@example.com',
+      needsPassword: true,
+      otherSession: true,
+    });
+    expect(api.inspectEmailToken).toHaveBeenCalledWith(
+      expect.anything(),
+      { token: TOKEN, purpose: 'verify_email' },
+      'S'.repeat(43),
+    );
+  });
+
+  it('confirmar: opened pone la sesión y borra las dos cookies; los fallos de enlace son pantallas', async () => {
+    cookies = fakeCookies({ cupidilla_email_token: TOKEN, cupidilla_pending_email: 'signup:b' });
+    api.verifyEmail.mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: {
+        session: 'opened',
+        auth: { user: {}, session: { token: 'NUEVA', expiresAt: '2026-12-11T00:00:00.000Z' } },
+      },
+    });
+    const confirm = (fields: Record<string, string>) =>
+      run(() => verifyPage.actions.confirm(formEvent(fields)) as Promise<unknown>);
+    expect((await confirm({ withPassword: '1', password: 'x' })).redirect).toEqual({
+      status: 303,
+      location: '/account?notice=email-verified-signin',
+    });
+    expect(cookie.set).toHaveBeenCalledWith(expect.anything(), 'NUEVA', expect.any(String));
+    expect(cookies.jar.size).toBe(0);
+
+    cookies = fakeCookies({ cupidilla_email_token: TOKEN });
+    expect((await confirm({ withPassword: '1', password: '' })).result).toMatchObject({
+      status: 400,
+      data: { passwordError: 'confirmar.error.contrasena_vacia' },
+    });
+    api.verifyEmail.mockResolvedValue(apiFailure(403, 'TOKEN_ATTEMPTS_EXCEEDED'));
+    expect((await confirm({ withPassword: '1', password: 'x' })).redirect).toEqual({
+      status: 303,
+      location: '/verify-email?error=attempts-exceeded',
+    });
+    cookies = fakeCookies({ cupidilla_email_token: TOKEN });
+    api.verifyEmail.mockResolvedValue(apiFailure(403, 'PASSWORD_INCORRECT'));
+    expect((await confirm({ withPassword: '1', password: 'x' })).result).toMatchObject({
+      status: 403,
+      data: { passwordError: 'confirmar.error.contrasena' },
+    });
+    api.verifyEmail.mockResolvedValue(apiFailure(503, 'OUTCOME_UNKNOWN'));
+    expect((await confirm({})).result).toMatchObject({
+      status: 503,
+      data: { general: 'confirmar.error.resultado_incierto' },
+    });
   });
 });
 

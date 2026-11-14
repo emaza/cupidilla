@@ -30,7 +30,7 @@ import { isUniqueViolation } from '../database/pg-errors.js';
 import { pendingIdentities, users } from '../database/schema/index.js';
 import { Transactions } from '../database/transactions.js';
 import { PasswordService } from '../users/password.service.js';
-import { UsersService } from '../users/users.service.js';
+import { toPublicUser, UsersService } from '../users/users.service.js';
 import { IdentitiesService } from './identities.service.js';
 
 const MINUTE_MS = 60_000;
@@ -100,7 +100,11 @@ export class PendingIdentitiesService {
   async lookup(token: string | undefined): Promise<PendingIdentityResponse> {
     const tokenHash = pendingTokenHash(token);
     const [row] = await this.db
-      .select({ pending: pendingIdentities, accountEmail: users.email })
+      .select({
+        pending: pendingIdentities,
+        accountEmail: users.email,
+        accountEmailVerifiedAt: users.emailVerifiedAt,
+      })
       .from(pendingIdentities)
       .leftJoin(users, eq(users.id, pendingIdentities.userId))
       .where(
@@ -111,7 +115,7 @@ export class PendingIdentitiesService {
       )
       .limit(1);
     if (!row) throw flowInvalid();
-    const { pending, accountEmail } = row;
+    const { pending, accountEmail, accountEmailVerifiedAt } = row;
     return {
       kind: pending.kind,
       provider: pending.provider,
@@ -120,6 +124,10 @@ export class PendingIdentitiesService {
         pending.kind === 'link' ? (accountEmail ?? pending.providerEmail) : pending.providerEmail,
       entryPoint: pending.entryPoint,
       expiresAt: pending.expiresAt.toISOString(),
+      // Para que /login/link explique una cuenta sin verificar (correo §6.2).
+      ...(pending.kind === 'link' && accountEmail !== null
+        ? { accountEmailVerified: accountEmailVerifiedAt !== null }
+        : {}),
     };
   }
 
@@ -251,12 +259,12 @@ export class PendingIdentitiesService {
       throw new ApiException('PASSWORD_INCORRECT', 403, undefined, 'Password does not match');
     }
 
-    if (this.passwords.needsRehash(passwordHash)) {
-      await this.users.updatePasswordHash(account.id, await this.passwords.hash(request.password));
-    }
-    let session: { token: string; expiresAt: Date };
+    const rehash = this.passwords.needsRehash(passwordHash)
+      ? await this.passwords.hash(request.password)
+      : undefined;
+    let result: { session: { token: string; expiresAt: Date }; verified: boolean };
     try {
-      session = await this.transactions.run(async (tx) => {
+      result = await this.transactions.run(async (tx) => {
         // Una unión que ha llegado a 5 fallos está bloqueada aunque su fila aún no se haya borrado:
         // una contraseña correcta simultánea al 5.º fallo no puede completarla.
         const [consumed] = await tx
@@ -271,6 +279,10 @@ export class PendingIdentitiesService {
           )
           .returning();
         if (!consumed) throw flowInvalid();
+        // Correo §5.7 (K10): si la contraseña cambió mientras se verificaba, no vale.
+        if (!(await this.users.lockUnchangedPassword(tx, account.id, passwordHash, rehash))) {
+          throw new ApiException('PASSWORD_INCORRECT', 403, undefined, 'Password does not match');
+        }
         await this.identities.create(tx, {
           userId: account.id,
           provider: pending.provider,
@@ -278,7 +290,12 @@ export class PendingIdentitiesService {
           providerEmail: pending.providerEmail,
           emailVerified: pending.emailVerified,
         });
-        return this.sessions.create(tx, account.id);
+        // Quien une sabe la contraseña y el proveedor certifica el correo (correo §5.10).
+        const verified =
+          pending.emailVerified && pending.providerEmail === account.email
+            ? await this.users.markEmailVerified(tx, account.id, account.email)
+            : false;
+        return { session: await this.sessions.create(tx, account.id), verified };
       });
     } catch (error) {
       // La identidad se unió entre medias (otra pestaña) o la cuenta ya tiene ese proveedor.
@@ -293,8 +310,13 @@ export class PendingIdentitiesService {
     }
     await this.sessions.deleteExpiredForUser(account.id);
     this.logger.log({ event: 'oauth_linked' });
+    if (result.verified) this.logger.log({ event: 'email_verified', method: 'oauth_link' });
+    const { session } = result;
     return {
-      user: { id: account.id, email: account.email, createdAt: account.createdAt.toISOString() },
+      user: toPublicUser({
+        ...account,
+        emailVerifiedAt: result.verified ? this.clock.now() : account.emailVerifiedAt,
+      }),
       session: { token: session.token, expiresAt: session.expiresAt.toISOString() },
       returnPath: pending.returnPath,
     };

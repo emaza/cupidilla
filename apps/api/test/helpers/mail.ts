@@ -1,10 +1,12 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { SERVICE_TERMS_VERSION } from '@cupidilla/contracts';
+import { eq } from 'drizzle-orm';
 import { identities, users } from '../../src/database/schema/index.js';
 import type { Database } from '../../src/database/database.types.js';
 import { Mailer } from '../../src/mail/mailer.js';
 import { MemoryMailer } from '../../src/mail/memory.mailer.js';
 import { OutboxWorker, type DrainResult } from '../../src/mail/outbox.worker.js';
-import { TEST_NOW } from './test-app.js';
+import { api, TEST_NOW } from './test-app.js';
 
 /**
  * Correo en la integración (correo §11.1): `MemoryMailer` y `drain()` a mano, porque con
@@ -116,4 +118,42 @@ export async function seedCarla(db: Database): Promise<string> {
     },
   ]);
   return userId;
+}
+
+/** Contraseña y fecha de nacimiento de las pruebas de correo (correo §11.3). */
+export const TEST_PASSWORD = 'una frase larga de prueba';
+
+/** Cuerpo de registro de las pruebas de correo, con la contraseña y la fecha comunes. */
+export function mailRegisterBody(email: string, overrides: Record<string, unknown> = {}) {
+  return {
+    email,
+    password: TEST_PASSWORD,
+    birthDate: '1990-05-05',
+    acceptTerms: true,
+    termsVersion: SERVICE_TERMS_VERSION,
+    ...overrides,
+  };
+}
+
+/**
+ * Beto registrado de verdad por la API (con contraseña real), sin verificar, con su primer correo
+ * entregado. Devuelve su id y el token de su enlace.
+ */
+export async function registerBeto(
+  app: NestExpressApplication,
+  db: Database,
+): Promise<{ userId: string; link: string }> {
+  const response = await api(app).post('/auth/register').send(mailRegisterBody(BETO));
+  if (response.status !== 202) throw new Error(`Registro de Beto fallido: ${response.status}`);
+  await deliverMail(app);
+  const [row] = await db.select({ id: users.id }).from(users).where(eq(users.email, BETO));
+  if (!row) throw new Error('Beto no existe');
+  return { userId: row.id, link: linkTo(app, BETO, '/verify-email') };
+}
+
+/** Entra con la contraseña de las pruebas y devuelve el token de sesión. */
+export async function loginToken(app: NestExpressApplication, email: string): Promise<string> {
+  const response = await api(app).post('/auth/login').send({ email, password: TEST_PASSWORD });
+  if (response.status !== 200) throw new Error(`Login fallido: ${response.status}`);
+  return response.body.session.token as string;
 }

@@ -19,6 +19,9 @@ export const ERROR_CODES = [
   'UNDERAGE', // 422
   'RATE_LIMITED', // 429  con cabecera Retry-After
   'INTERNAL_ERROR', // 500
+  'TOKEN_INVALID_OR_EXPIRED', // 400  enlace de correo inexistente, caducado, usado o de otro propósito
+  'TOKEN_ATTEMPTS_EXCEEDED', // 403  5.º fallo de contraseña al confirmar el correo; el enlace ya no existe
+  'EMAIL_NOT_VERIFIED', // 403  la ruta exige el correo verificado
   'OUTCOME_UNKNOWN', // 503  se perdió la conexión con la BD durante una escritura: pudo hacerse o no
 ] as const;
 

@@ -134,10 +134,19 @@ describe('edad mínima distinta de 18', () => {
 });
 
 describe('configResponseSchema', () => {
+  const mail = { unverifiedReminder: true, passwordChangedNotice: false };
+
   it('acepta la edad dentro del rango y rechaza lo demás', () => {
-    expect(configResponseSchema.parse({ minAge: 21 })).toEqual({ minAge: 21 });
+    expect(configResponseSchema.parse({ minAge: 21, mail })).toEqual({ minAge: 21, mail });
     for (const minAge of [17, 26, 21.5, '21', undefined]) {
-      expect(configResponseSchema.safeParse({ minAge }).success).toBe(false);
+      expect(configResponseSchema.safeParse({ minAge, mail }).success).toBe(false);
     }
+  });
+
+  it('exige la configuración de los correos opcionales (correo §5.8)', () => {
+    expect(configResponseSchema.safeParse({ minAge: 18 }).success).toBe(false);
+    expect(
+      configResponseSchema.safeParse({ minAge: 18, mail: { unverifiedReminder: 'true' } }).success,
+    ).toBe(false);
   });
 });

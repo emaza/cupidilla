@@ -45,7 +45,7 @@ describe('Sesión', () => {
       const response = await getSession(user.token);
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
-        user: { id: user.userId, email: user.email, createdAt: TEST_NOW },
+        user: { id: user.userId, email: user.email, createdAt: TEST_NOW, emailVerified: true },
         session: {
           expiresAt: new Date(new Date(TEST_NOW).getTime() + 30 * DAY_MS).toISOString(),
           renewed: false,
@@ -109,7 +109,15 @@ describe('Sesión', () => {
     const response = await api(t.app).get('/users/me').set('Authorization', `Bearer ${user.token}`);
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
-      user: { id: user.userId, email: user.email, createdAt: TEST_NOW, birthDate: '1990-05-05' },
+      user: {
+        id: user.userId,
+        email: user.email,
+        createdAt: TEST_NOW,
+        emailVerified: true,
+        birthDate: '1990-05-05',
+        emailVerifiedAt: TEST_NOW,
+        unverifiedDeletionAt: null,
+      },
       consents: [
         {
           purpose: 'service_use',

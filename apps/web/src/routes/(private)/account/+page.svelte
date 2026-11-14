@@ -15,6 +15,7 @@
   let { data, form }: PageProps = $props();
 
   const submission = createSubmission();
+  const resend = createSubmission();
   const NAMES: Record<OAuthProvider, string> = { google: 'Google', facebook: 'Facebook' };
 
   /** Errores que vuelven de una acción (no de la URL). */
@@ -61,12 +62,45 @@
 
 <h1>{t('cuenta.titulo')}</h1>
 
+{#if data.emailSection}
+  {@const section = data.emailSection}
+  <section id="correo" class="section" aria-labelledby="correo-titulo">
+    <h2 id="correo-titulo">{t('correo.titulo')}</h2>
+    <p class="typed-email">{fill('correo.texto.pendiente', { correo: section.email })}</p>
+    <p>{t('correo.texto.limites')}</p>
+    <p class="help">{fill('correo.texto.caducidad', { duracion: section.duration })}</p>
+    {#if section.deletionOn}
+      <p class="help">{fill('correo.texto.plazo', { fecha: section.deletionOn })}</p>
+    {/if}
+    {#if section.reminder}
+      <p class="help">{t('correo.texto.recordatorio')}</p>
+    {/if}
+    <form method="POST" action="?/resendVerification" use:enhance={resend.submit}>
+      <div class="actions">
+        <SubmitButton
+          label={t('correo.boton.reenviar')}
+          sendingLabel={t('correo.boton.reenviando')}
+          statusText={t('correo.estado.reenviando')}
+          sending={resend.sending}
+        />
+      </div>
+    </form>
+  </section>
+{/if}
+
 {#if data.account}
   <section class="section" aria-labelledby="account-details">
     <h2 id="account-details">{t('cuenta.datos.titulo')}</h2>
     <dl class="data-list">
       <dt>{t('cuenta.datos.correo')}</dt>
-      <dd>{data.account.email}</dd>
+      <dd>
+        <span class="typed-email">{data.account.email}</span>
+        <span class="access-state">
+          {data.account.emailVerified
+            ? t('cuenta.datos.correo_confirmado')
+            : t('cuenta.datos.correo_pendiente')}
+        </span>
+      </dd>
       {#if data.account.birthDate}
         <dt>{t('cuenta.datos.nacimiento')}</dt>
         <dd><time datetime={data.account.birthDate.iso}>{data.account.birthDate.text}</time></dd>
@@ -193,8 +227,13 @@
             <span class="access-state">{t('cuenta.acceso.estado_no_unido')}</span>
           </div>
           <!-- Con contraseña, escribiéndola (decisión 20); sin ella, confirmando antes con un
-               proveedor unido (decisión 21). -->
-          {#if signIn.hasPassword}
+               proveedor unido (decisión 21). Con el correo sin confirmar no se puede (K7). -->
+          {#if data.emailSection}
+            <p class="help">
+              {fill('cuenta.acceso.requiere_correo', { proveedor: NAMES[provider] })}
+              <a href="#correo">{t('cuenta.acceso.enlace_requiere_correo')}</a>
+            </p>
+          {:else if signIn.hasPassword}
             <ProviderButtons
               providers={[provider]}
               from="account"

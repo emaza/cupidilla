@@ -114,7 +114,8 @@ describe('Eliminación de la cuenta', () => {
     const again = await api(t.app)
       .post('/auth/register')
       .send(registerBody({ email: user.email }));
-    expect(again.status).toBe(201);
+    expect(again.status).toBe(202);
+    expect(await countRows(t.db, 'users')).toBe(1);
   });
 
   it('I-17: borrar al usuario A no toca las filas del usuario B', async () => {

@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { closeDb } from './helpers/db.ts';
 import { fillRegister, PASSWORD, registerAdult, uniqueEmail } from './helpers/forms.ts';
+import { pathIn, waitForMail } from './helpers/mailpit.ts';
 
 // Criterios de accesibilidad, estructura y adaptación de UX §9 que se pueden comprobar sin un lector
 // de pantalla: estructura del DOM, atributos ARIA, orden de tabulación, tamaños y desbordamiento.
@@ -115,7 +116,8 @@ test('C34/C35/C36/C37: con errores, el resumen es lo primero de <main>, enlaza a
 
   // Cada campo con error: aria-invalid y aria-describedby apuntando a elementos que existen.
   const expectations: Record<string, string[]> = {
-    email: ['email-error'],
+    // `registro.ayuda.correo` bajo la etiqueta (correo UX §7).
+    email: ['email-help', 'email-error'],
     password: ['password-help', 'password-error'],
     day: ['birth-date-error'],
     month: ['birth-date-error'],
@@ -240,7 +242,16 @@ test('C38: registrarse, salir y eliminar la cuenta solo con el teclado, sin tram
   await page.keyboard.press('Tab'); // botón de enviar
   await expect(page.locator('form button.button-primary[type="submit"]')).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL('/account');
+  await expect(page).toHaveURL('/register/check-email');
+
+  // Confirmar el correo, también con el teclado: el campo de contraseña e Intro.
+  await page.goto(
+    await pathIn(await waitForMail(email, { subject: 'Confirma tu correo' }), '/verify-email'),
+  );
+  await page.locator('#password').focus();
+  await page.keyboard.type(PASSWORD);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL('/account?notice=email-verified-signin');
 
   // En /account se llega con Tab al botón de salir y al enlace de eliminar, en ese orden.
   const order = await tabOrder(page);
@@ -478,7 +489,7 @@ test('C30: con JavaScript, el botón muestra «enviando» y un segundo envío no
   await expect(page.locator('form [role="status"]')).toHaveText('Creando tu cuenta…');
   await button.click({ force: true });
   await page.getByLabel('Correo electrónico').press('Enter');
-  await expect(page).toHaveURL('/account');
+  await expect(page).toHaveURL('/register/check-email');
   expect(posts).toHaveLength(1);
 });
 

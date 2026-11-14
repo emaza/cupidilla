@@ -60,3 +60,12 @@ export async function closeDb(): Promise<void> {
   await pool?.end();
   pool = undefined;
 }
+
+/** `users.email_verified_at` de un correo (ya normalizado), o `undefined` si no hay cuenta. */
+export async function emailVerifiedAt(email: string): Promise<Date | null | undefined> {
+  const { rows } = await getPool().query<{ email_verified_at: Date | null }>(
+    'select email_verified_at from users where email = $1',
+    [email],
+  );
+  return rows[0]?.email_verified_at;
+}

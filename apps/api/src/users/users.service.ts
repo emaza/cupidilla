@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { AccountResponse, PublicUser } from '@cupidilla/contracts';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { listOpenSessions } from '../auth/open-sessions.js';
 import { markSessionAuthenticated } from '../auth/recent-auth.js';
 import { ApiException } from '../common/errors/api.exception.js';
@@ -10,9 +10,10 @@ import { ConsentsService } from '../consents/consents.service.js';
 import { DB, type Database, type Executor, type Tx } from '../database/database.types.js';
 import { lockEmail } from '../database/email-lock.js';
 import { isUniqueViolation } from '../database/pg-errors.js';
-import { emailOutbox, identities, users } from '../database/schema/index.js';
+import { emailOutbox, emailTokens, identities, users } from '../database/schema/index.js';
 import { IdentitiesService, providerEmailIs } from '../oauth/identities.service.js';
 import { PasswordService } from './password.service.js';
+import { unverifiedDeletionAt } from './unverified-deletion.js';
 
 export interface NewUser {
   email: string;
@@ -34,10 +35,13 @@ export interface UserCredentials {
 
 type UserRow = typeof users.$inferSelect;
 
-export const toPublicUser = (row: Pick<UserRow, 'id' | 'email' | 'createdAt'>): PublicUser => ({
+export const toPublicUser = (
+  row: Pick<UserRow, 'id' | 'email' | 'createdAt' | 'emailVerifiedAt'>,
+): PublicUser => ({
   id: row.id,
   email: row.email,
   createdAt: row.createdAt.toISOString(),
+  emailVerified: row.emailVerifiedAt !== null,
 });
 
 @Injectable()
@@ -96,6 +100,94 @@ export class UsersService {
     if (row) throw new ApiException('EMAIL_TAKEN', 409, undefined, 'Email already registered');
   }
 
+  /**
+   * Registro uniforme (correo §5.1): ¿el correo ya es de alguien, en `users` (verificado o no) o
+   * como `provider_email` verificado de una identidad? La misma consulta que
+   * `assertEmailNotInIdentities`, sin lanzar. Toma el bloqueo del correo.
+   */
+  async isEmailTaken(tx: Tx, email: string): Promise<boolean> {
+    await lockEmail(tx, email);
+    const [user] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+    const [identity] = await tx
+      .select({ id: identities.id })
+      .from(identities)
+      .where(and(providerEmailIs(email), eq(identities.emailVerified, true)))
+      .limit(1);
+    return user !== undefined || identity !== undefined;
+  }
+
+  /**
+   * Marca el correo como verificado (correo §5.4) y borra lo que ya no sirve: los enlaces de
+   * verificación del usuario y los correos `verify_email` y `verify_reminder` pendientes para esa
+   * dirección. Lo usan la verificación, la unión y (fase C) la recuperación. Devuelve si la cuenta
+   * pasó de no verificada a verificada.
+   */
+  async markEmailVerified(tx: Tx, userId: string, email: string): Promise<boolean> {
+    const updated = await tx
+      .update(users)
+      .set({ emailVerifiedAt: this.clock.now() })
+      .where(and(eq(users.id, userId), isNull(users.emailVerifiedAt)))
+      .returning({ id: users.id });
+    await tx
+      .delete(emailTokens)
+      .where(and(eq(emailTokens.userId, userId), eq(emailTokens.purpose, 'verify_email')));
+    await tx
+      .delete(emailOutbox)
+      .where(
+        and(
+          eq(emailOutbox.toEmail, email),
+          inArray(emailOutbox.kind, ['verify_email', 'verify_reminder']),
+          isNull(emailOutbox.failedAt),
+        ),
+      );
+    return updated.length > 0;
+  }
+
+  /**
+   * Bloquea la fila de la cuenta hasta el COMMIT, antes de tocar sus enlaces: así una confirmación
+   * y el borrado de §6.3 se ordenan sin interbloqueo. `false` si la cuenta ya no existe.
+   */
+  async lockUser(tx: Tx, userId: string): Promise<boolean> {
+    const locked = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId))
+      .for('update');
+    return locked.length > 0;
+  }
+
+  /**
+   * Correo §5.7 (K10): dentro de la transacción que crea la sesión, comprueba que el hash que se
+   * acaba de verificar sigue siendo el de la cuenta, y lo bloquea hasta el COMMIT. Si un
+   * restablecimiento lo cambió entre medias, `false`: la sesión no se crea. Con `rehash`, sustituye
+   * el hash en la misma sentencia.
+   */
+  async lockUnchangedPassword(
+    tx: Tx,
+    userId: string,
+    verifiedHash: string,
+    rehash?: string,
+  ): Promise<boolean> {
+    if (rehash !== undefined) {
+      const updated = await tx
+        .update(users)
+        .set({ passwordHash: rehash, updatedAt: this.clock.now() })
+        .where(and(eq(users.id, userId), eq(users.passwordHash, verifiedHash)))
+        .returning({ id: users.id });
+      return updated.length > 0;
+    }
+    const locked = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.id, userId), eq(users.passwordHash, verifiedHash)))
+      .for('share');
+    return locked.length > 0;
+  }
+
   async findCredentialsByEmail(email: string): Promise<UserCredentials | undefined> {
     const [row] = await this.db.select().from(users).where(eq(users.email, email)).limit(1);
     return row ? { user: toPublicUser(row), passwordHash: row.passwordHash } : undefined;
@@ -122,7 +214,13 @@ export class UsersService {
     const linked = await this.identities.listForUser(userId);
     const open = await listOpenSessions(this.db, userId, session.tokenHash, this.clock.now());
     return {
-      user: { ...toPublicUser(row), birthDate: row.birthDate },
+      user: {
+        ...toPublicUser(row),
+        birthDate: row.birthDate,
+        emailVerifiedAt: row.emailVerifiedAt?.toISOString() ?? null,
+        unverifiedDeletionAt:
+          row.emailVerifiedAt === null ? unverifiedDeletionAt(row.createdAt).toISOString() : null,
+      },
       consents: await this.consents.listForUser(userId),
       signInMethods: {
         password: row.passwordHash !== null,

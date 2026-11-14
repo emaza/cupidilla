@@ -1,9 +1,17 @@
-import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
+  emailRequestSchema,
+  emailTokenInspectionRequestSchema,
+  emailVerificationRequestSchema,
   loginRequestSchema,
   registerRequestSchema,
   type AuthResponse,
+  type EmailRequest,
+  type EmailTokenInspectionRequest,
+  type EmailTokenInspectionResponse,
+  type EmailVerificationRequest,
+  type EmailVerificationResponse,
   type LoginRequest,
   type RegisterRequest,
   type SessionResponse,
@@ -15,21 +23,71 @@ import {
 import { Public } from '../common/decorators/public.decorator.js';
 import {
   ACCOUNT_THROTTLER,
+  EMAIL_THROTTLER,
   IP_THROTTLER,
   THROTTLE_TTL,
 } from '../common/guards/app-throttler.guard.js';
 import { AuthService } from './auth.service.js';
+import { EmailVerificationService } from './email-verification.service.js';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly verification: EmailVerificationService,
+  ) {}
 
+  /** Registro uniforme (correo §5.1): siempre 202 sin cuerpo y sin sesión. */
   @Post('register')
   @Public()
-  @HttpCode(201)
-  @Throttle({ [IP_THROTTLER]: { limit: 5, ttl: THROTTLE_TTL.hour } })
-  register(@Body({ schema: registerRequestSchema }) body: RegisterRequest): Promise<AuthResponse> {
-    return this.auth.register(body);
+  @HttpCode(202)
+  @Throttle({
+    [IP_THROTTLER]: { limit: 5, ttl: THROTTLE_TTL.hour },
+    [EMAIL_THROTTLER]: { limit: 3, ttl: THROTTLE_TTL.day },
+  })
+  async register(@Body({ schema: registerRequestSchema }) body: RegisterRequest): Promise<void> {
+    await this.auth.register(body);
+  }
+
+  /** Pedir (otra vez) el correo de verificación: siempre 202, exista o no la cuenta (§5.3). */
+  @Post('email-verification/request')
+  @Public()
+  @HttpCode(202)
+  @Throttle({
+    [IP_THROTTLER]: { limit: 5, ttl: THROTTLE_TTL.quarterHour },
+    [EMAIL_THROTTLER]: { limit: 5, ttl: THROTTLE_TTL.day },
+  })
+  async requestVerification(
+    @Body({ schema: emailRequestSchema }) body: EmailRequest,
+  ): Promise<void> {
+    await this.verification.request(body.email);
+  }
+
+  /**
+   * Comprobar un enlace sin consumirlo (§5.4). Pública, pero lee el `Bearer` si viene. Sin el
+   * conjunto `account`: sin correo en el cuerpo, todas las personas sin sesión compartirían cubo.
+   */
+  @Post('email-tokens/inspection')
+  @Public()
+  @HttpCode(200)
+  @Throttle({ [IP_THROTTLER]: { limit: 30, ttl: THROTTLE_TTL.quarterHour } })
+  inspectToken(
+    @Body({ schema: emailTokenInspectionRequestSchema }) body: EmailTokenInspectionRequest,
+    @Headers('authorization') authorization: string | undefined,
+  ): Promise<EmailTokenInspectionResponse> {
+    return this.verification.inspect(body, authorization);
+  }
+
+  /** Confirmar el correo (§5.4). Pública, pero lee el `Bearer` si viene. */
+  @Post('email-verification')
+  @Public()
+  @HttpCode(200)
+  @Throttle({ [IP_THROTTLER]: { limit: 20, ttl: THROTTLE_TTL.quarterHour } })
+  confirmEmail(
+    @Body({ schema: emailVerificationRequestSchema }) body: EmailVerificationRequest,
+    @Headers('authorization') authorization: string | undefined,
+  ): Promise<EmailVerificationResponse> {
+    return this.verification.confirm(body, authorization);
   }
 
   @Post('login')

@@ -11,10 +11,12 @@ import {
   createTestApp,
   registerBody,
   registerUser,
+  resetRateLimits,
   TEST_NOW,
   truncateAll,
   type TestApp,
 } from './helpers/test-app.js';
+import { emailOutbox } from '../src/database/schema/index.js';
 
 /** Espera a que alguna sesión esté bloqueada esperando un advisory lock. */
 async function waitForAdvisoryWaiter(t: TestApp): Promise<void> {
@@ -30,7 +32,8 @@ async function waitForAdvisoryWaiter(t: TestApp): Promise<void> {
 
 /**
  * R7b: no se crea una cuenta con un correo que ya es el `provider_email` de una identidad de otra
- * cuenta. La respuesta es la misma que con `users.email` repetido.
+ * cuenta. Con el registro uniforme (correo §5.1), la respuesta es el mismo 202 que con un correo
+ * nuevo o con `users.email` repetido, y solo se avisa al dueño.
  */
 describe('Alta con contraseña de un correo de proveedor ya registrado (R7b)', () => {
   let t: TestApp;
@@ -43,8 +46,12 @@ describe('Alta con contraseña de un correo de proveedor ya registrado (R7b)', (
   });
   beforeEach(async () => {
     await truncateAll(t.db);
+    resetRateLimits(t.app);
     t.clock.set(TEST_NOW);
   });
+
+  const outboxKinds = async () =>
+    (await t.db.select().from(emailOutbox)).map((row) => `${row.kind}:${row.toEmail}`).sort();
 
   /** Cuenta A con Facebook unido, cuyo correo de proveedor no es el de la cuenta. */
   async function accountWithFacebook(
@@ -64,7 +71,7 @@ describe('Alta con contraseña de un correo de proveedor ya registrado (R7b)', (
     return owner.userId;
   }
 
-  it('R7b-1: el correo es provider_email de otra cuenta → el mismo 409 EMAIL_TAKEN', async () => {
+  it('R7b-1: el correo es provider_email de otra cuenta → el mismo 202 y solo un aviso', async () => {
     await accountWithFacebook('ecom@example.com');
     const fromIdentity = await api(t.app)
       .post('/auth/register')
@@ -73,11 +80,14 @@ describe('Alta con contraseña de un correo de proveedor ya registrado (R7b)', (
       .post('/auth/register')
       .send(registerBody({ email: 'fenix@example.com' }));
 
-    expect(fromIdentity.status).toBe(409);
-    expect(fromIdentity.body.error.code).toBe('EMAIL_TAKEN');
+    expect(fromIdentity.status).toBe(202);
     // Indistinguible del correo repetido en users: no revela que viene de un proveedor.
     expect(fromIdentity.status).toBe(fromUsers.status);
-    expect(fromIdentity.body).toEqual(fromUsers.body);
+    expect(fromIdentity.text).toBe(fromUsers.text);
+    expect(await outboxKinds()).toEqual([
+      'signup_notice:ecom@example.com',
+      'signup_notice:fenix@example.com',
+    ]);
     expect(await countRows(t.db, 'users')).toBe(1);
     expect(await countRows(t.db, 'sessions')).toBe(1);
     expect(await countRows(t.db, 'consents')).toBe(1);
@@ -87,10 +97,10 @@ describe('Alta con contraseña de un correo de proveedor ya registrado (R7b)', (
     await accountWithFacebook(' Ecom@Example.COM ');
     for (const email of ['ecom@example.com', '  ECOM@example.com ']) {
       const response = await api(t.app).post('/auth/register').send(registerBody({ email }));
-      expect(response.status).toBe(409);
-      expect(response.body.error.code).toBe('EMAIL_TAKEN');
+      expect(response.status).toBe(202);
     }
     expect(await countRows(t.db, 'users')).toBe(1);
+    expect(await outboxKinds()).toEqual(['signup_notice:ecom@example.com']);
   });
 
   it('R7b-3: otros correos se siguen registrando; un provider_email NULL no bloquea nada', async () => {
@@ -98,7 +108,7 @@ describe('Alta con contraseña de un correo de proveedor ya registrado (R7b)', (
     const response = await api(t.app)
       .post('/auth/register')
       .send(registerBody({ email: 'otra@example.com' }));
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(202);
     expect(await countRows(t.db, 'users')).toBe(2);
   });
 
@@ -107,11 +117,11 @@ describe('Alta con contraseña de un correo de proveedor ya registrado (R7b)', (
     const response = await api(t.app)
       .post('/auth/register')
       .send(registerBody({ email: 'x@gmail.com' }));
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(202);
     expect(await countRows(t.db, 'users')).toBe(2);
   });
 
-  it('4 (decisión 21): un Google verificado con ese correo → el mismo 409 EMAIL_TAKEN', async () => {
+  it('4 (decisión 21): un Google verificado con ese correo → el mismo 202, sin cuenta nueva', async () => {
     await accountWithFacebook('x@gmail.com', { provider: 'google' });
     const fromIdentity = await api(t.app)
       .post('/auth/register')
@@ -119,8 +129,8 @@ describe('Alta con contraseña de un correo de proveedor ya registrado (R7b)', (
     const fromUsers = await api(t.app)
       .post('/auth/register')
       .send(registerBody({ email: 'fenix@example.com' }));
-    expect(fromIdentity.status).toBe(409);
-    expect(fromIdentity.body).toEqual(fromUsers.body);
+    expect(fromIdentity.status).toBe(202);
+    expect(fromIdentity.text).toEqual(fromUsers.text);
     expect(await countRows(t.db, 'users')).toBe(1);
     expect(await countRows(t.db, 'sessions')).toBe(1);
     expect(await countRows(t.db, 'consents')).toBe(1);
@@ -151,9 +161,9 @@ describe('Alta con contraseña de un correo de proveedor ya registrado (R7b)', (
     });
 
     const response = await registration!;
-    expect(response.status).toBe(409);
-    expect(response.body.error?.code).toBe('EMAIL_TAKEN');
+    expect(response.status).toBe(202);
     expect(await countRows(t.db, 'users')).toBe(1);
+    expect(await outboxKinds()).toEqual(['signup_notice:nuevo@example.com']);
   });
 
   it('R7b-5: crear una identidad espera al alta en curso de su correo', async () => {

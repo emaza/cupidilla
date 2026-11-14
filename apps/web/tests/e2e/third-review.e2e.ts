@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { startApiProxy, type ApiProxy } from './helpers/api-proxy.ts';
 import { closeDb } from './helpers/db.ts';
-import { fillRegister, uniqueEmail, PASSWORD } from './helpers/forms.ts';
+import { fillRegister, uniqueEmail, PASSWORD, registerAdult } from './helpers/forms.ts';
 import { startStack, type Stack } from './helpers/stack.ts';
 
 // Tercera revisión (QA): detalles del enlace de comprobación del resultado incierto (criterios
@@ -68,8 +68,7 @@ test('[QA-3] borrado incierto: el enlace a /account es de la misma pestaña, sin
 }) => {
   const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
   const page = await context.newPage();
-  await fillRegister(page, { email: uniqueEmail() });
-  await expect(page).toHaveURL('/account');
+  await registerAdult(page);
   await page.goto('/account/delete');
   proxy.setFault('POST /users/me/deletion', 'cut');
   await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);

@@ -12,13 +12,22 @@
     error?: string;
     /** Contenido del error cuando lleva un enlace. */
     errorContent?: Snippet;
+    /** Texto de ayuda bajo la etiqueta. */
+    help?: string;
   }
 
-  let { label, value, error, errorContent }: Props = $props();
+  let { label, value, error, errorContent, help }: Props = $props();
+
+  const describedBy = $derived(
+    [help ? 'email-help' : '', error ? 'email-error' : ''].filter(Boolean).join(' ') || undefined,
+  );
 </script>
 
 <div class="field">
   <label for="email">{label}</label>
+  {#if help}
+    <p id="email-help" class="help">{help}</p>
+  {/if}
   {#if error}
     <FieldError id="email-error" text={error} children={errorContent} />
   {/if}
@@ -31,7 +40,7 @@
     autocapitalize="none"
     spellcheck="false"
     defaultValue={value}
-    aria-describedby={error ? 'email-error' : undefined}
+    aria-describedby={describedBy}
     aria-invalid={error ? 'true' : undefined}
   />
 </div>

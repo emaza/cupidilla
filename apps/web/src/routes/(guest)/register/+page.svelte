@@ -46,10 +46,6 @@
   $effect(() => {
     if (form?.underage) underageHeading?.focus();
   });
-
-  /** «entra» enlaza a /login dentro del mensaje de correo ya registrado (UX §3.2.1). */
-  const emailTakenText = t('registro.error.correo_existente');
-  const emailTakenLink = emailTakenText.indexOf('entra;');
 </script>
 
 <svelte:head>
@@ -96,8 +92,8 @@
         <EmailField
           label={t('registro.campo.correo')}
           value={values?.email ?? ''}
+          help={t('registro.ayuda.correo')}
           error={fields.email ? t(fields.email) : undefined}
-          errorContent={fields.email === 'registro.error.correo_existente' ? emailTaken : undefined}
         />
 
         <PasswordField
@@ -133,8 +129,3 @@
     <p><a class="block-link" href={resolve('login')}>{t('registro.enlace.entrar')}</a></p>
   </div>
 {/if}
-
-{#snippet emailTaken()}
-  {emailTakenText.slice(0, emailTakenLink)}<a href={resolve('login')}>entra</a
-  >{emailTakenText.slice(emailTakenLink + 'entra'.length)}
-{/snippet}

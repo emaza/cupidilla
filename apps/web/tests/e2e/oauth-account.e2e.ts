@@ -147,7 +147,7 @@ test('decisión 20: con contraseña, añadir y quitar un proveedor la piden en e
   page,
 }) => {
   const email = await registerAdult(page);
-  await expect(page).toHaveURL('/account');
+  await expect(page).toHaveURL('/account?notice=email-verified-signin');
   // Sin bloque de confirmar: el botón de añadir está siempre, con su campo de contraseña.
   await expect(page.getByRole('heading', { name: 'Confirma que eres tú' })).toHaveCount(0);
   const facebook = accessRow(page, 'Facebook');

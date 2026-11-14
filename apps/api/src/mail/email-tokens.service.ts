@@ -1,12 +1,21 @@
 import { Injectable } from '@nestjs/common';
-import type { EmailTokenPurpose } from '@cupidilla/contracts';
-import { and, eq, gt, lte } from 'drizzle-orm';
+import { EMAIL_TOKEN_MAX_FAILURES, type EmailTokenPurpose } from '@cupidilla/contracts';
+import { and, eq, gt, lt, lte, sql } from 'drizzle-orm';
 import { Clock } from '../common/clock.js';
 import { generateOpaqueToken, hashOpaqueToken } from '../common/crypto/opaque-token.js';
 import type { Executor, Tx } from '../database/database.types.js';
-import { emailTokens } from '../database/schema/index.js';
+import { emailTokens, users } from '../database/schema/index.js';
 
 export type EmailTokenRow = typeof emailTokens.$inferSelect;
+
+/** La cuenta de un enlace vivo, con lo que necesitan la comprobación y la confirmación. */
+export interface EmailTokenAccount {
+  token: EmailTokenRow;
+  user: Pick<
+    typeof users.$inferSelect,
+    'id' | 'email' | 'createdAt' | 'emailVerifiedAt' | 'passwordHash'
+  >;
+}
 
 /**
  * Correo enmascarado para mostrar a quien tiene el enlace (correo §5.4): primera letra, `•••` y
@@ -63,6 +72,55 @@ export class EmailTokensService {
     return row;
   }
 
+  /**
+   * Enlace vivo con su cuenta, sin consumirlo (correo §5.4). Solo vale si el correo del token
+   * sigue siendo el de la cuenta (`email_tokens.email = users.email`).
+   */
+  async findLiveForAccount(
+    db: Executor,
+    token: string,
+    purpose: EmailTokenPurpose,
+  ): Promise<EmailTokenAccount | undefined> {
+    const [row] = await db
+      .select({
+        token: emailTokens,
+        user: {
+          id: users.id,
+          email: users.email,
+          createdAt: users.createdAt,
+          emailVerifiedAt: users.emailVerifiedAt,
+          passwordHash: users.passwordHash,
+        },
+      })
+      .from(emailTokens)
+      .innerJoin(users, and(eq(users.id, emailTokens.userId), eq(users.email, emailTokens.email)))
+      .where(this.liveToken(token, purpose))
+      .limit(1);
+    return row;
+  }
+
+  /**
+   * Una contraseña errónea más al confirmar con este enlace (correo §5.4). Nunca pasa del tope:
+   * devuelve los fallos acumulados, o `undefined` si el enlace ya no existe o ya estaba en el tope.
+   */
+  async recordFailure(
+    db: Executor,
+    token: string,
+    purpose: EmailTokenPurpose,
+  ): Promise<number | undefined> {
+    const [row] = await db
+      .update(emailTokens)
+      .set({ failedAttempts: sql`${emailTokens.failedAttempts} + 1` })
+      .where(this.liveToken(token, purpose))
+      .returning({ failedAttempts: emailTokens.failedAttempts });
+    return row?.failedAttempts;
+  }
+
+  /** Borra el enlace, exista o no (5.º fallo de contraseña). */
+  async delete(db: Executor, token: string): Promise<void> {
+    await db.delete(emailTokens).where(eq(emailTokens.tokenHash, hashOpaqueToken(token)));
+  }
+
   /** Consume el token: un solo uso atómico. `undefined` si no existe, caducó o es de otro propósito. */
   async consume(
     tx: Tx,
@@ -96,11 +154,17 @@ export class EmailTokensService {
     return emailHint(email);
   }
 
+  /**
+   * Vivo: ese hash y propósito, sin caducar y por debajo del tope de fallos. Un enlace que llegó a
+   * 5 fallos ya no vale aunque su fila no se haya borrado todavía (una contraseña correcta
+   * simultánea al 5.º fallo no lo consume).
+   */
   private liveToken(token: string, purpose: EmailTokenPurpose) {
     return and(
       eq(emailTokens.tokenHash, hashOpaqueToken(token)),
       eq(emailTokens.purpose, purpose),
       gt(emailTokens.expiresAt, this.clock.now()),
+      lt(emailTokens.failedAttempts, EMAIL_TOKEN_MAX_FAILURES),
     );
   }
 }

@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { startApiProxy, type ApiProxy } from './helpers/api-proxy.ts';
 import { closeDb, revokeSessionsForEmail, rowsForEmail } from './helpers/db.ts';
-import { fillRegister, login, PASSWORD, uniqueEmail } from './helpers/forms.ts';
+import { fillRegister, login, PASSWORD, registerAdult, uniqueEmail } from './helpers/forms.ts';
 import { startStack, type Stack } from './helpers/stack.ts';
 
 // Criterios de UX 60 a 65: resultado incierto (OUTCOME_UNKNOWN) en registro y eliminación.
@@ -12,7 +12,7 @@ import { startStack, type Stack } from './helpers/stack.ts';
 test.setTimeout(120_000);
 
 const REGISTER_UNCERTAIN =
-  'No sabemos si tu cuenta se ha creado: se ha perdido la conexión antes de recibir la respuesta. Antes de volver a registrarte, prueba a entrar con este correo y esta contraseña. Si entras, la cuenta ya existe. Si no puedes entrar, pulsa «Crear cuenta» otra vez.';
+  'No sabemos si tu cuenta se ha creado: se ha perdido la conexión antes de recibir la respuesta. Antes de volver a registrarte, prueba a entrar con este correo y esta contraseña. Si entras, la cuenta ya existe (con el correo sin confirmar, tendrás acceso limitado hasta que lo confirmes). Si no puedes entrar, pulsa «Crear cuenta» otra vez.';
 const CHECK_LOGIN_LINK = 'Probar a entrar con este correo (se abre en una pestaña nueva)';
 const DELETE_UNCERTAIN =
   'No sabemos si tu cuenta se ha eliminado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta. Si la ves, sigue activa y puedes volver a intentarlo. Si te pide entrar, entra con tu correo y tu contraseña: si entras, la cuenta sigue activa. Si te dice que el correo o la contraseña son incorrectos y has escrito bien la contraseña, lo más probable es que se haya eliminado. Si te dice que hay demasiados intentos o que algo ha fallado, espera unos minutos y vuelve a intentarlo: eso no dice nada sobre tu cuenta.';
@@ -21,8 +21,6 @@ const LOGIN_SERVER_ERROR =
   'Algo ha fallado por nuestra parte y no hemos podido iniciar tu sesión. Inténtalo de nuevo en unos minutos.';
 const LOGOUT_SERVER_ERROR =
   'Algo ha fallado por nuestra parte y no hemos podido cerrar tu sesión. Inténtalo de nuevo en unos minutos.';
-const EMAIL_TAKEN_TEXT =
-  'No hemos podido crear la cuenta con ese correo. Si ya tienes una, entra; si no, comprueba que está bien escrito o prueba con otro.';
 
 const REGISTER = 'POST /auth/register';
 const DELETION = 'POST /users/me/deletion';
@@ -176,12 +174,13 @@ test('C60, C64: el registro no llega a responder (tiempo agotado); volver a envi
   proxy.setFault(REGISTER, null);
   await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Crear cuenta' }).click();
-  await expect(page).toHaveURL('/account');
+  await expect(page).toHaveURL('/register/check-email');
+  expect((await rowsForEmail(email)).users).toBe(1);
 
   await context.close();
 });
 
-test('si la cuenta ya se creó, volver a enviar el registro da «correo existente»', async ({
+test('si la cuenta ya se creó, volver a enviar el registro da la misma pantalla y no crea otra (correo §5.1)', async ({
   browser,
   javaScriptEnabled,
 }) => {
@@ -195,16 +194,15 @@ test('si la cuenta ya se creó, volver a enviar el registro da «correo existent
   proxy.setFault(REGISTER, null);
   await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Crear cuenta' }).click();
-  await expect(page.locator('main > .error-summary')).toContainText(EMAIL_TAKEN_TEXT);
+  await expect(page).toHaveURL('/register/check-email');
+  expect((await rowsForEmail(email)).users).toBe(1);
 
   await context.close();
 });
 
 /** Registra una cuenta (sin fallos) y abre /account/delete. */
 async function signedInOnDeletePage(page: Page): Promise<string> {
-  const email = uniqueEmail();
-  await fillRegister(page, { email });
-  await expect(page).toHaveURL('/account');
+  const email = await registerAdult(page);
   await page.goto('/account/delete');
   return email;
 }
@@ -354,9 +352,7 @@ test('C65: OUTCOME_UNKNOWN nunca aparece en /login ni al cerrar sesión', async 
 }) => {
   const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
   const page = await context.newPage();
-  const email = uniqueEmail();
-  await fillRegister(page, { email });
-  await expect(page).toHaveURL('/account');
+  const email = await registerAdult(page);
 
   // `hang` y no `cut`: si la API cerrara la sesión, /account ya no se podría volver a mostrar.
   proxy.setFault('POST /auth/logout', 'hang');

@@ -14,8 +14,7 @@ test.afterAll(closeDb);
 
 test('C11: tras cerrar sesión, «atrás» no muestra la cuenta y pide entrar', async ({ page }) => {
   const email = uniqueEmail();
-  await fillRegister(page, { email });
-  await expect(page).toHaveURL('/account');
+  await registerAdult(page, email);
 
   // La página privada pide que no se guarde en caché.
   const response = await page.goto('/account');
@@ -94,11 +93,11 @@ test('C3: quien cumple 18 hoy puede registrarse (y el de mañana, no: ver E-5)',
     .map(Number) as [number, number, number];
   const email = uniqueEmail();
   await fillRegister(page, { email, day: String(day), month: String(month), year: String(year) });
-  await expect(page).toHaveURL('/account');
+  await expect(page).toHaveURL('/register/check-email');
   expect((await rowsForEmail(email)).users).toBe(1);
 });
 
-test('C6: correo ya registrado (con otras mayúsculas y espacios): error en el campo, valores conservados', async ({
+test('C6 (correo UX §1.6): con un correo ya registrado, la misma pantalla «Revisa tu correo» y ninguna cuenta nueva', async ({
   page,
   browser,
 }) => {
@@ -112,19 +111,9 @@ test('C6: correo ya registrado (con otras mayúsculas y espacios): error en el c
     month: '8',
     year: '1985',
   });
-  const message =
-    'No hemos podido crear la cuenta con ese correo. Si ya tienes una, entra; si no, comprueba que está bien escrito o prueba con otro.';
-  await expect(page.locator('#email-error')).toContainText(message);
-  await expect(page.locator('#email')).toHaveAttribute('aria-invalid', 'true');
-  await expect(page.locator('#email-error').getByRole('link', { name: 'entra' })).toHaveAttribute(
-    'href',
-    /login$/,
-  );
-  await expect(page.getByLabel('Día')).toHaveValue('7');
-  await expect(page.getByLabel('Mes')).toHaveValue('8');
-  await expect(page.getByLabel('Año')).toHaveValue('1985');
-  await expect(page.getByLabel(/Acepto las condiciones de uso/)).toBeChecked();
-  await expect(page.getByLabel('Contraseña', { exact: true })).toHaveValue('');
+  await expect(page).toHaveURL('/register/check-email');
+  await expect(page.getByText(`Te hemos enviado un mensaje a ${email}.`)).toBeVisible();
+  await expect(page.locator('main')).not.toContainText('No hemos podido crear la cuenta');
   expect((await rowsForEmail(email)).users).toBe(1);
 });
 
@@ -169,7 +158,7 @@ for (const [name, password, error] of PASSWORD_CASES) {
   test(`C25: contraseña de ${name}`, async ({ page }) => {
     await fillRegister(page, { email: uniqueEmail(), password });
     if (error) await expect(page.locator('#password-error')).toContainText(error);
-    else await expect(page).toHaveURL('/account');
+    else await expect(page).toHaveURL('/register/check-email');
   });
 }
 
@@ -200,7 +189,7 @@ for (const [day, month] of [
   test(`C26: «${day}» y «${month}» se aceptan como día y mes`, async ({ page }) => {
     const email = uniqueEmail();
     await fillRegister(page, { email, day: day ?? '', month: month ?? '', year: '1990' });
-    await expect(page).toHaveURL('/account');
+    await expect(page).toHaveURL('/register/check-email');
     expect((await rowsForEmail(email)).users).toBe(1);
   });
 }

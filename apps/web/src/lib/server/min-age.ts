@@ -1,4 +1,4 @@
-import { DEFAULT_MIN_AGE } from '@cupidilla/contracts';
+import { DEFAULT_MIN_AGE, type ConfigResponse } from '@cupidilla/contracts';
 import type { RequestEvent } from '@sveltejs/kit';
 import { api } from '#lib/server/api-client.ts';
 
@@ -7,7 +7,7 @@ export const MIN_AGE_TTL_MS = 60_000;
 /** Tras un fallo, los textos de las páginas no vuelven a preguntar a la API durante este tiempo. */
 export const MIN_AGE_RETRY_MS = 5_000;
 
-let cached: { value: number; at: number } | null = null;
+let cached: { value: number; mail: ConfigResponse['mail'] | null; at: number } | null = null;
 let failedAt: number | null = null;
 let inFlight: Promise<number | null> | null = null;
 
@@ -22,7 +22,8 @@ async function refresh(event: RequestEvent): Promise<number | null> {
   const result = await api.config(event);
   const now = Date.now();
   if (result.ok) {
-    cached = { value: result.data.minAge, at: now };
+    // `mail` puede faltar si la API es anterior al hito de correo: entonces no se sabe.
+    cached = { value: result.data.minAge, mail: result.data.mail ?? null, at: now };
     failedAt = null;
     return result.data.minAge;
   }
@@ -56,4 +57,14 @@ export async function currentMinAge(
 export async function displayMinAge(event: RequestEvent): Promise<number> {
   const fresh = await currentMinAge(event, { respectBackoff: true }).catch(() => null);
   return fresh ?? cached?.value ?? DEFAULT_MIN_AGE;
+}
+
+/**
+ * Correos opcionales de la instalación (correo §5.8, UX §6.9), de la misma caché de `GET /config`.
+ * Si no se sabe (la API no responde y nunca respondió), los dos falsos: ningún texto promete un
+ * correo que quizá no existe.
+ */
+export async function displayMailConfig(event: RequestEvent): Promise<ConfigResponse['mail']> {
+  await currentMinAge(event, { respectBackoff: true }).catch(() => null);
+  return cached?.mail ?? { unverifiedReminder: false, passwordChangedNotice: false };
 }

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { closeDb } from './helpers/db.ts';
-import { fillRegister, login, PASSWORD, uniqueEmail } from './helpers/forms.ts';
+import { fillRegister, login, PASSWORD, uniqueEmail, registerAdult } from './helpers/forms.ts';
 import { startStack, type Stack } from './helpers/stack.ts';
 
 // QA, rutas en inglés: lo que `typecheck` no comprueba. Recorre las pantallas y sus estados de
@@ -170,8 +170,7 @@ test('las pantallas, con sus estados de error, no tienen referencias rotas ni cl
 
   // Con sesión: /account, /account/delete y sus errores.
   const email = uniqueEmail();
-  await fillRegister(page, { email });
-  await expect(page).toHaveURL('/account');
+  await registerAdult(page, email);
   await expectClean(page, '/account');
   await page.goto('/account/delete');
   await expectClean(page, '/account/delete');
@@ -242,8 +241,7 @@ test('guardia de rutas: sin sesión, /account y /account/delete llevan a /login?
 
   const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
   const page = await context.newPage();
-  await fillRegister(page, { email: uniqueEmail() });
-  await expect(page).toHaveURL('/account');
+  await registerAdult(page);
   for (const path of ['/login', '/register', '/login?next=/account/delete']) {
     const response = await context.request.get(path, { maxRedirects: 0 });
     expect(response.status(), path).toBe(303);
@@ -296,8 +294,7 @@ test('`next`: solo /account y /account/delete exactos; todo lo demás se descart
   // Una cuenta para poder entrar con la petición cruda.
   const setup = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
   const setupPage = await setup.newPage();
-  await fillRegister(setupPage, { email });
-  await expect(setupPage).toHaveURL('/account');
+  await registerAdult(setupPage, email);
   await setup.close();
 
   for (const next of ['/account', '/account/delete']) {

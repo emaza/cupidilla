@@ -1,4 +1,10 @@
-import { OAUTH_PROVIDERS, type AccountResponse, type OAuthProvider } from '@cupidilla/contracts';
+import {
+  EMAIL_VERIFICATION_TTL_HOURS,
+  formatSpanishDate,
+  OAUTH_PROVIDERS,
+  type AccountResponse,
+  type OAuthProvider,
+} from '@cupidilla/contracts';
 
 const TIME_ZONE = 'Europe/Madrid';
 
@@ -45,6 +51,8 @@ export function formatPlainDate(value: string): FormattedDate | null {
 /** «Tus datos» en /account (UX §3.5). Una fecha que no se puede leer no se pinta. */
 export interface AccountDetailsView {
   email: string;
+  /** Estado del correo, como texto junto al correo (correo UX §3.7). */
+  emailVerified: boolean;
   birthDate: FormattedDate | null;
   createdOn: FormattedDate | null;
   /** Última vez que se demostró la identidad en esta sesión. */
@@ -59,6 +67,7 @@ export function accountDetailsView(account: AccountResponse): AccountDetailsView
   const acceptedOn = consent ? formatDay(consent.grantedAt) : null;
   return {
     email: account.user.email,
+    emailVerified: account.user.emailVerified,
     birthDate: formatPlainDate(account.user.birthDate),
     createdOn: formatDay(account.user.createdAt),
     sessionSince: formatDateTime(account.session.authenticatedAt),
@@ -134,5 +143,34 @@ export function signInMethodsView(
     addable: configured.filter((provider) => !linked.some((item) => item.provider === provider)),
     methods: linked.length + (password ? 1 : 0),
     confirmWith: lastUsed?.provider ?? null,
+  };
+}
+
+/**
+ * Sección «Confirma tu correo» de /account (correo UX §3.7), o `null` con el correo confirmado.
+ * La fecha de borrado es la de la API (`unverifiedDeletionAt`) como día en Europe/Madrid, con la
+ * misma función que los correos; el recordatorio solo se menciona si está activo.
+ */
+export interface EmailSectionView {
+  email: string;
+  /** «24 horas». */
+  duration: string;
+  /** «18 de noviembre de 2026», o `null` si la fecha no se puede leer. */
+  deletionOn: string | null;
+  reminder: boolean;
+}
+
+export function emailSectionView(
+  account: AccountResponse,
+  mail: { unverifiedReminder: boolean },
+): EmailSectionView | null {
+  if (account.user.emailVerified) return null;
+  const deletionAt = account.user.unverifiedDeletionAt;
+  const valid = deletionAt !== null && !Number.isNaN(new Date(deletionAt).getTime());
+  return {
+    email: account.user.email,
+    duration: `${EMAIL_VERIFICATION_TTL_HOURS} horas`,
+    deletionOn: valid ? formatSpanishDate(deletionAt) : null,
+    reminder: mail.unverifiedReminder,
   };
 }
