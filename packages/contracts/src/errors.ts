@@ -22,6 +22,7 @@ export const ERROR_CODES = [
   'TOKEN_INVALID_OR_EXPIRED', // 400  enlace de correo inexistente, caducado, usado o de otro propósito
   'TOKEN_ATTEMPTS_EXCEEDED', // 403  5.º fallo de contraseña al confirmar el correo; el enlace ya no existe
   'EMAIL_NOT_VERIFIED', // 403  la ruta exige el correo verificado
+  'DATA_REVIEW_REQUIRED', // 403  la cuenta tiene pendiente revisar sus datos (correo §5.11)
   'OUTCOME_UNKNOWN', // 503  se perdió la conexión con la BD durante una escritura: pudo hacerse o no
 ] as const;
 

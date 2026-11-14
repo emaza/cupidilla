@@ -45,7 +45,13 @@ describe('Sesión', () => {
       const response = await getSession(user.token);
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
-        user: { id: user.userId, email: user.email, createdAt: TEST_NOW, emailVerified: true },
+        user: {
+          id: user.userId,
+          email: user.email,
+          createdAt: TEST_NOW,
+          emailVerified: true,
+          dataReviewRequired: false,
+        },
         session: {
           expiresAt: new Date(new Date(TEST_NOW).getTime() + 30 * DAY_MS).toISOString(),
           renewed: false,
@@ -114,6 +120,7 @@ describe('Sesión', () => {
         email: user.email,
         createdAt: TEST_NOW,
         emailVerified: true,
+        dataReviewRequired: false,
         birthDate: '1990-05-05',
         emailVerifiedAt: TEST_NOW,
         unverifiedDeletionAt: null,

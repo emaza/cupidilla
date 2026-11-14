@@ -28,6 +28,7 @@ const user = {
   email: 'ana@example.com',
   createdAt: '2026-11-13T10:00:00.000Z',
   emailVerified: true,
+  dataReviewRequired: false,
 };
 
 describe('oauthCallbackResponseSchema (C-O1)', () => {

@@ -18,6 +18,7 @@ const auth = {
     email: 'beto@example.com',
     createdAt: '2026-11-11T10:00:00.000Z',
     emailVerified: true,
+    dataReviewRequired: false,
   },
   session: { token: TOKEN, expiresAt: '2026-12-11T10:00:00.000Z' },
 };

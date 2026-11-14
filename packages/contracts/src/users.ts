@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { passwordInputSchema, publicUserSchema, strictObjectError } from './auth.js';
+import {
+  birthDateSchema,
+  passwordInputSchema,
+  publicUserSchema,
+  strictObjectError,
+  termsVersionSchema,
+} from './auth.js';
 import { consentSchema } from './consents.js';
 import { OAUTH_PROVIDERS } from './oauth.js';
 
@@ -84,3 +90,18 @@ export const removeIdentityRequestSchema = z.strictObject(
 );
 
 export type RemoveIdentityRequest = z.infer<typeof removeIdentityRequestSchema>;
+
+/**
+ * Cuerpo de POST /users/me/data-review (correo §5.11): la persona escribe de nuevo su fecha de
+ * nacimiento y vuelve a aceptar las condiciones tras recuperar una cuenta sin verificar. `204`.
+ */
+export const dataReviewRequestSchema = z.strictObject(
+  {
+    birthDate: birthDateSchema,
+    acceptTerms: z.literal(true, { error: 'required' }),
+    termsVersion: termsVersionSchema,
+  },
+  { error: strictObjectError },
+);
+
+export type DataReviewRequest = z.infer<typeof dataReviewRequestSchema>;

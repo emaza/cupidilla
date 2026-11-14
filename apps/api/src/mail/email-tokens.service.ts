@@ -13,7 +13,7 @@ export interface EmailTokenAccount {
   token: EmailTokenRow;
   user: Pick<
     typeof users.$inferSelect,
-    'id' | 'email' | 'createdAt' | 'emailVerifiedAt' | 'passwordHash'
+    'id' | 'email' | 'createdAt' | 'emailVerifiedAt' | 'dataReviewRequiredAt' | 'passwordHash'
   >;
 }
 
@@ -89,6 +89,7 @@ export class EmailTokensService {
           email: users.email,
           createdAt: users.createdAt,
           emailVerifiedAt: users.emailVerifiedAt,
+          dataReviewRequiredAt: users.dataReviewRequiredAt,
           passwordHash: users.passwordHash,
         },
       })
