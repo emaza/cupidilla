@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { AccountResponse, PublicUser } from '@cupidilla/contracts';
 import { and, eq, isNull } from 'drizzle-orm';
+import { listOpenSessions } from '../auth/open-sessions.js';
 import { assertRecent, markSessionAuthenticated } from '../auth/recent-auth.js';
 import { ApiException } from '../common/errors/api.exception.js';
 import { Clock } from '../common/clock.js';
@@ -81,23 +82,32 @@ export class UsersService {
   }
 
   async getAccount(
-    userId: string,
-    session: Pick<ActiveSession, 'authenticatedAt'>,
+    session: Pick<ActiveSession, 'userId' | 'tokenHash' | 'authenticatedAt'>,
   ): Promise<AccountResponse> {
+    const userId = session.userId;
     const [row] = await this.db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (!row) throw new ApiException('UNAUTHENTICATED', 401);
     const linked = await this.identities.listForUser(userId);
+    const open = await listOpenSessions(this.db, userId, session.tokenHash, this.clock.now());
     return {
       user: { ...toPublicUser(row), birthDate: row.birthDate },
       consents: await this.consents.listForUser(userId),
       signInMethods: {
         password: row.passwordHash !== null,
-        identities: linked.map(({ provider, linkedAt }) => ({
+        identities: linked.map(({ provider, linkedAt, lastUsedAt }) => ({
           provider,
           linkedAt: linkedAt.toISOString(),
+          lastUsedAt: lastUsedAt.toISOString(),
         })),
       },
       session: { authenticatedAt: session.authenticatedAt.toISOString() },
+      // Campo a campo, sin spread: lo que no se nombra aquí no sale en la respuesta.
+      sessions: open.map((item) => ({
+        createdAt: item.createdAt.toISOString(),
+        authenticatedAt: item.authenticatedAt.toISOString(),
+        expiresAt: item.expiresAt.toISOString(),
+        current: item.current,
+      })),
     };
   }
 

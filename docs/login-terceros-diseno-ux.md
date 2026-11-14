@@ -551,6 +551,20 @@ Se reutilizan de H0 §5.3 sin cambios: `registro.campo.nacimiento`, `registro.ay
 | `cuenta.acceso.estado_sin_contrasena` | No tienes contraseña |
 | `cuenta.acceso.enlace_crear_contrasena` | Crear contraseña |
 | `cuenta.acceso.estado_unido` | Unido el {fecha} |
+| `cuenta.datos.nacimiento` | Fecha de nacimiento |
+| `cuenta.datos.alta` | Cuenta creada el |
+| `cuenta.datos.sesion` | Inicio de la sesión actual |
+| `cuenta.acceso.ultimo_uso` | Último uso: {fecha} |
+| `cuenta.sesiones.titulo` | Sesiones abiertas |
+| `cuenta.sesiones.intro` | Estas son las sesiones que siguen abiertas con tu cuenta. De cada una solo guardamos las fechas, no el dispositivo ni el lugar. |
+| `cuenta.sesiones.nombre` | Sesión {n} |
+| `cuenta.sesiones.actual` | Esta sesión |
+| `cuenta.sesiones.item_actual_oculto` | `, es la sesión desde la que estás viendo esta página` |
+| `cuenta.sesiones.creada` | Abierta el |
+| `cuenta.sesiones.ultimo_inicio` | Último inicio de sesión |
+| `cuenta.sesiones.caduca` | Caduca el |
+| `cuenta.sesiones.unica` | Solo tienes esta sesión abierta. |
+| `cuenta.sesiones.nota` | Las sesiones caducadas desaparecen de la lista solas. |
 | `cuenta.acceso.estado_no_unido` | No unido |
 | `cuenta.acceso.boton_quitar` | Quitar {proveedor} |
 | `cuenta.acceso.boton_quitando` | Quitando… |

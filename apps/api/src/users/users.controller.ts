@@ -22,7 +22,7 @@ export class UsersController {
 
   @Get('me')
   getAccount(@CurrentSession() session: ActiveSession): Promise<AccountResponse> {
-    return this.users.getAccount(session.userId, session);
+    return this.users.getAccount(session);
   }
 
   @Post('me/password')

@@ -10,6 +10,7 @@ import {
   oauthStartRequestSchema,
 } from './oauth.js';
 import {
+  ACCOUNT_SESSIONS_LIMIT,
   accountResponseSchema,
   createPasswordRequestSchema,
   deleteAccountRequestSchema,
@@ -176,24 +177,63 @@ describe('cuentas sin contraseña (C-O1)', () => {
     ]);
   });
 
-  it('accountResponseSchema lleva las formas de entrar y la fecha de autenticación', () => {
+  it('accountResponseSchema lleva las formas de entrar, la fecha de autenticación y las sesiones', () => {
+    const openSession = {
+      createdAt: '2026-11-13T10:00:00.000Z',
+      authenticatedAt: '2026-11-13T10:00:00.000Z',
+      expiresAt: '2026-12-13T10:00:00.000Z',
+      current: true,
+    };
     const account = {
       user: { ...user, birthDate: '1990-05-05' },
       consents: [],
       signInMethods: {
         password: false,
-        identities: [{ provider: 'google', linkedAt: '2026-11-13T10:00:00.000Z' }],
+        identities: [
+          {
+            provider: 'google',
+            linkedAt: '2026-11-13T10:00:00.000Z',
+            lastUsedAt: '2026-11-13T10:00:00.000Z',
+          },
+        ],
       },
       session: { authenticatedAt: '2026-11-13T10:00:00.000Z' },
+      sessions: [openSession],
     };
     expect(accountResponseSchema.safeParse(account).success).toBe(true);
+    expect(accountResponseSchema.safeParse({ ...account, sessions: [] }).success).toBe(true);
     expect(
       accountResponseSchema.safeParse({
         ...account,
-        signInMethods: { password: false, identities: [{ provider: 'github', linkedAt: EXPIRES }] },
+        signInMethods: {
+          password: false,
+          identities: [{ provider: 'github', linkedAt: EXPIRES, lastUsedAt: EXPIRES }],
+        },
       }).success,
     ).toBe(false);
     expect(accountResponseSchema.safeParse({ ...account, session: {} }).success).toBe(false);
+    // Sin `sessions`, con más del límite o con una identidad sin `lastUsedAt`.
+    expect(accountResponseSchema.safeParse({ ...account, sessions: undefined }).success).toBe(
+      false,
+    );
+    expect(
+      accountResponseSchema.safeParse({
+        ...account,
+        sessions: Array.from({ length: ACCOUNT_SESSIONS_LIMIT + 1 }, () => ({
+          ...openSession,
+          current: false,
+        })),
+      }).success,
+    ).toBe(false);
+    expect(
+      accountResponseSchema.safeParse({
+        ...account,
+        signInMethods: {
+          password: false,
+          identities: [{ provider: 'google', linkedAt: EXPIRES }],
+        },
+      }).success,
+    ).toBe(false);
   });
 });
 

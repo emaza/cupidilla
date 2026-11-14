@@ -120,6 +120,14 @@ describe('Sesión', () => {
       ],
       signInMethods: { password: true, identities: [] },
       session: { authenticatedAt: TEST_NOW },
+      sessions: [
+        {
+          createdAt: TEST_NOW,
+          authenticatedAt: TEST_NOW,
+          expiresAt: new Date(new Date(TEST_NOW).getTime() + 30 * DAY_MS).toISOString(),
+          current: true,
+        },
+      ],
     });
     expect((await api(t.app).get('/users/me')).status).toBe(401);
   });

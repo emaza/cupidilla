@@ -91,9 +91,15 @@ export class IdentitiesService {
     return this.db.select().from(identities).where(eq(identities.userId, userId));
   }
 
-  async listForUser(userId: string): Promise<{ provider: OAuthProvider; linkedAt: Date }[]> {
+  async listForUser(
+    userId: string,
+  ): Promise<{ provider: OAuthProvider; linkedAt: Date; lastUsedAt: Date }[]> {
     const rows = await this.db
-      .select({ provider: identities.provider, linkedAt: identities.createdAt })
+      .select({
+        provider: identities.provider,
+        linkedAt: identities.createdAt,
+        lastUsedAt: identities.lastUsedAt,
+      })
       .from(identities)
       .where(eq(identities.userId, userId))
       .orderBy(asc(identities.createdAt));

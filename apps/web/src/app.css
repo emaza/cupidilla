@@ -677,6 +677,55 @@ input[aria-invalid='true'] {
   }
 }
 
+/* «Sesiones abiertas» en /account: una fila por sesión, solo con fechas. */
+.session-list {
+  list-style: none;
+  margin: 0 0 var(--espacio-4);
+  padding: 0;
+}
+
+.session-row {
+  padding: var(--espacio-3) 0;
+  border-bottom: var(--borde-fino) solid var(--color-borde-suave);
+}
+
+/* Mismo aspecto que .data-list, con otra clase: cada sesión tiene su propia lista de fechas. */
+.session-dates {
+  margin: 0;
+}
+
+.session-dates dt {
+  font-weight: var(--peso-fuerte);
+}
+
+.session-dates dd {
+  margin: 0 0 var(--espacio-3);
+  overflow-wrap: anywhere;
+}
+
+.session-dates dd:last-child {
+  margin-bottom: 0;
+}
+
+.session-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2);
+  margin: 0 0 var(--espacio-2);
+  font-weight: var(--peso-fuerte);
+}
+
+/* «Esta sesión»: texto visible, no solo color (contraste AA sobre el fondo de superficie). */
+.session-tag {
+  padding: 0 var(--espacio-2);
+  border: var(--borde-fino) solid var(--color-primario);
+  border-radius: var(--radio-s);
+  background: var(--color-superficie);
+  color: var(--color-primario);
+  font-size: var(--texto-pequeno);
+}
+
 .confirm-identity {
   border-top: var(--borde-fino) solid var(--color-borde-suave);
   padding-top: var(--espacio-4);

@@ -189,7 +189,13 @@ describe('Entrada con Google: inicio, vuelta y alta pendiente (fase 2)', () => {
       .set('Authorization', `Bearer ${body.session.token}`);
     expect(account.body.signInMethods).toEqual({
       password: false,
-      identities: [{ provider: 'google', linkedAt: identityRow!.createdAt.toISOString() }],
+      identities: [
+        {
+          provider: 'google',
+          linkedAt: identityRow!.createdAt.toISOString(),
+          lastUsedAt: identityRow!.lastUsedAt.toISOString(),
+        },
+      ],
     });
   });
 
@@ -218,6 +224,7 @@ describe('Entrada con Google: inicio, vuelta y alta pendiente (fase 2)', () => {
   it('O-6: identidad ya unida → signed_in aunque cambie el correo del proveedor, que se actualiza', async () => {
     const { identity, token } = await untilSignup();
     expect((await signup(signupBody(token))).status).toBe(201);
+    const linkedAt = t.clock.now().toISOString();
 
     t.clock.advanceMinutes(30);
     const again = await runFlow(t.app, {
@@ -233,6 +240,14 @@ describe('Entrada con Google: inicio, vuelta y alta pendiente (fase 2)', () => {
     expect(identityRow?.lastUsedAt.toISOString()).toBe(t.clock.now().toISOString());
     expect(await countRows(t.db, 'sessions')).toBe(2);
     expect(await countRows(t.db, 'pending_identities')).toBe(0);
+
+    // /users/me muestra el nuevo último uso; la fecha de unión no cambia.
+    const account = await api(t.app)
+      .get('/users/me')
+      .set('Authorization', `Bearer ${(body as { session: { token: string } }).session.token}`);
+    expect(account.body.signInMethods.identities).toEqual([
+      { provider: 'google', linkedAt, lastUsedAt: t.clock.now().toISOString() },
+    ]);
   });
 
   it('O-10 (Google): correo sin verificar → email_unverified; sin correo → email_missing; sin consultar users', async () => {

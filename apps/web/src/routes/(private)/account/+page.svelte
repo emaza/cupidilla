@@ -64,6 +64,20 @@
     <dl class="data-list">
       <dt>{t('cuenta.datos.correo')}</dt>
       <dd>{data.account.email}</dd>
+      {#if data.account.birthDate}
+        <dt>{t('cuenta.datos.nacimiento')}</dt>
+        <dd><time datetime={data.account.birthDate.iso}>{data.account.birthDate.text}</time></dd>
+      {/if}
+      {#if data.account.createdOn}
+        <dt>{t('cuenta.datos.alta')}</dt>
+        <dd><time datetime={data.account.createdOn.iso}>{data.account.createdOn.text}</time></dd>
+      {/if}
+      {#if data.account.sessionSince}
+        <dt>{t('cuenta.datos.sesion')}</dt>
+        <dd>
+          <time datetime={data.account.sessionSince.iso}>{data.account.sessionSince.text}</time>
+        </dd>
+      {/if}
       {#if data.account.terms}
         <dt>{t('cuenta.datos.condiciones')}</dt>
         <dd>
@@ -101,9 +115,16 @@
         <li class="access-row">
           <div class="access-info">
             <span class="access-name">{NAMES[item.provider]}</span>
-            <span class="access-state"
-              >{fill('cuenta.acceso.estado_unido', { fecha: item.linkedOn })}</span
-            >
+            {#if item.linkedOn}
+              <span class="access-state"
+                >{fill('cuenta.acceso.estado_unido', { fecha: item.linkedOn })}</span
+              >
+            {/if}
+            {#if item.lastUsedOn}
+              <span class="access-state"
+                >{fill('cuenta.acceso.ultimo_uso', { fecha: item.lastUsedOn })}</span
+              >
+            {/if}
           </div>
           {#if signIn.methods > 1}
             <form
@@ -198,6 +219,45 @@
         next="/account"
       />
     {/if}
+  </section>
+{/if}
+
+{#if data.sessions && data.sessions.length > 0}
+  <section class="section" aria-labelledby="account-sessions">
+    <h2 id="account-sessions">{t('cuenta.sesiones.titulo')}</h2>
+    <p>{t('cuenta.sesiones.intro')}</p>
+    <ul class="session-list">
+      {#each data.sessions as item (item.n)}
+        <li class="session-row">
+          <p class="session-name">
+            {fill('cuenta.sesiones.nombre', { n: String(item.n) })}
+            {#if item.current}
+              <span class="session-tag">{t('cuenta.sesiones.actual')}</span><span
+                class="visually-hidden">{t('cuenta.sesiones.item_actual_oculto')}</span
+              >
+            {/if}
+          </p>
+          <dl class="session-dates">
+            {#if item.createdAt}
+              <dt>{t('cuenta.sesiones.creada')}</dt>
+              <dd><time datetime={item.createdAt.iso}>{item.createdAt.text}</time></dd>
+            {/if}
+            {#if item.authenticatedAt}
+              <dt>{t('cuenta.sesiones.ultimo_inicio')}</dt>
+              <dd><time datetime={item.authenticatedAt.iso}>{item.authenticatedAt.text}</time></dd>
+            {/if}
+            {#if item.expiresAt}
+              <dt>{t('cuenta.sesiones.caduca')}</dt>
+              <dd><time datetime={item.expiresAt.iso}>{item.expiresAt.text}</time></dd>
+            {/if}
+          </dl>
+        </li>
+      {/each}
+    </ul>
+    {#if data.sessions.length === 1}
+      <p class="help">{t('cuenta.sesiones.unica')}</p>
+    {/if}
+    <p class="help">{t('cuenta.sesiones.nota')}</p>
   </section>
 {/if}
 
