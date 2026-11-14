@@ -80,204 +80,211 @@ test('C23/C24/C33/C46: atributos de los campos, fecha en fieldset sin date/numbe
   await expect(page.locator('html')).toHaveAttribute('lang', 'es');
 });
 
-test('C34/C35/C36/C37: con errores, el resumen es lo primero de <main>, enlaza a los campos y los asocia por ARIA', async ({
-  page,
-  javaScriptEnabled,
-}) => {
-  await fillRegister(page, {
-    email: 'MAL CORREO',
-    password: 'corta',
-    day: '31',
-    month: '2',
-    year: '2000',
-    acceptTerms: false,
-  });
+test(
+  'C34/C35/C36/C37: con errores, el resumen es lo primero de <main>, enlaza a los campos y los asocia por ARIA',
+  { tag: '@nojs' },
+  async ({ page, javaScriptEnabled }) => {
+    await fillRegister(page, {
+      email: 'MAL CORREO',
+      password: 'corta',
+      day: '31',
+      month: '2',
+      year: '2000',
+      acceptTerms: false,
+    });
 
-  const summary = page.locator('main > .error-summary');
-  await expect(summary).toBeVisible();
-  // Es lo primero dentro de <main>, antes de la <h1>.
-  expect(
-    await page.evaluate(() => document.querySelector('main')?.firstElementChild?.className),
-  ).toBe('error-summary');
-  await expect(summary.getByRole('heading', { level: 2 })).toHaveText(
-    'Revisa esto antes de seguir',
-  );
-  await expect(page).toHaveTitle('Error: Crear cuenta — Cupidilla');
-  if (javaScriptEnabled) await expect(summary).toBeFocused();
+    const summary = page.locator('main > .error-summary');
+    await expect(summary).toBeVisible();
+    // Es lo primero dentro de <main>, antes de la <h1>.
+    expect(
+      await page.evaluate(() => document.querySelector('main')?.firstElementChild?.className),
+    ).toBe('error-summary');
+    await expect(summary.getByRole('heading', { level: 2 })).toHaveText(
+      'Revisa esto antes de seguir',
+    );
+    await expect(page).toHaveTitle('Error: Crear cuenta — Cupidilla');
+    if (javaScriptEnabled) await expect(summary).toBeFocused();
 
-  const links = summary.getByRole('link');
-  await expect(links).toHaveCount(4);
-  expect(await links.evaluateAll((els) => els.map((el) => el.getAttribute('href')))).toEqual([
-    '#email',
-    '#password',
-    '#day',
-    '#acceptTerms',
-  ]);
+    const links = summary.getByRole('link');
+    await expect(links).toHaveCount(4);
+    expect(await links.evaluateAll((els) => els.map((el) => el.getAttribute('href')))).toEqual([
+      '#email',
+      '#password',
+      '#day',
+      '#acceptTerms',
+    ]);
 
-  // Cada campo con error: aria-invalid y aria-describedby apuntando a elementos que existen.
-  const expectations: Record<string, string[]> = {
-    // `registro.ayuda.correo` bajo la etiqueta (correo UX §7).
-    email: ['email-help', 'email-error'],
-    password: ['password-help', 'password-error'],
-    day: ['birth-date-error'],
-    month: ['birth-date-error'],
-    year: ['birth-date-error'],
-    acceptTerms: ['accept-terms-help', 'accept-terms-error'],
-  };
-  for (const [id, described] of Object.entries(expectations)) {
-    const field = page.locator(`#${id}`);
-    await expect(field, id).toHaveAttribute('aria-invalid', 'true');
-    expect((await field.getAttribute('aria-describedby'))?.split(' '), id).toEqual(described);
-    for (const target of described) await expect(page.locator(`#${target}`), target).toHaveCount(1);
-  }
-  // Los errores llevan texto oculto «Error:», un icono y el color: no dependen solo del color.
-  await expect(page.locator('#email-error .visually-hidden')).toHaveText('Error:');
-  await expect(page.locator('#email-error .icon')).toHaveText('⚠');
+    // Cada campo con error: aria-invalid y aria-describedby apuntando a elementos que existen.
+    const expectations: Record<string, string[]> = {
+      // `registro.ayuda.correo` bajo la etiqueta (correo UX §7).
+      email: ['email-help', 'email-error'],
+      password: ['password-help', 'password-error'],
+      day: ['birth-date-error'],
+      month: ['birth-date-error'],
+      year: ['birth-date-error'],
+      acceptTerms: ['accept-terms-help', 'accept-terms-error'],
+    };
+    for (const [id, described] of Object.entries(expectations)) {
+      const field = page.locator(`#${id}`);
+      await expect(field, id).toHaveAttribute('aria-invalid', 'true');
+      expect((await field.getAttribute('aria-describedby'))?.split(' '), id).toEqual(described);
+      for (const target of described)
+        await expect(page.locator(`#${target}`), target).toHaveCount(1);
+    }
+    // Los errores llevan texto oculto «Error:», un icono y el color: no dependen solo del color.
+    await expect(page.locator('#email-error .visually-hidden')).toHaveText('Error:');
+    await expect(page.locator('#email-error .icon')).toHaveText('⚠');
 
-  // El enlace del resumen lleva al campo.
-  await links.nth(1).click();
-  if (javaScriptEnabled) await expect(page.locator('#password')).toBeFocused();
-  else await expect(page).toHaveURL(/#password$/);
+    // El enlace del resumen lleva al campo.
+    await links.nth(1).click();
+    if (javaScriptEnabled) await expect(page.locator('#password')).toBeFocused();
+    else await expect(page).toHaveURL(/#password$/);
 
-  // Un campo sin error no tiene aria-invalid ni describedby de error.
-  await fillRegister(page, { email: uniqueEmail(), password: 'corta' });
-  await expect(page.locator('#password-error')).toBeVisible();
-  await expect(page.locator('#email')).not.toHaveAttribute('aria-invalid', /.*/);
-  await expect(page.locator('#day')).not.toHaveAttribute('aria-invalid', /.*/);
-  await expect(page.locator('#day')).not.toHaveAttribute('aria-describedby', /.*/);
-});
+    // Un campo sin error no tiene aria-invalid ni describedby de error.
+    await fillRegister(page, { email: uniqueEmail(), password: 'corta' });
+    await expect(page.locator('#password-error')).toBeVisible();
+    await expect(page.locator('#email')).not.toHaveAttribute('aria-invalid', /.*/);
+    await expect(page.locator('#day')).not.toHaveAttribute('aria-invalid', /.*/);
+    await expect(page.locator('#day')).not.toHaveAttribute('aria-describedby', /.*/);
+  },
+);
 
-test('C59: la contraseña nunca reaparece en el HTML tras un error en registro, entrada y eliminar', async ({
-  page,
-}) => {
-  const secret = 'contraseña-secreta-que-no-debe-volver';
-  await fillRegister(page, { email: 'mal', password: secret });
-  await expect(page.locator('#email-error')).toBeVisible();
-  expect(await page.content()).not.toContain(secret);
-  await expect(page.locator('#password')).toHaveValue('');
-  expect(await page.locator('#password').getAttribute('value')).toBeNull();
+test(
+  'C59: la contraseña nunca reaparece en el HTML tras un error en registro, entrada y eliminar',
+  { tag: '@nojs' },
+  async ({ page }) => {
+    const secret = 'contraseña-secreta-que-no-debe-volver';
+    await fillRegister(page, { email: 'mal', password: secret });
+    await expect(page.locator('#email-error')).toBeVisible();
+    expect(await page.content()).not.toContain(secret);
+    await expect(page.locator('#password')).toHaveValue('');
+    expect(await page.locator('#password').getAttribute('value')).toBeNull();
 
-  await page.goto('/login');
-  await page.getByLabel('Correo electrónico').fill('alguien@example.com');
-  await page.getByLabel('Contraseña', { exact: true }).fill(secret);
-  await page.getByRole('button', { name: 'Entrar' }).click();
-  await expect(page.locator('.error-summary')).toBeVisible();
-  expect(await page.content()).not.toContain(secret);
-  await expect(page.locator('#password')).toHaveValue('');
+    await page.goto('/login');
+    await page.getByLabel('Correo electrónico').fill('alguien@example.com');
+    await page.getByLabel('Contraseña', { exact: true }).fill(secret);
+    await page.getByRole('button', { name: 'Entrar' }).click();
+    await expect(page.locator('.error-summary')).toBeVisible();
+    expect(await page.content()).not.toContain(secret);
+    await expect(page.locator('#password')).toHaveValue('');
 
-  await registerAdult(page);
-  await page.goto('/account/delete');
-  await page.getByLabel('Contraseña', { exact: true }).fill(secret);
-  await page.getByRole('button', { name: 'Eliminar mi cuenta definitivamente' }).click();
-  await expect(page.locator('#password-error')).toBeVisible();
-  expect(await page.content()).not.toContain(secret);
-  await expect(page.locator('#password')).toHaveValue('');
-});
+    await registerAdult(page);
+    await page.goto('/account/delete');
+    await page.getByLabel('Contraseña', { exact: true }).fill(secret);
+    await page.getByRole('button', { name: 'Eliminar mi cuenta definitivamente' }).click();
+    await expect(page.locator('#password-error')).toBeVisible();
+    expect(await page.content()).not.toContain(secret);
+    await expect(page.locator('#password')).toHaveValue('');
+  },
+);
 
-test('C38/C40: orden de tabulación de /register y «Saltar al contenido»', async ({
-  page,
-  javaScriptEnabled,
-}) => {
-  await page.goto('/register');
-  const order = await tabOrder(page);
-  const expected = [
-    'Saltar al contenido',
-    'Cupidilla',
-    'Entrar',
-    'Crear cuenta',
-    // Botones de proveedor encima del formulario (UX terceros §3.1.1), en orden alfabético.
-    'Continuar con Google',
-    'Continuar con Facebook',
-    '#email',
-    '#password',
-    ...(javaScriptEnabled ? ['Mostrar contraseña'] : []),
-    '#day',
-    '#month',
-    '#year',
-    '#acceptTerms',
-    'Leer las condiciones (se abre en una pestaña nueva)',
-    'Crear cuenta',
-    '¿Ya tienes cuenta? Entra',
-    'Condiciones de uso',
-  ];
-  expect(order).toEqual(expected);
+test(
+  'C38/C40: orden de tabulación de /register y «Saltar al contenido»',
+  { tag: '@nojs' },
+  async ({ page, javaScriptEnabled }) => {
+    await page.goto('/register');
+    const order = await tabOrder(page);
+    const expected = [
+      'Saltar al contenido',
+      'Cupidilla',
+      'Entrar',
+      'Crear cuenta',
+      // Botones de proveedor encima del formulario (UX terceros §3.1.1), en orden alfabético.
+      'Continuar con Google',
+      'Continuar con Facebook',
+      '#email',
+      '#password',
+      ...(javaScriptEnabled ? ['Mostrar contraseña'] : []),
+      '#day',
+      '#month',
+      '#year',
+      '#acceptTerms',
+      'Leer las condiciones (se abre en una pestaña nueva)',
+      'Crear cuenta',
+      '¿Ya tienes cuenta? Entra',
+      'Condiciones de uso',
+    ];
+    expect(order).toEqual(expected);
 
-  // «Saltar al contenido» es lo primero, se ve al recibir el foco y lleva a <main>.
-  // Página nueva: el recorrido anterior dejó la ventana desplazada hasta el final y, al recargar la
-  // misma URL, el navegador restaura ese desplazamiento (con la máquina cargada, DESPUÉS de que
-  // Tab ya haya enfocado el enlace). El enlace seguía enfocado pero fuera de la pantalla, y el
-  // test fallaba a ratos. Una pestaña nueva no tiene desplazamiento que restaurar.
-  const fresh = await page.context().newPage();
-  await fresh.goto('/register');
-  await fresh.keyboard.press('Tab');
-  const skip = fresh.getByRole('link', { name: 'Saltar al contenido' });
-  await expect(skip).toBeFocused();
-  const box = await skip.boundingBox();
-  expect(box && box.y >= 0 && box.x >= 0 && box.width > 0 && box.height > 0).toBe(true);
-  await fresh.keyboard.press('Enter');
-  await expect(fresh).toHaveURL(/#content$/);
-  await expect(fresh.locator('main')).toBeFocused();
-});
+    // «Saltar al contenido» es lo primero, se ve al recibir el foco y lleva a <main>.
+    // Página nueva: el recorrido anterior dejó la ventana desplazada hasta el final y, al recargar la
+    // misma URL, el navegador restaura ese desplazamiento (con la máquina cargada, DESPUÉS de que
+    // Tab ya haya enfocado el enlace). El enlace seguía enfocado pero fuera de la pantalla, y el
+    // test fallaba a ratos. Una pestaña nueva no tiene desplazamiento que restaurar.
+    const fresh = await page.context().newPage();
+    await fresh.goto('/register');
+    await fresh.keyboard.press('Tab');
+    const skip = fresh.getByRole('link', { name: 'Saltar al contenido' });
+    await expect(skip).toBeFocused();
+    const box = await skip.boundingBox();
+    expect(box && box.y >= 0 && box.x >= 0 && box.width > 0 && box.height > 0).toBe(true);
+    await fresh.keyboard.press('Enter');
+    await expect(fresh).toHaveURL(/#content$/);
+    await expect(fresh.locator('main')).toBeFocused();
+  },
+);
 
-test('C38: registrarse, salir y eliminar la cuenta solo con el teclado, sin trampas de foco', async ({
-  page,
-}) => {
-  const email = uniqueEmail();
-  await page.goto('/register');
-  await page.locator('#email').focus();
-  await page.keyboard.type(email);
-  await page.keyboard.press('Tab');
-  await page.keyboard.type(PASSWORD);
-  if (await page.getByRole('button', { name: 'Mostrar contraseña' }).count())
+test(
+  'C38: registrarse, salir y eliminar la cuenta solo con el teclado, sin trampas de foco',
+  { tag: '@nojs' },
+  async ({ page }) => {
+    const email = uniqueEmail();
+    await page.goto('/register');
+    await page.locator('#email').focus();
+    await page.keyboard.type(email);
     await page.keyboard.press('Tab');
-  for (const part of ['5', '5', '1990']) {
-    await page.keyboard.press('Tab');
-    await page.keyboard.type(part);
-  }
-  await page.keyboard.press('Tab'); // casilla
-  await expect(page.locator('#acceptTerms')).toBeFocused();
-  await page.keyboard.press('Space');
-  await expect(page.locator('#acceptTerms')).toBeChecked();
-  await page.keyboard.press('Tab'); // enlace a las condiciones
-  await page.keyboard.press('Tab'); // botón de enviar
-  await expect(page.locator('form button.button-primary[type="submit"]')).toBeFocused();
-  await page.keyboard.press('Enter');
-  await expect(page).toHaveURL('/register/check-email');
+    await page.keyboard.type(PASSWORD);
+    if (await page.getByRole('button', { name: 'Mostrar contraseña' }).count())
+      await page.keyboard.press('Tab');
+    for (const part of ['5', '5', '1990']) {
+      await page.keyboard.press('Tab');
+      await page.keyboard.type(part);
+    }
+    await page.keyboard.press('Tab'); // casilla
+    await expect(page.locator('#acceptTerms')).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(page.locator('#acceptTerms')).toBeChecked();
+    await page.keyboard.press('Tab'); // enlace a las condiciones
+    await page.keyboard.press('Tab'); // botón de enviar
+    await expect(page.locator('form button.button-primary[type="submit"]')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL('/register/check-email');
 
-  // Confirmar el correo, también con el teclado: el campo de contraseña e Intro.
-  await page.goto(
-    await pathIn(await waitForMail(email, { subject: 'Confirma tu correo' }), '/verify-email'),
-  );
-  await page.locator('#password').focus();
-  await page.keyboard.type(PASSWORD);
-  await page.keyboard.press('Enter');
-  await expect(page).toHaveURL('/account?notice=email-verified-signin');
+    // Confirmar el correo, también con el teclado: el campo de contraseña e Intro.
+    await page.goto(
+      await pathIn(await waitForMail(email, { subject: 'Confirma tu correo' }), '/verify-email'),
+    );
+    await page.locator('#password').focus();
+    await page.keyboard.type(PASSWORD);
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL('/account?notice=email-verified-signin');
 
-  // En /account se llega con Tab al botón de salir y al enlace de eliminar, en ese orden.
-  const order = await tabOrder(page);
-  expect(order).toEqual([
-    'Saltar al contenido',
-    'Cupidilla',
-    'Mi cuenta',
-    // «Formas de entrar»: la cuenta tiene contraseña, así que cada proveedor se añade
-    // escribiéndola antes del botón (decisión 20).
-    '#password-add-google',
-    'Continuar con Google',
-    '#password-add-facebook',
-    'Continuar con Facebook',
-    'Cerrar sesión',
-    'Eliminar mi cuenta',
-    'Condiciones de uso',
-  ]);
+    // En /account se llega con Tab al botón de salir y al enlace de eliminar, en ese orden.
+    const order = await tabOrder(page);
+    expect(order).toEqual([
+      'Saltar al contenido',
+      'Cupidilla',
+      'Mi cuenta',
+      // «Formas de entrar»: la cuenta tiene contraseña, así que cada proveedor se añade
+      // escribiéndola antes del botón (decisión 20).
+      '#password-add-google',
+      'Continuar con Google',
+      '#password-add-facebook',
+      'Continuar con Facebook',
+      'Cerrar sesión',
+      'Eliminar mi cuenta',
+      'Condiciones de uso',
+    ]);
 
-  await page.getByRole('link', { name: 'Eliminar mi cuenta' }).focus();
-  await page.keyboard.press('Enter');
-  await expect(page).toHaveURL('/account/delete');
-  await page.locator('#password').focus();
-  await page.keyboard.type(PASSWORD);
-  await page.keyboard.press('Enter'); // Intro en el campo envía el formulario
-  await expect(page).toHaveURL('/?notice=account-deleted');
-});
+    await page.getByRole('link', { name: 'Eliminar mi cuenta' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL('/account/delete');
+    await page.locator('#password').focus();
+    await page.keyboard.type(PASSWORD);
+    await page.keyboard.press('Enter'); // Intro en el campo envía el formulario
+    await expect(page).toHaveURL('/?notice=account-deleted');
+  },
+);
 
 test('C46/C47: una sola <h1>, títulos sin saltos de nivel, <title> con el patrón y landmarks, en todas las pantallas', async ({
   page,
@@ -493,26 +500,27 @@ test('C30: con JavaScript, el botón muestra «enviando» y un segundo envío no
   expect(posts).toHaveLength(1);
 });
 
-test('C29: «Mostrar contraseña» solo existe con JavaScript, alterna la visibilidad y cambia su texto', async ({
-  page,
-  javaScriptEnabled,
-}) => {
-  await page.goto('/register');
-  const toggle = page.locator('.button-text');
-  if (!javaScriptEnabled) {
-    await expect(toggle).toHaveCount(0);
-    return;
-  }
-  await expect(toggle).toHaveText('Mostrar contraseña');
-  await page.locator('#password').fill('algo');
-  await toggle.click();
-  await expect(page.locator('#password')).toHaveAttribute('type', 'text');
-  await expect(toggle).toHaveText('Ocultar contraseña');
-  await toggle.click();
-  await expect(page.locator('#password')).toHaveAttribute('type', 'password');
-  await expect(toggle).toHaveText('Mostrar contraseña');
-  await expect(page.locator('#password')).toHaveValue('algo');
-});
+test(
+  'C29: «Mostrar contraseña» solo existe con JavaScript, alterna la visibilidad y cambia su texto',
+  { tag: '@nojs' },
+  async ({ page, javaScriptEnabled }) => {
+    await page.goto('/register');
+    const toggle = page.locator('.button-text');
+    if (!javaScriptEnabled) {
+      await expect(toggle).toHaveCount(0);
+      return;
+    }
+    await expect(toggle).toHaveText('Mostrar contraseña');
+    await page.locator('#password').fill('algo');
+    await toggle.click();
+    await expect(page.locator('#password')).toHaveAttribute('type', 'text');
+    await expect(toggle).toHaveText('Ocultar contraseña');
+    await toggle.click();
+    await expect(page.locator('#password')).toHaveAttribute('type', 'password');
+    await expect(toggle).toHaveText('Mostrar contraseña');
+    await expect(page.locator('#password')).toHaveValue('algo');
+  },
+);
 
 test('[BUG-QA-4] C44: a 320 px con el texto ampliado al 200 %, ninguna pantalla se desborda horizontalmente', async ({
   page,

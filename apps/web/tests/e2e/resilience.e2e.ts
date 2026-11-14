@@ -40,155 +40,160 @@ async function expectNoTechnicalDetails(page: Page): Promise<void> {
   );
 }
 
-test('C31: con el servidor parado, registro y entrada muestran su error y conservan lo escrito', async ({
-  browser,
-  javaScriptEnabled,
-}) => {
-  await withStack({ apiUp: false }, async (stack) => {
-    const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
-    const page = await context.newPage();
-    const email = uniqueEmail();
+test(
+  'C31: con el servidor parado, registro y entrada muestran su error y conservan lo escrito',
+  { tag: '@nojs' },
+  async ({ browser, javaScriptEnabled }) => {
+    await withStack({ apiUp: false }, async (stack) => {
+      const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
+      const page = await context.newPage();
+      const email = uniqueEmail();
 
-    await fillRegister(page, { email });
-    await expect(page.getByText(REGISTER_SERVER_ERROR)).toBeVisible();
-    await expect(page).toHaveTitle('Error: Crear cuenta — Cupidilla');
-    await expect(page.getByLabel('Correo electrónico')).toHaveValue(email);
-    await expect(page.getByLabel('Día')).toHaveValue('5');
-    await expect(page.getByLabel('Mes')).toHaveValue('5');
-    await expect(page.getByLabel('Año')).toHaveValue('1990');
-    await expect(page.getByLabel(/Acepto las condiciones de uso/)).toBeChecked();
-    await expect(page.getByLabel('Contraseña', { exact: true })).toHaveValue('');
-    await expectNoTechnicalDetails(page);
-    // Es un error general: se anuncia y no se señala ningún campo.
-    await expect(page.locator('.error-summary')).toHaveAttribute('role', 'alert');
-    await expect(page.locator('[aria-invalid="true"]')).toHaveCount(0);
+      await fillRegister(page, { email });
+      await expect(page.getByText(REGISTER_SERVER_ERROR)).toBeVisible();
+      await expect(page).toHaveTitle('Error: Crear cuenta — Cupidilla');
+      await expect(page.getByLabel('Correo electrónico')).toHaveValue(email);
+      await expect(page.getByLabel('Día')).toHaveValue('5');
+      await expect(page.getByLabel('Mes')).toHaveValue('5');
+      await expect(page.getByLabel('Año')).toHaveValue('1990');
+      await expect(page.getByLabel(/Acepto las condiciones de uso/)).toBeChecked();
+      await expect(page.getByLabel('Contraseña', { exact: true })).toHaveValue('');
+      await expectNoTechnicalDetails(page);
+      // Es un error general: se anuncia y no se señala ningún campo.
+      await expect(page.locator('.error-summary')).toHaveAttribute('role', 'alert');
+      await expect(page.locator('[aria-invalid="true"]')).toHaveCount(0);
 
-    await page.goto('/login');
-    await page.getByLabel('Correo electrónico').fill(email);
-    await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
-    await page.getByRole('button', { name: 'Entrar' }).click();
-    await expect(page.getByText(LOGIN_SERVER_ERROR)).toBeVisible();
-    await expect(page.getByLabel('Correo electrónico')).toHaveValue(email);
-    await expect(page.getByLabel('Contraseña', { exact: true })).toHaveValue('');
-    await expectNoTechnicalDetails(page);
-
-    await context.close();
-  });
-});
-
-test('A14: si la API cae con la sesión abierta, «Cerrar sesión» no dice que has salido; al volver, sale', async ({
-  browser,
-  javaScriptEnabled,
-}) => {
-  await withStack({}, async (stack) => {
-    const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
-    const page = await context.newPage();
-    await registerAdult(page);
-    // Sin el aviso de la URL: el error de salir se pinta en /account (si no, la página se recarga).
-    await page.goto('/account');
-
-    await stack.stopApi();
-    await page.getByRole('button', { name: 'Cerrar sesión' }).click();
-
-    await expect(page.getByText(LOGOUT_SERVER_ERROR)).toBeVisible();
-    await expect(page.getByRole('alert')).toContainText(LOGOUT_SERVER_ERROR);
-    await expect(page).not.toHaveURL(/notice=signed-out/);
-    await expect(page.getByRole('status').filter({ hasText: 'Has cerrado sesión.' })).toHaveCount(
-      0,
-    );
-    await expect(page).toHaveTitle('Error: Tu cuenta — Cupidilla');
-    // La cookie sigue ahí: la sesión no se ha podido revocar.
-    expect((await context.cookies()).some((c) => c.name === 'cupidilla_session')).toBe(true);
-    await expectNoTechnicalDetails(page);
-
-    // Al volver la API, el mismo botón funciona. (La API nueva no recuerda nada en memoria, pero la
-    // sesión está en la base de datos.)
-    await stack.startApi();
-    await page.getByRole('button', { name: 'Cerrar sesión' }).click();
-    await expect(page).toHaveURL(/\/\?notice=signed-out$/);
-    await expect(page.getByRole('status')).toContainText('Has cerrado sesión.');
-    expect((await context.cookies()).some((c) => c.name === 'cupidilla_session')).toBe(false);
-
-    await context.close();
-  });
-});
-
-test('con la API caída, eliminar la cuenta da eliminar.error.servidor y la cuenta sigue', async ({
-  browser,
-  javaScriptEnabled,
-}) => {
-  await withStack({}, async (stack) => {
-    const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
-    const page = await context.newPage();
-    await registerAdult(page);
-    await page.goto('/account/delete');
-
-    await stack.stopApi();
-    await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
-    await page.getByRole('button', { name: 'Eliminar mi cuenta definitivamente' }).click();
-    await expect(page.getByText(DELETE_SERVER_ERROR).first()).toBeVisible();
-    await expect(page).not.toHaveURL(/notice=account-deleted/);
-    await expect(page.getByLabel('Contraseña', { exact: true })).toHaveValue('');
-    await expectNoTechnicalDetails(page);
-
-    // Con la API otra vez en pie, la cuenta existe y la sesión también.
-    await stack.startApi();
-    await page.goto('/account');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tu cuenta');
-
-    await context.close();
-  });
-});
-
-test('C32: el 6.º intento de entrada con el mismo correo muestra comun.error.limite', async ({
-  browser,
-  javaScriptEnabled,
-}) => {
-  await withStack({ rateLimitFactor: 1 }, async (stack) => {
-    const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
-    const page = await context.newPage();
-    const email = uniqueEmail();
-
-    for (let attempt = 1; attempt <= 6; attempt++) {
       await page.goto('/login');
       await page.getByLabel('Correo electrónico').fill(email);
-      await page.getByLabel('Contraseña', { exact: true }).fill(`contraseña errónea ${attempt}`);
+      await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
       await page.getByRole('button', { name: 'Entrar' }).click();
-      const expected = attempt <= 5 ? 'Correo o contraseña incorrectos.' : RATE_LIMIT_TEXT;
-      await expect(page.locator('.error-summary'), `intento ${attempt}`).toContainText(expected);
-    }
-    await expect(page.getByLabel('Correo electrónico')).toHaveValue(email);
-    await expect(page.getByLabel('Contraseña', { exact: true })).toHaveValue('');
-    await expect(page.locator('.error-summary')).toHaveAttribute('role', 'alert');
-    await expect(page).toHaveTitle('Error: Entrar — Cupidilla');
+      await expect(page.getByText(LOGIN_SERVER_ERROR)).toBeVisible();
+      await expect(page.getByLabel('Correo electrónico')).toHaveValue(email);
+      await expect(page.getByLabel('Contraseña', { exact: true })).toHaveValue('');
+      await expectNoTechnicalDetails(page);
 
-    await context.close();
-  });
-});
+      await context.close();
+    });
+  },
+);
 
-test('C32: el 6.º registro desde la misma IP en una hora muestra comun.error.limite y conserva lo escrito', async ({
-  browser,
-  javaScriptEnabled,
-}) => {
-  await withStack({ rateLimitFactor: 1 }, async (stack) => {
-    const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
-    const page = await context.newPage();
+test(
+  'A14: si la API cae con la sesión abierta, «Cerrar sesión» no dice que has salido; al volver, sale',
+  { tag: '@nojs' },
+  async ({ browser, javaScriptEnabled }) => {
+    await withStack({}, async (stack) => {
+      const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
+      const page = await context.newPage();
+      await registerAdult(page);
+      // Sin el aviso de la URL: el error de salir se pinta en /account (si no, la página se recarga).
+      await page.goto('/account');
 
-    for (let attempt = 1; attempt <= 5; attempt++) {
-      await fillRegister(page, { email: uniqueEmail() });
-      await expect(page, `registro ${attempt}`).toHaveURL('/register/check-email');
-      await context.clearCookies();
-    }
-    const email = uniqueEmail();
-    await fillRegister(page, { email });
-    await expect(page.locator('.error-summary')).toContainText(RATE_LIMIT_TEXT);
-    await expect(page).toHaveURL(/\/register$/);
-    await expect(page.getByLabel('Correo electrónico')).toHaveValue(email);
-    await expect(page.getByLabel('Año')).toHaveValue('1990');
-    await expect(page.getByLabel(/Acepto las condiciones de uso/)).toBeChecked();
-    await expect(page.getByLabel('Contraseña', { exact: true })).toHaveValue('');
-    await expect(page).toHaveTitle('Error: Crear cuenta — Cupidilla');
+      await stack.stopApi();
+      await page.getByRole('button', { name: 'Cerrar sesión' }).click();
 
-    await context.close();
-  });
-});
+      await expect(page.getByText(LOGOUT_SERVER_ERROR)).toBeVisible();
+      await expect(page.getByRole('alert')).toContainText(LOGOUT_SERVER_ERROR);
+      await expect(page).not.toHaveURL(/notice=signed-out/);
+      await expect(page.getByRole('status').filter({ hasText: 'Has cerrado sesión.' })).toHaveCount(
+        0,
+      );
+      await expect(page).toHaveTitle('Error: Tu cuenta — Cupidilla');
+      // La cookie sigue ahí: la sesión no se ha podido revocar.
+      expect((await context.cookies()).some((c) => c.name === 'cupidilla_session')).toBe(true);
+      await expectNoTechnicalDetails(page);
+
+      // Al volver la API, el mismo botón funciona. (La API nueva no recuerda nada en memoria, pero la
+      // sesión está en la base de datos.)
+      await stack.startApi();
+      await page.getByRole('button', { name: 'Cerrar sesión' }).click();
+      await expect(page).toHaveURL(/\/\?notice=signed-out$/);
+      await expect(page.getByRole('status')).toContainText('Has cerrado sesión.');
+      expect((await context.cookies()).some((c) => c.name === 'cupidilla_session')).toBe(false);
+
+      await context.close();
+    });
+  },
+);
+
+test(
+  'con la API caída, eliminar la cuenta da eliminar.error.servidor y la cuenta sigue',
+  { tag: '@nojs' },
+  async ({ browser, javaScriptEnabled }) => {
+    await withStack({}, async (stack) => {
+      const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
+      const page = await context.newPage();
+      await registerAdult(page);
+      await page.goto('/account/delete');
+
+      await stack.stopApi();
+      await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
+      await page.getByRole('button', { name: 'Eliminar mi cuenta definitivamente' }).click();
+      await expect(page.getByText(DELETE_SERVER_ERROR).first()).toBeVisible();
+      await expect(page).not.toHaveURL(/notice=account-deleted/);
+      await expect(page.getByLabel('Contraseña', { exact: true })).toHaveValue('');
+      await expectNoTechnicalDetails(page);
+
+      // Con la API otra vez en pie, la cuenta existe y la sesión también.
+      await stack.startApi();
+      await page.goto('/account');
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tu cuenta');
+
+      await context.close();
+    });
+  },
+);
+
+test(
+  'C32: el 6.º intento de entrada con el mismo correo muestra comun.error.limite',
+  { tag: '@nojs' },
+  async ({ browser, javaScriptEnabled }) => {
+    await withStack({ rateLimitFactor: 1 }, async (stack) => {
+      const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
+      const page = await context.newPage();
+      const email = uniqueEmail();
+
+      for (let attempt = 1; attempt <= 6; attempt++) {
+        await page.goto('/login');
+        await page.getByLabel('Correo electrónico').fill(email);
+        await page.getByLabel('Contraseña', { exact: true }).fill(`contraseña errónea ${attempt}`);
+        await page.getByRole('button', { name: 'Entrar' }).click();
+        const expected = attempt <= 5 ? 'Correo o contraseña incorrectos.' : RATE_LIMIT_TEXT;
+        await expect(page.locator('.error-summary'), `intento ${attempt}`).toContainText(expected);
+      }
+      await expect(page.getByLabel('Correo electrónico')).toHaveValue(email);
+      await expect(page.getByLabel('Contraseña', { exact: true })).toHaveValue('');
+      await expect(page.locator('.error-summary')).toHaveAttribute('role', 'alert');
+      await expect(page).toHaveTitle('Error: Entrar — Cupidilla');
+
+      await context.close();
+    });
+  },
+);
+
+test(
+  'C32: el 6.º registro desde la misma IP en una hora muestra comun.error.limite y conserva lo escrito',
+  { tag: '@nojs' },
+  async ({ browser, javaScriptEnabled }) => {
+    await withStack({ rateLimitFactor: 1 }, async (stack) => {
+      const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
+      const page = await context.newPage();
+
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        await fillRegister(page, { email: uniqueEmail() });
+        await expect(page, `registro ${attempt}`).toHaveURL('/register/check-email');
+        await context.clearCookies();
+      }
+      const email = uniqueEmail();
+      await fillRegister(page, { email });
+      await expect(page.locator('.error-summary')).toContainText(RATE_LIMIT_TEXT);
+      await expect(page).toHaveURL(/\/register$/);
+      await expect(page.getByLabel('Correo electrónico')).toHaveValue(email);
+      await expect(page.getByLabel('Año')).toHaveValue('1990');
+      await expect(page.getByLabel(/Acepto las condiciones de uso/)).toBeChecked();
+      await expect(page.getByLabel('Contraseña', { exact: true })).toHaveValue('');
+      await expect(page).toHaveTitle('Error: Crear cuenta — Cupidilla');
+
+      await context.close();
+    });
+  },
+);
