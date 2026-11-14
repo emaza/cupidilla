@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { mailpitSmtpUrl } from './tests/e2e/helpers/mailpit.ts';
 import { FAKE_PROVIDER_URL, OAUTH_E2E_ENV, WEB_URL } from './tests/e2e/helpers/oauth-env.ts';
 
 // Un único .env en la raíz (§11.2). Los valores ya definidos en el entorno tienen prioridad.
@@ -12,6 +13,8 @@ const API_PORT = '3101';
 export default defineConfig({
   testDir: 'tests/e2e',
   testMatch: '**/*.e2e.ts',
+  // Sin Mailpit no arranca (correo §11.2): «levanta Mailpit: npm run mail:up».
+  globalSetup: './tests/e2e/global-setup.ts',
   forbidOnly: !!process.env.CI,
   reporter: process.env.CI ? 'line' : 'list',
   use: {
@@ -40,8 +43,10 @@ export default defineConfig({
         // Todas las peticiones llegan desde la misma IP (§12.2).
         RATE_LIMIT_FACTOR: '100',
         LOG_FORMAT: 'json',
-        // Google y Facebook apuntan al proveedor falso (técnico §14.1).
+        // Google y Facebook apuntan al proveedor falso (técnico §14.1). Trae PUBLIC_WEB_URL.
         ...OAUTH_E2E_ENV,
+        // El worker envía de verdad a Mailpit, y kick() al momento (correo §11.2).
+        SMTP_URL: mailpitSmtpUrl(),
       },
     },
     {

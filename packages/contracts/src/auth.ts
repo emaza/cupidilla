@@ -1,9 +1,31 @@
 import { z } from 'zod';
-import { MIN_BIRTH_DATE } from './age.js';
+import { MIN_BIRTH_DATE, REFERENCE_TIME_ZONE } from './age.js';
 
 export const PASSWORD_MIN = 10; // puntos de código
 export const PASSWORD_MAX = 128; // puntos de código
 export const EMAIL_MAX = 254;
+
+/** Plazos de los correos (diseño técnico de correo §7.1). Los textos de los correos salen de aquí. */
+export const EMAIL_VERIFICATION_TTL_HOURS = 24;
+export const PASSWORD_RESET_TTL_MINUTES = 60;
+export const UNVERIFIED_ACCOUNT_TTL_DAYS = 7;
+export const UNVERIFIED_REMINDER_AFTER_DAYS = 5;
+export const EMAIL_TOKEN_MAX_FAILURES = 5;
+export const EMAIL_TOKEN_PURPOSES = ['verify_email', 'reset_password'] as const;
+export type EmailTokenPurpose = (typeof EMAIL_TOKEN_PURPOSES)[number];
+
+/**
+ * «18 de noviembre de 2026»: el día del instante en Europe/Madrid (la zona de la regla de edad).
+ * Lo usan los correos y la web, así que la fecha siempre coincide.
+ */
+export function formatSpanishDate(instant: Date | string): string {
+  return new Intl.DateTimeFormat('es-ES', {
+    timeZone: REFERENCE_TIME_ZONE,
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(instant));
+}
 
 /**
  * Longitud en puntos de código Unicode, no en unidades UTF-16, tras la normalización NFKC que

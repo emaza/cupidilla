@@ -120,6 +120,7 @@ describe('Carrera real alta con contraseña vs. identidad con el mismo correo (R
       await tx.insert(users).values({
         email: 'y@gmail.com',
         passwordHash: null,
+        emailVerifiedAt: t.clock.now(),
         birthDate: '1990-05-05',
         createdAt: t.clock.now(),
         updatedAt: t.clock.now(),

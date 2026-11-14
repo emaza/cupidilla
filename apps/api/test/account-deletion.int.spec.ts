@@ -1,4 +1,6 @@
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import { emailOutbox } from '../src/database/schema/index.js';
+import { OutboxService } from '../src/mail/outbox.service.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   api,
@@ -70,6 +72,7 @@ describe('Eliminación de la cuenta', () => {
       users: 1,
       sessions: 1,
       consents: 1,
+      email_tokens: 0,
       identities: 0,
       pending_identities: 0,
     });
@@ -90,6 +93,7 @@ describe('Eliminación de la cuenta', () => {
     // Toda tabla con FK a users entra aquí (oauth_states cuelga de sessions, no de users).
     expect(Object.keys(remaining).sort()).toEqual([
       'consents',
+      'email_tokens',
       'identities',
       'pending_identities',
       'sessions',
@@ -121,10 +125,33 @@ describe('Eliminación de la cuenta', () => {
       users: 1,
       sessions: 1,
       consents: 1,
+      email_tokens: 0,
       identities: 0,
       pending_identities: 0,
     });
     expect(await countRows(t.db, 'users')).toBe(1);
+  });
+
+  /** Correo 3.5: filas del outbox (pendiente y fallida) de la cuenta y una de otra persona. */
+  async function seedOutbox(email: string): Promise<void> {
+    const outbox = t.app.get(OutboxService);
+    await outbox.enqueue(t.db, 'password_changed', email);
+    await t.db.update(emailOutbox).set({ failedAt: t.clock.now() });
+    await outbox.enqueue(t.db, 'password_changed', email);
+    await outbox.enqueue(t.db, 'signup_notice', email);
+    await outbox.enqueue(t.db, 'signup_notice', 'otra@example.com');
+  }
+  const outboxTo = async (email: string) =>
+    (await t.db.select().from(emailOutbox).where(eq(emailOutbox.toEmail, email))).length;
+
+  it('§3.5: borrar la cuenta borra sus filas del outbox (pendientes y fallidas), no las de otros', async () => {
+    const user = await registerUser(t.app);
+    await seedOutbox(user.email);
+    expect(await outboxTo(user.email)).toBe(3);
+
+    expect((await deleteAccount(user.token, user.password)).status).toBe(204);
+    expect(await outboxTo(user.email)).toBe(0);
+    expect(await outboxTo('otra@example.com')).toBe(1);
   });
 
   it('valida el cuerpo y exige sesión', async () => {

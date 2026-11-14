@@ -17,20 +17,21 @@
   },
   "scripts": {
     "db:up": "docker compose up -d --wait db",
+    "mail:up": "docker compose up -d --wait mail",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d --wait db && npm run db:migrate",
     "db:generate": "npm run db:generate -w @cupidilla/api --",
     "db:migrate": "npm run db:migrate -w @cupidilla/api",
     "db:studio": "npm run db:up && npm run db:studio -w @cupidilla/api",
     "build:contracts": "npm run build -w @cupidilla/contracts",
-    "dev": "npm run db:up && npm run build:contracts && concurrently -k -n contracts,api,web -c blue,magenta,green \"npm run dev -w @cupidilla/contracts\" \"npm run dev -w @cupidilla/api\" \"npm run dev -w @cupidilla/web\"",
+    "dev": "npm run db:up && npm run mail:up && npm run build:contracts && concurrently -k -n contracts,api,web -c blue,magenta,green \"npm run dev -w @cupidilla/contracts\" \"npm run dev -w @cupidilla/api\" \"npm run dev -w @cupidilla/web\"",
     "oauth:fake": "node --env-file-if-exists=.env packages/fake-oauth-provider/src/main.ts",
     "build": "npm run build:contracts && npm run build -w @cupidilla/api && npm run build -w @cupidilla/web",
     "typecheck": "npm run build:contracts && npm run typecheck --workspaces --if-present",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "test": "npm run build:contracts && npm run test --workspaces --if-present",
-    "test:e2e": "npm run build:contracts && npm run test:e2e -w @cupidilla/web",
+    "test:e2e": "npm run mail:up && npm run build:contracts && npm run test:e2e -w @cupidilla/web",
     "e2e:install": "npx playwright install chromium"
   },
   "devDependencies": {

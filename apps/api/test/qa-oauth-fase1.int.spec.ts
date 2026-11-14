@@ -30,7 +30,11 @@ describe('QA fase 1: login con password_hash nulo', () => {
   const login = (email: string, password: string) =>
     api(t.app).post('/auth/login').send({ email, password });
   const withoutPassword = (userId: string) =>
-    t.db.update(users).set({ passwordHash: null }).where(eq(users.id, userId));
+    t.db
+      .update(users)
+      // Una cuenta sin contraseña nace verificada (correo §3.1).
+      .set({ passwordHash: null, emailVerifiedAt: t.clock.now() })
+      .where(eq(users.id, userId));
 
   /** Cabeceras que no dependen de la petición concreta (ni de cuántos intentos lleva ya el correo). */
   const VOLATILE_HEADERS = ['date', 'x-request-id', 'retry-after', 'x-ratelimit-remaining-account'];
