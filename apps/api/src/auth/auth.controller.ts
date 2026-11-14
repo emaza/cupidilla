@@ -22,6 +22,7 @@ import {
   CurrentSession,
   type ActiveSession,
 } from '../common/decorators/current-session.decorator.js';
+import { AllowDuringDataReview } from '../common/decorators/allow-during-data-review.decorator.js';
 import { Public } from '../common/decorators/public.decorator.js';
 import {
   ACCOUNT_THROTTLER,
@@ -138,12 +139,14 @@ export class AuthController {
   }
 
   @Post('logout')
+  @AllowDuringDataReview()
   @HttpCode(204)
   logout(@CurrentSession() session: ActiveSession): Promise<void> {
     return this.auth.logout(session.tokenHash);
   }
 
   @Get('session')
+  @AllowDuringDataReview()
   getSession(@CurrentSession() session: ActiveSession): SessionResponse {
     return {
       user: session.user,
