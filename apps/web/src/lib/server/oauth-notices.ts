@@ -23,7 +23,8 @@ export interface UrlMessage {
 }
 
 /** Páginas con listas cerradas de avisos (técnico §11.4, correo §9.2). */
-export type MessagePage = 'entry' | 'account' | 'account-step' | 'check-email-signup';
+export type MessagePage =
+  'entry' | 'account' | 'account-step' | 'check-email-signup' | 'check-email-reset' | 'review';
 
 interface Entry {
   key: TextKey;
@@ -66,6 +67,9 @@ const LISTS: Record<MessagePage, { notice: Record<string, Entry>; error: Record<
         'email-verified-other': { key: 'confirmar.aviso.hecho_otra', success: true },
         'verification-sent': { key: 'correo.aviso.reenviado', success: true },
         'verification-already': { key: 'correo.aviso.ya_confirmado' },
+        // Recuperación y revisión de datos (correo UX §6.10).
+        'password-reset': { key: 'restablecer.aviso.hecho', success: true },
+        'details-reviewed': { key: 'revision.aviso.hecha', success: true },
       },
       error: {
         'verification-failed': { key: 'correo.error.servidor' },
@@ -106,6 +110,19 @@ const LISTS: Record<MessagePage, { notice: Record<string, Entry>; error: Record<
         'rate-limited': { key: 'comun.error.limite' },
         'resend-failed': { key: 'correo.error.servidor' },
       },
+    },
+    // /forgot-password/check-email (correo UX §6.10)
+    'check-email-reset': {
+      notice: { resent: { key: 'olvido.revisar.aviso_reenviado', success: true } },
+      error: {
+        'rate-limited': { key: 'comun.error.limite' },
+        'resend-failed': { key: 'correo.error.servidor' },
+      },
+    },
+    // /account/review (correo UX §6.10)
+    review: {
+      notice: { 'password-reset': { key: 'restablecer.aviso.hecho', success: true } },
+      error: {},
     },
   };
 
@@ -212,4 +229,18 @@ export function connectMessages(
   if (!message || !fromConnect || !first) return { message, connect: null };
   const target = isProvider(provider) && signIn.addable.includes(provider) ? provider : first;
   return { message: null, connect: { provider: target, message } };
+}
+
+/**
+ * `notice=password-reset` (correo UX §6.6, §6.9): `restablecer.aviso.hecho` va seguido de
+ * `restablecer.aviso.correo_enviado` solo si la instalación envía «Tu contraseña ha cambiado».
+ */
+export function withPasswordChangedNotice(
+  message: UrlMessage | null,
+  params: URLSearchParams,
+  passwordChangedNotice: boolean,
+): UrlMessage | null {
+  if (!message || !passwordChangedNotice || message.kind !== 'success') return message;
+  if (params.get('error') !== null || params.get('notice') !== 'password-reset') return message;
+  return { ...message, text: `${message.text} ${texts['restablecer.aviso.correo_enviado']}` };
 }

@@ -13,7 +13,17 @@ export const WEB_ERROR_CODES = ['API_UNAVAILABLE'] as const;
 export type WebErrorCode = ErrorCode | (typeof WEB_ERROR_CODES)[number];
 
 /** Formularios. Cada uno tiene sus propios textos de error (UX §5). */
-export type FormName = 'register' | 'login' | 'delete' | 'logout' | 'signup' | 'link' | 'verify';
+export type FormName =
+  | 'register'
+  | 'login'
+  | 'delete'
+  | 'logout'
+  | 'signup'
+  | 'link'
+  | 'verify'
+  | 'forgot'
+  | 'reset'
+  | 'review';
 
 function byCode(
   fallback: TextKey,
@@ -77,6 +87,24 @@ export const errorMessages: Record<FormName, Record<WebErrorCode, TextKey>> = {
     TOKEN_INVALID_OR_EXPIRED: 'enlace.titulo',
     RATE_LIMITED: 'comun.error.limite',
     OUTCOME_UNKNOWN: 'confirmar.error.resultado_incierto',
+  }),
+  // /forgot-password (correo UX §3.3): un correo con formato válido siempre da éxito.
+  forgot: byCode('olvido.error.servidor', {
+    RATE_LIMITED: 'comun.error.limite',
+  }),
+  // /reset-password (correo UX §3.5). Un enlace que no sirve es una pantalla entera.
+  reset: byCode('restablecer.error.servidor', {
+    TOKEN_INVALID_OR_EXPIRED: 'enlace.titulo',
+    RATE_LIMITED: 'comun.error.limite',
+    OUTCOME_UNKNOWN: 'restablecer.error.resultado_incierto',
+  }),
+  // /account/review (correo UX §3.10, §7). UNDERAGE es la pantalla de cierre. DATA_REVIEW_REQUIRED
+  // no tiene texto: la web redirige a /account/review.
+  review: byCode('revision.error.servidor', {
+    UNDERAGE: 'revision.menor.titulo',
+    TERMS_VERSION_OUTDATED: 'registro.error.condiciones_version',
+    RATE_LIMITED: 'comun.error.limite',
+    OUTCOME_UNKNOWN: 'revision.error.resultado_incierto',
   }),
 };
 

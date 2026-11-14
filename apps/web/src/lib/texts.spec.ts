@@ -46,6 +46,10 @@ const mailTable = tableOfSection5(mailUxDoc, '## 7. Cambios', '## 6. Textos de i
  */
 const mailChanges = new Map([
   [
+    'registro.ayuda.contrasena',
+    'Mínimo 10 caracteres, sin más reglas: una frase larga vale. Si la olvidas, podrás crear otra desde tu correo.',
+  ],
+  [
     'registro.error.resultado_incierto',
     (table.get('registro.error.resultado_incierto') ?? '').replace(
       'Si entras, la cuenta ya existe.',
@@ -53,7 +57,7 @@ const mailChanges = new Map([
     ),
   ],
 ]);
-const mailRemoved = new Set(['registro.error.correo_existente']);
+const mailRemoved = new Set(['registro.error.correo_existente', 'union.ayuda.olvido']);
 
 describe('Textos de interfaz = tabla de UX §5 (criterio 49)', () => {
   it('se ha leído la tabla entera (no pasa por no encontrar nada)', () => {
@@ -111,6 +115,35 @@ const legal = (file: string): string =>
   readFileSync(resolve(REPO_ROOT, `apps/web/src/lib/legal/${file}`), 'utf8');
 
 /**
+ * Retoques de las secciones 4 y 5 que pide la §7 del diseño UX de correo, en la versión vigente
+ * `2026-11-borrador-2` sin subirla (decisión 9 del cliente). Las frases se leen del propio §7.
+ */
+function withMailTermsChanges(rows: Map<string, string>): Map<string, string> {
+  const section7 = mailUxDoc.slice(
+    mailUxDoc.indexOf('## 7. Cambios'),
+    mailUxDoc.indexOf('## 8. Responsive'),
+  );
+  const quoted = (key: string) =>
+    [
+      ...(section7.split('\n').find((line) => line.includes(`\`${key}\``)) ?? '').matchAll(
+        /«([^»]+)»/g,
+      ),
+    ].map((match) => match[1] ?? '');
+  const [oldS4, newS4] = quoted('condiciones.s4.texto');
+  const [addS5] = quoted('condiciones.s5.texto');
+  expect(oldS4 && newS4 && addS5).toBeTruthy();
+  const result = new Map(rows);
+  const s4 = result.get('condiciones.s4.texto') ?? '';
+  expect(s4).toContain(oldS4);
+  result.set('condiciones.s4.texto', s4.replace(oldS4 ?? '', newS4 ?? ''));
+  // La frase se añade al final de lo que dice la sección, antes de su nota [PENDIENTE: …].
+  const s5 = result.get('condiciones.s5.texto') ?? '';
+  expect(s5).toContain(' [PENDIENTE');
+  result.set('condiciones.s5.texto', s5.replace(' [PENDIENTE', ` ${addS5} [PENDIENTE`));
+  return result;
+}
+
+/**
  * Cada versión de las condiciones coincide con su tabla: la de H0 (`2026-11-borrador`, que se
  * conserva como registro de lo aceptado) y la de H0 con las secciones que cambia la entrada con
  * terceros (`2026-11-borrador-2`, vigente).
@@ -119,7 +152,9 @@ const versions = [
   { file: 'terms-2026-11-borrador.svelte', rows: table },
   {
     file: 'terms-2026-11-borrador-2.svelte',
-    rows: new Map([...table, ...[...oauthTable].filter(([key]) => key.startsWith('condiciones.'))]),
+    rows: withMailTermsChanges(
+      new Map([...table, ...[...oauthTable].filter(([key]) => key.startsWith('condiciones.'))]),
+    ),
   },
 ];
 

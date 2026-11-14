@@ -2,7 +2,11 @@ import { displayMinAge } from '#lib/server/min-age.ts';
 import type { LayoutServerLoad } from './$types';
 
 /** Páginas sin la banda de correo sin confirmar: ya hablan del correo (correo UX §3.7). */
-const NO_EMAIL_BANNER = new Set(['/(private)/account', '/verify-email']);
+const NO_EMAIL_BANNER = new Set([
+  '/(private)/account',
+  '/(private)/account/review',
+  '/verify-email',
+]);
 
 /**
  * Solo se expone si hay sesión; ni el token ni el usuario completo llegan al navegador.

@@ -76,6 +76,10 @@
         autocomplete="current-password"
         error={fields.password ? t(fields.password) : undefined}
       />
+      <!-- Entre el campo y el botón, siempre visible y sin arrastrar `next` (correo UX §3.8). -->
+      <p>
+        <a class="block-link" href={resolve('forgot-password')}>{t('entrar.enlace.olvido')}</a>
+      </p>
 
       <div class="actions">
         <SubmitButton

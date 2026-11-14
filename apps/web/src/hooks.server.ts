@@ -8,6 +8,7 @@ import {
 import { API_URL, API_URL_ALLOW_HTTP } from '$app/env/private';
 import { api } from '#lib/server/api-client.ts';
 import { assertApiUrlTransport } from '#lib/server/api-url.ts';
+import { DATA_REVIEW_PATH, mustReviewData } from '#lib/server/data-review.ts';
 import { DEFAULT_RETURN_PATH, safeReturnPath } from '#lib/server/return-path.ts';
 import {
   clearSessionCookie,
@@ -31,7 +32,12 @@ const authenticate: Handle = async ({ event, resolve }) => {
     const result = await api.session(event, token);
     if (result.ok) {
       const { user, session } = result.data;
-      event.locals.user = { id: user.id, email: user.email, emailVerified: user.emailVerified };
+      event.locals.user = {
+        id: user.id,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        dataReviewRequired: user.dataReviewRequired,
+      };
       event.locals.sessionToken = token;
       if (session.renewed) setSessionCookie(event.cookies, token, session.expiresAt);
     } else if (result.status === 401) {
@@ -56,6 +62,10 @@ const guardRoutes: Handle = async ({ event, resolve }) => {
       event.request.method === 'GET' ? safeReturnPath(event.url.pathname) : DEFAULT_RETURN_PATH;
     redirect(303, `/login?next=${next}`);
   }
+  if (mustReviewData(user, routeId)) {
+    // Hasta revisar los datos no se puede usar nada más (la API lo refuerza con 403).
+    redirect(303, DATA_REVIEW_PATH);
+  }
   if (routeId.startsWith('/(guest)') && user) {
     redirect(303, '/account');
   }
@@ -63,9 +73,12 @@ const guardRoutes: Handle = async ({ event, resolve }) => {
 };
 
 /** Páginas con el token de un enlace de correo (técnico de correo §9.1). */
-const TOKEN_ROUTES = new Set(['/verify-email']);
+const TOKEN_ROUTES = new Set(['/verify-email', '/reset-password']);
 /** «Revisa tu correo»: muestran el correo escrito. */
-const CHECK_EMAIL_ROUTES = new Set(['/(guest)/register/check-email']);
+const CHECK_EMAIL_ROUTES = new Set([
+  '/(guest)/register/check-email',
+  '/forgot-password/check-email',
+]);
 
 const securityHeaders: Handle = async ({ event, resolve }) => {
   const response = await resolve(event);

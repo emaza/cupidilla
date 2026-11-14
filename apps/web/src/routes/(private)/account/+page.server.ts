@@ -9,7 +9,11 @@ import {
 } from '#lib/server/account-view.ts';
 import { api, configuredProviders } from '#lib/server/api-client.ts';
 import { displayMailConfig } from '#lib/server/min-age.ts';
-import { connectMessages, isProvider } from '#lib/server/oauth-notices.ts';
+import {
+  connectMessages,
+  isProvider,
+  withPasswordChangedNotice,
+} from '#lib/server/oauth-notices.ts';
 import { clearSessionCookie } from '#lib/server/session-cookie.ts';
 import type { TextKey } from '#lib/texts.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -23,11 +27,16 @@ export const load: PageServerLoad = async (event) => {
     const { message, connect } = connectMessages(signIn, event.url.searchParams, {
       correo: result.data.user.email,
     });
+    const mail = await displayMailConfig(event);
     return {
-      message,
+      message: withPasswordChangedNotice(
+        message,
+        event.url.searchParams,
+        mail.passwordChangedNotice,
+      ),
       connect,
       account: accountDetailsView(result.data),
-      emailSection: emailSectionView(result.data, await displayMailConfig(event)),
+      emailSection: emailSectionView(result.data, mail),
       signIn,
       sessions: openSessionsView(result.data),
     };
