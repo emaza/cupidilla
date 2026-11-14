@@ -36,6 +36,12 @@ const withMessage = (
   return `${path}?${params.toString()}`;
 };
 
+/** Destino de un flujo caducado: con sesión /login no se ve, el aviso va a /account (decisión 21). */
+export const expiredLocation = (provider: string, signedIn: boolean): string =>
+  signedIn
+    ? withMessage('/account', { error: 'confirm-expired' }, provider)
+    : '/login?error=provider-expired';
+
 /**
  * Redirección de la vuelta. La cookie `cupidilla_oauth` solo sigue viva, con el token pendiente,
  * en el alta y la unión, o con el flujo siguiente tras una confirmación; en todo lo demás se borra.
@@ -50,13 +56,7 @@ export function callbackOutcome(
     // Flujo caducado, ya usado o con una cookie que no vale: «ha pasado demasiado tiempo». Con
     // sesión, /login no se ve: el aviso va a /account (decisión 21).
     if (result.error.code === 'OAUTH_FLOW_INVALID' || result.error.code === 'VALIDATION_FAILED') {
-      if (signedIn) {
-        return {
-          kind: 'redirect',
-          location: withMessage('/account', { error: 'confirm-expired' }, provider),
-        };
-      }
-      return { kind: 'redirect', location: '/login?error=provider-expired' };
+      return { kind: 'redirect', location: expiredLocation(provider, signedIn) };
     }
     if (result.error.code === 'RATE_LIMITED') {
       return { kind: 'redirect', location: '/login?error=rate-limited' };

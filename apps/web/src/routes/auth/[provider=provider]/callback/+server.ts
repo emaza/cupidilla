@@ -1,5 +1,5 @@
 import { api } from '#lib/server/api-client.ts';
-import { callbackOutcome } from '#lib/server/oauth-callback.ts';
+import { callbackOutcome, expiredLocation } from '#lib/server/oauth-callback.ts';
 import { clearOAuthToken, getOAuthToken, setOAuthToken } from '#lib/server/oauth-cookie.ts';
 import { setSessionCookie } from '#lib/server/session-cookie.ts';
 import type { RequestHandler } from './$types';
@@ -16,7 +16,7 @@ export const GET: RequestHandler = async (event) => {
   const { provider } = event.params;
   const flowToken = getOAuthToken(event.cookies);
   // Sin la cookie no hay flujo que continuar: no se llama a la API.
-  if (!flowToken) return seeOther('/login?error=provider-expired');
+  if (!flowToken) return seeOther(expiredLocation(provider, event.locals.user !== null));
 
   const result = await api.oauthCallback(
     event,

@@ -295,6 +295,21 @@ describe('W-O3: GET /auth/{provider}/callback', () => {
     expect(cookies.values.get('cupidilla_oauth')).toBe(NEXT);
   });
 
+  it('sin cookie y con sesión → /account?error=confirm-expired, sin llamar a la API', async () => {
+    const result = await run(() =>
+      back.GET(
+        event<Parameters<typeof back.GET>[0]>({
+          url: 'http://localhost/auth/google/callback?code=x&state=s',
+          cookies: jar(),
+          method: 'GET',
+          user: { id: 'u' },
+        }),
+      ),
+    );
+    expect(result.location).toBe('/account?error=confirm-expired&provider=google');
+    expect(api.oauthCallback).not.toHaveBeenCalled();
+  });
+
   it('flujo caducado con sesión → /account?error=confirm-expired (decisión 21)', async () => {
     api.oauthCallback.mockResolvedValue(failure(400, 'OAUTH_FLOW_INVALID'));
     const cookies = jar({ cupidilla_oauth: FLOW });
