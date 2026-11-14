@@ -18,7 +18,8 @@ const api = vi.hoisted(() => ({
 const cookie = vi.hoisted(() => ({ set: vi.fn(), clear: vi.fn() }));
 
 vi.mock('#lib/server/api-client.ts', () => ({ api }));
-vi.mock('#lib/server/min-age.ts', () => ({ currentMinAge: () => Promise.resolve(18) }));
+const minAge = vi.hoisted(() => ({ current: 18 as number | null }));
+vi.mock('#lib/server/min-age.ts', () => ({ currentMinAge: () => Promise.resolve(minAge.current) }));
 vi.mock('#lib/server/session-cookie.ts', () => ({
   setSessionCookie: cookie.set,
   clearSessionCookie: cookie.clear,
@@ -78,6 +79,33 @@ const adultForm = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  minAge.current = 18;
+});
+
+describe('registro: edad mínima no disponible', () => {
+  const submit = (fields: Record<string, string>) =>
+    run(() => registerPage.actions.default(formEvent(fields)) as Promise<unknown>);
+
+  it('menor de 18: camino de menor, sin valores y sin llamar a la API', async () => {
+    minAge.current = null;
+    const { result } = await submit({ ...adultForm, year: '2015' });
+    expect(result).toMatchObject({ status: 422, data: { underage: true } });
+    expect(Object.keys((result as { data: object }).data)).toEqual(['underage']);
+    expect(api.register).not.toHaveBeenCalled();
+  });
+
+  it('adulto: 503 con los valores conservados, sin llamar a la API', async () => {
+    minAge.current = null;
+    const { result } = await submit(adultForm);
+    expect(result).toMatchObject({
+      status: 503,
+      data: {
+        errors: { general: 'registro.error.servidor' },
+        values: { email: 'ana@example.com', year: '1990' },
+      },
+    });
+    expect(api.register).not.toHaveBeenCalled();
+  });
 });
 
 describe('registro: respuestas de la API (criterios 31 y 32)', () => {
