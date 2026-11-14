@@ -5,6 +5,7 @@ import {
   emailTokenInspectionRequestSchema,
   emailVerificationRequestSchema,
   loginRequestSchema,
+  passwordResetSchema,
   registerRequestSchema,
   type AuthResponse,
   type EmailRequest,
@@ -13,6 +14,7 @@ import {
   type EmailVerificationRequest,
   type EmailVerificationResponse,
   type LoginRequest,
+  type PasswordResetRequest,
   type RegisterRequest,
   type SessionResponse,
 } from '@cupidilla/contracts';
@@ -29,12 +31,14 @@ import {
 } from '../common/guards/app-throttler.guard.js';
 import { AuthService } from './auth.service.js';
 import { EmailVerificationService } from './email-verification.service.js';
+import { PasswordResetService } from './password-reset.service.js';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly verification: EmailVerificationService,
+    private readonly passwordReset: PasswordResetService,
   ) {}
 
   /** Registro uniforme (correo §5.1): siempre 202 sin cuerpo y sin sesión. */
@@ -88,6 +92,34 @@ export class AuthController {
     @Headers('authorization') authorization: string | undefined,
   ): Promise<EmailVerificationResponse> {
     return this.verification.confirm(body, authorization);
+  }
+
+  /** Pedir el enlace de recuperación: siempre 202, exista o no la cuenta (§5.5). */
+  @Post('password-reset/request')
+  @Public()
+  @HttpCode(202)
+  @Throttle({
+    [IP_THROTTLER]: { limit: 5, ttl: THROTTLE_TTL.quarterHour },
+    [EMAIL_THROTTLER]: { limit: 5, ttl: THROTTLE_TTL.day },
+  })
+  async requestPasswordReset(
+    @Body({ schema: emailRequestSchema }) body: EmailRequest,
+  ): Promise<void> {
+    await this.passwordReset.request(body.email);
+  }
+
+  /**
+   * Fijar la contraseña con el enlace (§5.6): cierra todas las sesiones de la cuenta y abre una.
+   * Sin el conjunto `account`, por lo mismo que la confirmación del correo.
+   */
+  @Post('password-reset')
+  @Public()
+  @HttpCode(200)
+  @Throttle({ [IP_THROTTLER]: { limit: 10, ttl: THROTTLE_TTL.quarterHour } })
+  resetPassword(
+    @Body({ schema: passwordResetSchema }) body: PasswordResetRequest,
+  ): Promise<AuthResponse> {
+    return this.passwordReset.reset(body);
   }
 
   @Post('login')
