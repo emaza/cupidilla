@@ -1,7 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { closeDb } from './helpers/db.ts';
-import { fillRegister, PASSWORD, registerAdult, uniqueEmail } from './helpers/forms.ts';
+import {
+  confirmEmail,
+  fillRegister,
+  PASSWORD,
+  registerAdult,
+  uniqueEmail,
+} from './helpers/forms.ts';
 
 // Segunda revisión de QA de H0: comprueba por otra vía que los arreglos de la primera revisión
 // funcionan en cada pantalla y formulario, con y sin JavaScript, y que no han roto otra cosa.
@@ -242,15 +248,15 @@ test('[BUG-QA-6] C44: sin desplazamiento horizontal a 320 px con el texto al 200
   await expect(page.getByRole('heading', { name: 'No podemos crear tu cuenta' })).toBeVisible();
   await measure('pantalla de menor');
 
-  // Correo ya registrado (409) y errores de /login.
+  // Correo ya registrado («Revisa tu correo», correo §5.1) y errores de /login.
   const email = uniqueEmail();
   await registerAdult(page, email);
   await measure('/account');
   await page.getByRole('button', { name: 'Cerrar sesión' }).click();
   await expect(page).toHaveURL('/?notice=signed-out');
   await fillRegister(page, { email });
-  await expect(page.getByText(SUMMARY_TITLE)).toBeVisible();
-  await measure('/register: correo ya registrado');
+  await expect(page).toHaveURL('/register/check-email');
+  await measure('/register/check-email: correo ya registrado');
 
   await open('/login');
   await submit('Entrar', true);
@@ -270,7 +276,13 @@ test('[BUG-QA-6] C44: sin desplazamiento horizontal a 320 px con el texto al 200
   const unique = randomUUID().replaceAll('-', '');
   const longEmail = `${unique}${'a'.repeat(64 - unique.length)}@${'b'.repeat(63)}.${'c'.repeat(63)}.${'d'.repeat(57)}.com`;
   await page.setViewportSize({ width: 1280, height: 800 });
-  await registerAdult(page, longEmail);
+  await fillRegister(page, { email: longEmail });
+  await expect(page).toHaveURL('/register/check-email');
+  await page.setViewportSize({ width: 320, height: 700 });
+  await measure('/register/check-email con un correo de 254 caracteres');
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await confirmEmail(page, longEmail);
+  await expect(page).toHaveURL('/account?notice=email-verified-signin');
   await page.setViewportSize({ width: 320, height: 700 });
   await open('/account');
   await measure('/account con un correo de 254 caracteres');

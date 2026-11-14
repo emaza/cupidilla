@@ -14,6 +14,11 @@ export const EMAIL_TOKEN_MAX_FAILURES = 5;
 export const EMAIL_TOKEN_PURPOSES = ['verify_email', 'reset_password'] as const;
 export type EmailTokenPurpose = (typeof EMAIL_TOKEN_PURPOSES)[number];
 
+/** Token opaco de 256 bits en base64url (43 caracteres): sesión, flujos de OAuth y enlaces de correo. */
+export const opaqueTokenSchema = z
+  .string({ error: 'required' })
+  .regex(/^[A-Za-z0-9_-]{43}$/, { error: 'invalid_format' });
+
 /**
  * «18 de noviembre de 2026»: el día del instante en Europe/Madrid (la zona de la regla de edad).
  * Lo usan los correos y la web, así que la fecha siempre coincide.
@@ -99,6 +104,8 @@ export const publicUserSchema = z.object({
   id: z.uuid(),
   email: z.string(),
   createdAt: z.iso.datetime(),
+  /** El correo de la cuenta está verificado (correo §5.8). */
+  emailVerified: z.boolean(),
 });
 
 export type PublicUser = z.infer<typeof publicUserSchema>;
@@ -118,3 +125,55 @@ export const sessionResponseSchema = z.object({
 });
 
 export type SessionResponse = z.infer<typeof sessionResponseSchema>;
+
+/**
+ * POST /auth/email-verification/request: pedir el correo de verificación (reenviar). Responde
+ * siempre `202` sin cuerpo, exista o no la cuenta (correo §5.3).
+ */
+export const emailRequestSchema = z.strictObject(
+  { email: emailSchema },
+  { error: strictObjectError },
+);
+
+export type EmailRequest = z.infer<typeof emailRequestSchema>;
+
+/** POST /auth/email-tokens/inspection: comprobar un enlace sin consumirlo (correo §5.4). */
+export const emailTokenInspectionRequestSchema = z.strictObject(
+  { token: opaqueTokenSchema, purpose: z.enum(EMAIL_TOKEN_PURPOSES, { error: 'invalid' }) },
+  { error: strictObjectError },
+);
+
+export type EmailTokenInspectionRequest = z.infer<typeof emailTokenInspectionRequestSchema>;
+
+export const emailTokenInspectionResponseSchema = z.object({
+  /** Correo de la cuenta del enlace, ya enmascarado: «p•••@ejemplo.com». */
+  emailHint: z.string(),
+  /** El `Bearer` de la petición es una sesión viva de la cuenta del enlace. */
+  sessionMatches: z.boolean(),
+});
+
+export type EmailTokenInspectionResponse = z.infer<typeof emailTokenInspectionResponseSchema>;
+
+/**
+ * POST /auth/email-verification: confirmar el correo. Sin la sesión de esa cuenta hace falta su
+ * contraseña (K3, correo §5.4).
+ */
+export const emailVerificationRequestSchema = z.strictObject(
+  { token: opaqueTokenSchema, password: passwordInputSchema.optional() },
+  { error: strictObjectError },
+);
+
+export type EmailVerificationRequest = z.infer<typeof emailVerificationRequestSchema>;
+
+/**
+ * - `same`: con la sesión de esa cuenta; la sesión no cambia.
+ * - `opened`: sin sesión; se abre una con la cuenta del enlace.
+ * - `kept-other`: con la sesión de otra cuenta, que no cambia (decisión 8 del cliente).
+ */
+export const emailVerificationResponseSchema = z.discriminatedUnion('session', [
+  z.object({ session: z.literal('same') }),
+  z.object({ session: z.literal('kept-other') }),
+  z.object({ session: z.literal('opened'), auth: authResponseSchema }),
+]);
+
+export type EmailVerificationResponse = z.infer<typeof emailVerificationResponseSchema>;

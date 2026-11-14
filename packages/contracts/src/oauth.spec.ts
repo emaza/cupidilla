@@ -27,6 +27,7 @@ const user = {
   id: '6f1c2b0e-8d4a-4f6e-9c3b-2a1d0e9f8b7c',
   email: 'ana@example.com',
   createdAt: '2026-11-13T10:00:00.000Z',
+  emailVerified: true,
 };
 
 describe('oauthCallbackResponseSchema (C-O1)', () => {
@@ -215,7 +216,12 @@ describe('cuentas sin contraseña (C-O1)', () => {
       current: true,
     };
     const account = {
-      user: { ...user, birthDate: '1990-05-05' },
+      user: {
+        ...user,
+        birthDate: '1990-05-05',
+        emailVerifiedAt: '2026-11-13T10:00:00.000Z',
+        unverifiedDeletionAt: null,
+      },
       consents: [],
       signInMethods: {
         password: false,

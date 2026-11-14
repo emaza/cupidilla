@@ -196,6 +196,34 @@ main {
   padding-block: var(--espacio-6) var(--espacio-12);
 }
 
+/* Banda de correo sin confirmar (correo UX §3.7): debajo de la cabecera, sin posición fija. */
+.email-banner {
+  width: 100%;
+  max-width: var(--ancho-pagina);
+  margin-inline: auto;
+  padding-inline: var(--espacio-4);
+}
+
+.email-banner p {
+  margin: 0;
+  padding: var(--espacio-2) var(--espacio-4);
+  border: var(--borde-grueso) solid var(--color-borde);
+  border-radius: var(--radio-m);
+  background: var(--color-superficie);
+  color: var(--color-texto);
+}
+
+.email-banner a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tactil-minimo);
+}
+
+/* Correo escrito por la persona: se parte en cualquier punto a 320 px (correo UX §3.1). */
+.typed-email {
+  overflow-wrap: anywhere;
+}
+
 main:focus {
   outline: none;
 }

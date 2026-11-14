@@ -22,8 +22,8 @@ export interface UrlMessage {
   text: string;
 }
 
-/** Páginas con listas cerradas de avisos (técnico §11.4). */
-export type MessagePage = 'entry' | 'account' | 'account-step';
+/** Páginas con listas cerradas de avisos (técnico §11.4, correo §9.2). */
+export type MessagePage = 'entry' | 'account' | 'account-step' | 'check-email-signup';
 
 interface Entry {
   key: TextKey;
@@ -60,8 +60,16 @@ const LISTS: Record<MessagePage, { notice: Record<string, Entry>; error: Record<
         'password-created': { key: 'contrasena.aviso.creada', success: true },
         reauthenticated: { key: 'verificar.aviso.confirmada', success: true },
         'provider-cancelled': { key: 'verificar.aviso.cancelado' },
+        // Correo (correo UX §6.10).
+        'email-verified': { key: 'confirmar.aviso.hecho', success: true },
+        'email-verified-signin': { key: 'confirmar.aviso.hecho_entrada', success: true },
+        'email-verified-other': { key: 'confirmar.aviso.hecho_otra', success: true },
+        'verification-sent': { key: 'correo.aviso.reenviado', success: true },
+        'verification-already': { key: 'correo.aviso.ya_confirmado' },
       },
       error: {
+        'verification-failed': { key: 'correo.error.servidor' },
+        'email-not-verified': { key: 'cuenta.error.correo_no_confirmado', needsProvider: true },
         'provider-failed': { key: 'cuenta.error.proveedor_fallo' },
         'identity-in-use': { key: 'cuenta.error.proveedor_en_uso' },
         'already-linked': { key: 'cuenta.error.ya_unido' },
@@ -91,6 +99,14 @@ const LISTS: Record<MessagePage, { notice: Record<string, Entry>; error: Record<
         'rate-limited': { key: 'comun.error.limite' },
       },
     },
+    // /register/check-email (correo UX §6.10)
+    'check-email-signup': {
+      notice: { resent: { key: 'revisar.aviso.reenviado', success: true } },
+      error: {
+        'rate-limited': { key: 'comun.error.limite' },
+        'resend-failed': { key: 'correo.error.servidor' },
+      },
+    },
   };
 
 /**
@@ -101,28 +117,41 @@ function ownEntry(list: Record<string, Entry>, value: string | null): Entry | un
   return value !== null && Object.hasOwn(list, value) ? list[value] : undefined;
 }
 
-function resolve(entry: Entry | undefined, provider: string | null): string | null {
+function resolve(
+  entry: Entry | undefined,
+  provider: string | null,
+  values: Record<string, string>,
+): string | null {
   if (!entry) return null;
   const text = texts[entry.key];
   const usesProvider = text.includes('{proveedor}');
   // Sin un proveedor válido no se muestra nada: ni el aviso que lo exige ni un «{proveedor}» suelto.
   if ((entry.needsProvider || usesProvider) && !isProvider(provider)) return null;
-  return fill(entry.key, { proveedor: isProvider(provider) ? PROVIDER_NAMES[provider] : '' });
+  const filled = fill(entry.key, {
+    ...values,
+    proveedor: isProvider(provider) ? PROVIDER_NAMES[provider] : '',
+  });
+  // Un valor que la página no ha dado (p. ej. `{correo}`) no se pinta suelto.
+  return /\{\w+\}/.test(filled) ? null : filled;
 }
 
 /**
  * Aviso o error de la URL para esa página. Un valor fuera de la lista, o un `provider` ausente
  * o inválido donde hace falta, no muestra nada (acuerdo A7 de H0). El error gana al aviso.
  */
-export function urlMessage(page: MessagePage, params: URLSearchParams): UrlMessage | null {
+export function urlMessage(
+  page: MessagePage,
+  params: URLSearchParams,
+  values: Record<string, string> = {},
+): UrlMessage | null {
   const list = LISTS[page];
   const provider = params.get('provider');
   const errorValue = params.get('error');
-  const errorText = resolve(ownEntry(list.error, errorValue), provider);
+  const errorText = resolve(ownEntry(list.error, errorValue), provider, values);
   if (errorText) return { kind: 'error', text: errorText };
   const noticeValue = params.get('notice');
   const notice = ownEntry(list.notice, noticeValue);
-  const noticeText = resolve(notice, provider);
+  const noticeText = resolve(notice, provider, values);
   if (!noticeText) return null;
   return { kind: notice?.success ? 'success' : 'notice', text: noticeText };
 }
@@ -151,6 +180,7 @@ const CONNECT_FLOW_VALUES = {
 export function connectMessages(
   signIn: SignInMethodsView,
   params: URLSearchParams,
+  values: Record<string, string> = {},
 ): {
   message: UrlMessage | null;
   connect: { provider: OAuthProvider; message: UrlMessage } | null;
@@ -159,7 +189,7 @@ export function connectMessages(
   const provider = params.get('provider');
   const errorValue = params.get('error');
   const noticeValue = params.get('notice');
-  if (!confirmWith) return { message: urlMessage('account', params), connect: null };
+  if (!confirmWith) return { message: urlMessage('account', params, values), connect: null };
 
   if (errorValue === null && noticeValue === 'linked' && isProvider(provider)) {
     return {
@@ -173,7 +203,7 @@ export function connectMessages(
 
   const resolved = new URLSearchParams(params);
   if (errorValue === 'confirm-expired') resolved.set('provider', confirmWith);
-  const message = urlMessage('account', resolved);
+  const message = urlMessage('account', resolved, values);
   const fromConnect =
     errorValue !== null
       ? CONNECT_FLOW_VALUES.error.includes(errorValue)

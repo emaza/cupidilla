@@ -97,7 +97,7 @@ describe('A.3: esquema de users, email_tokens y email_outbox (§3)', () => {
   });
 
   it('las cuentas del registro nacen sin verificar y las de proveedor, verificadas', async () => {
-    const user = await registerUser(t.app);
+    const user = await registerUser(t.app, {}, { verified: false });
     const flow = await runFlow(t.app);
     const created = await api(t.app)
       .post('/auth/oauth/signup')

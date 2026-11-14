@@ -22,6 +22,8 @@ type Mode =
   | 'api-outcome-unknown'
   | 'status-200'
   | 'status-204'
+  | 'status-201'
+  | 'status-202'
   | 'bare-502';
 
 /** Respuestas 201 que llegan pero no se pueden usar. */
@@ -37,6 +39,9 @@ const BROKEN_201: Partial<Record<Mode, string>> = {
   // 2xx sin cuerpo: 204 es el del borrado; 200 podría ser de un intermediario.
   'status-200': 'HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n',
   'status-204': 'HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n',
+  // El registro uniforme confirma con 202 (correo §5.1); un 201 ya no es suyo.
+  'status-201': 'HTTP/1.1 201 Created\r\nContent-Length: 0\r\nConnection: close\r\n\r\n',
+  'status-202': 'HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\nConnection: close\r\n\r\n',
   // Un proxy que no llega a la API, o que la pierde después de enviarle la petición.
   'bare-502':
     'HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/html\r\nContent-Length: 11\r\nConnection: close\r\n\r\nBad Gateway',
@@ -199,6 +204,37 @@ describe('api-client: resultado incierto (OUTCOME_UNKNOWN)', () => {
       expect(received).toBe(1);
     },
   );
+});
+
+describe('api-client: registro uniforme y verificación (B7-5)', () => {
+  const verifyEmail = () =>
+    api.verifyEmail(event, { token: 'A'.repeat(43), password: 'una frase larga de prueba' });
+
+  it.each<Mode>(['close', 'reset'])(
+    'un corte tras enviar (%s) → OUTCOME_UNKNOWN en register y verifyEmail',
+    async (cut) => {
+      target.url = serverUrl;
+      mode = cut;
+      expect(await register()).toMatchObject({ status: 503, error: { code: 'OUTCOME_UNKNOWN' } });
+      expect(await verifyEmail()).toMatchObject({
+        status: 503,
+        error: { code: 'OUTCOME_UNKNOWN' },
+      });
+      expect(received).toBe(2);
+    },
+  );
+
+  it('register: solo un 202 confirma; un 201 es OUTCOME_UNKNOWN', async () => {
+    target.url = serverUrl;
+    mode = 'status-202';
+    expect(await register()).toEqual({ ok: true, status: 202, data: undefined });
+    mode = 'status-201';
+    expect(await register()).toEqual({
+      ok: false,
+      status: 503,
+      error: { code: 'OUTCOME_UNKNOWN' },
+    });
+  });
 });
 
 describe('api-client: entrada con proveedor (W-O5)', () => {

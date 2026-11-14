@@ -1,6 +1,7 @@
 /**
- * Textos de interfaz, copiados palabra por palabra de la tabla de §5 del diseño UX de H0 y de la
- * del diseño UX de la entrada con terceros.
+ * Textos de interfaz, copiados palabra por palabra de la tabla de §5 del diseño UX de H0, de la
+ * del diseño UX de la entrada con terceros y de la §6 del diseño UX de correo (con los cambios de
+ * su §7).
  * Las claves son las de esa tabla. `{x}` es un valor variable (ver `fill`).
  * El texto de /legal/terms (§5.9) vive en `legal/terms-2026-11-borrador.svelte`.
  */
@@ -64,8 +65,6 @@ export const texts = {
   'registro.error.correo_formato':
     'Ese correo no parece válido. Comprueba que tiene el formato nombre@dominio.es.',
   'registro.error.correo_largo': 'Ese correo es demasiado largo.',
-  'registro.error.correo_existente':
-    'No hemos podido crear la cuenta con ese correo. Si ya tienes una, entra; si no, comprueba que está bien escrito o prueba con otro.',
   'registro.error.contrasena_vacia': 'Elige una contraseña.',
   'registro.error.contrasena_corta': 'La contraseña necesita al menos 10 caracteres.',
   'registro.error.contrasena_larga': 'La contraseña no puede tener más de 128 caracteres.',
@@ -81,7 +80,7 @@ export const texts = {
   'registro.error.servidor':
     'Algo ha fallado por nuestra parte y no hemos podido crear tu cuenta. Inténtalo de nuevo en unos minutos.',
   'registro.error.resultado_incierto':
-    'No sabemos si tu cuenta se ha creado: se ha perdido la conexión antes de recibir la respuesta. Antes de volver a registrarte, prueba a entrar con este correo y esta contraseña. Si entras, la cuenta ya existe. Si no puedes entrar, pulsa «Crear cuenta» otra vez.',
+    'No sabemos si tu cuenta se ha creado: se ha perdido la conexión antes de recibir la respuesta. Antes de volver a registrarte, prueba a entrar con este correo y esta contraseña. Si entras, la cuenta ya existe (con el correo sin confirmar, tendrás acceso limitado hasta que lo confirmes). Si no puedes entrar, pulsa «Crear cuenta» otra vez.',
   'registro.enlace.comprobar_entrada': 'Probar a entrar con este correo',
   'registro.menor.meta.titulo': 'No podemos crear tu cuenta',
   'registro.menor.titulo': 'No podemos crear tu cuenta',
@@ -308,6 +307,96 @@ export const texts = {
   'eliminar.error.resultado_incierto_proveedor':
     'No sabemos si tu cuenta se ha eliminado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta. Si la ves, sigue activa y puedes volver a intentarlo. Si te pide entrar, entra con {proveedor}: si entras, la cuenta sigue activa; si Cupidilla te pide fecha de nacimiento y condiciones como si fuera la primera vez, la cuenta ya no existe. Si te dice que hay demasiados intentos o que algo ha fallado, espera unos minutos y vuelve a intentarlo: eso no dice nada sobre tu cuenta.',
 
+  // Verificación de correo y recuperación (correo-diseno-ux.md §6)
+  // 6.1 Alta: ayuda del correo y «Revisa tu correo»
+  'registro.ayuda.correo': 'Te enviaremos un mensaje para confirmarlo.',
+  'revisar.meta.titulo': 'Revisa tu correo',
+  'revisar.titulo': 'Revisa tu correo',
+  'revisar.texto.enviado': 'Te hemos enviado un mensaje a {correo}.',
+  'revisar.texto.siguiente':
+    'Ábrelo y sigue las instrucciones. Si es la primera vez que usas ese correo en Cupidilla, tendrás que pulsar el enlace del mensaje para confirmarlo.',
+  'revisar.ayuda.titulo': '¿No te llega?',
+  'revisar.ayuda.texto':
+    'Puede tardar unos minutos. Mira también en la carpeta de correo no deseado. Comprueba que has escrito bien tu correo: {correo}.',
+  'revisar.aviso.reenviado':
+    'Si hay una cuenta con {correo}, te hemos enviado otro mensaje. El enlace anterior ya no funciona.',
+  'revisar.enlace.otro_correo': 'Me he equivocado de correo',
+  'revisar.enlace.entrar': '¿Ya has confirmado tu correo? Entra',
+  // 6.2 Comunes de reenvío
+  'correo.boton.reenviar': 'Enviar otro mensaje',
+  'correo.boton.reenviando': 'Enviando…',
+  'correo.estado.reenviando': 'Enviando otro mensaje…',
+  'correo.error.servidor':
+    'Algo ha fallado por nuestra parte y no hemos podido enviar otro mensaje. Inténtalo de nuevo en unos minutos.',
+  // 6.3 Confirmar el correo
+  'confirmar.meta.titulo': 'Confirma tu correo',
+  'confirmar.titulo': 'Confirma tu correo',
+  'confirmar.texto': 'Pulsa el botón para confirmar que este correo es tuyo.',
+  'confirmar.texto.contrasena': 'Para confirmar que esta cuenta es tuya, escribe su contraseña.',
+  'confirmar.texto.sesion_otra': 'Ahora mismo estás dentro con otra cuenta. No la cambiaremos.',
+  'confirmar.campo.contrasena': 'Contraseña',
+  'confirmar.ayuda.contrasena': 'Es la que elegiste al crear la cuenta.',
+  'confirmar.enlace.olvido': '¿Olvidaste tu contraseña?',
+  'confirmar.ayuda.olvido':
+    'Si no la recuerdas, o si no creaste tú esta cuenta, puedes recuperarla con tu correo: al crear una contraseña nueva, también quedará confirmado.',
+  'confirmar.boton': 'Confirmar mi correo',
+  'confirmar.boton.enviando': 'Confirmando…',
+  'confirmar.estado.enviando': 'Confirmando tu correo…',
+  'confirmar.aviso.hecho': 'Hemos confirmado tu correo.',
+  'confirmar.aviso.hecho_entrada': 'Hemos confirmado tu correo y has entrado en tu cuenta.',
+  'confirmar.aviso.hecho_otra':
+    'Hemos confirmado el correo de otra cuenta de Cupidilla. Sigues dentro con tu cuenta actual. Para usar la otra, cierra sesión y entra con ella.',
+  'confirmar.error.contrasena_vacia':
+    'Escribe la contraseña de la cuenta para confirmar tu correo. No hemos confirmado nada.',
+  'confirmar.error.contrasena': 'La contraseña no es correcta. No hemos confirmado nada.',
+  'confirmar.error.servidor':
+    'Algo ha fallado por nuestra parte y no hemos podido confirmar tu correo. Puedes volver a intentarlo con este enlace mientras no caduque.',
+  'confirmar.error.resultado_incierto':
+    'No sabemos si se ha confirmado tu correo: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta: si ya no ves el aviso de correo sin confirmar, está hecho. Si lo ves, vuelve a abrir el enlace del correo; si te dice que ya no sirve, es que la primera vez sí se confirmó.',
+  'confirmar.enlace.comprobar': 'Ir a mi cuenta para comprobarlo',
+  // 6.4 Enlaces que no sirven
+  'enlace.meta.titulo': 'Este enlace ya no sirve',
+  'enlace.titulo': 'Este enlace ya no sirve',
+  'enlace.texto':
+    'Ha caducado, ya se usó o no está completo. Los enlaces de los correos solo sirven una vez y durante un tiempo limitado.',
+  'enlace.verificar.sesion_sin_confirmar':
+    'Pide otro mensaje y confirma tu correo con el enlace nuevo.',
+  'enlace.verificar.sesion_confirmado':
+    'Tu cuenta ya tiene el correo confirmado, así que no hace falta nada más.',
+  'enlace.verificar.sin_sesion':
+    'Entra con tu correo y tu contraseña y pide otro mensaje desde Tu cuenta.',
+  'enlace.enlace.cuenta': 'Ir a mi cuenta',
+  'enlace.intentos.meta.titulo': 'Hemos anulado este enlace',
+  'enlace.intentos.titulo': 'Hemos anulado este enlace',
+  'enlace.intentos.texto':
+    'Has fallado la contraseña varias veces y, por seguridad, este enlace ya no se puede usar.',
+  'enlace.intentos.siguiente': 'Para confirmar tu correo, crea una contraseña nueva con tu correo.',
+  'enlace.boton.recuperar': 'Recuperar mi cuenta',
+  'enlace.campo.cuenta': 'Cuenta',
+  // 6.7 Aviso en la cuenta y proveedores
+  'entrar.enlace.olvido': '¿Olvidaste tu contraseña?',
+  'correo.banda.etiqueta': 'Aviso sobre tu correo',
+  'correo.banda.texto': 'Tu correo aún no está confirmado.',
+  'correo.banda.enlace': 'Confirmarlo',
+  'correo.titulo': 'Confirma tu correo',
+  'correo.texto.pendiente':
+    'Te enviamos un mensaje a {correo}. Ábrelo y pulsa el enlace para confirmar que es tuyo.',
+  'correo.texto.limites':
+    'Mientras no lo confirmes puedes ver y gestionar tu cuenta, pero no podrás usar las funciones para conocer gente cuando estén disponibles, ni añadir Google o Facebook.',
+  'correo.texto.caducidad':
+    'El enlace caduca en {duracion} y solo sirve una vez. Si pides otro mensaje, el anterior deja de funcionar.',
+  'correo.texto.plazo': 'Si no lo confirmas antes del {fecha}, borraremos la cuenta.',
+  'correo.texto.recordatorio': 'Antes de borrarla te lo recordaremos por correo.',
+  'correo.aviso.reenviado':
+    'Te hemos enviado otro mensaje a {correo}. El enlace anterior ya no funciona.',
+  'correo.aviso.ya_confirmado': 'Tu correo ya estaba confirmado. No hace falta hacer nada.',
+  'cuenta.datos.correo_confirmado': 'Confirmado',
+  'cuenta.datos.correo_pendiente': 'Sin confirmar',
+  'cuenta.acceso.requiere_correo': 'Para añadir {proveedor}, primero confirma tu correo.',
+  'cuenta.acceso.enlace_requiere_correo': 'Confirmar mi correo',
+  'cuenta.error.correo_no_confirmado':
+    'No hemos añadido {proveedor} porque tu correo aún no está confirmado. Confírmalo e inténtalo de nuevo. No hemos hecho ningún cambio.',
+
   // 5.8 Textos para lectores de pantalla
   'a11y.error.prefijo': 'Error:',
   'a11y.nueva_pestana': '(se abre en una pestaña nueva)',
@@ -323,6 +412,14 @@ export function t(key: TextKey): string {
 /** Texto de una clave con sus valores `{x}` sustituidos. */
 export function fill(key: TextKey, values: Record<string, string>): string {
   return texts[key].replace(/\{(\w+)\}/g, (match, name: string) => values[name] ?? match);
+}
+
+/** `<title>` de las pantallas «Este enlace ya no sirve» y «Hemos anulado este enlace» (correo UX §8). */
+export function linkInvalidTitle(kind: 'invalid' | 'attempts'): string {
+  return pageTitle(
+    kind === 'attempts' ? 'enlace.intentos.meta.titulo' : 'enlace.meta.titulo',
+    true,
+  );
 }
 
 /** `<title>` con el patrón «Título — Cupidilla», y el prefijo «Error: » si la página tiene errores. */

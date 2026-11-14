@@ -3,6 +3,8 @@ import {
   apiErrorSchema,
   authResponseSchema,
   configResponseSchema,
+  emailTokenInspectionResponseSchema,
+  emailVerificationResponseSchema,
   oauthAuthResponseSchema,
   oauthCallbackResponseSchema,
   oauthProvidersResponseSchema,
@@ -13,6 +15,10 @@ import {
   type AuthResponse,
   type ConfigResponse,
   type DeleteAccountRequest,
+  type EmailTokenInspectionRequest,
+  type EmailTokenInspectionResponse,
+  type EmailVerificationRequest,
+  type EmailVerificationResponse,
   type FieldError,
   type LoginRequest,
   type OAuthAuthResponse,
@@ -198,12 +204,52 @@ export const api = {
       timeoutMs: CONFIG_TIMEOUT_MS,
     }),
 
-  register: (event: RequestEvent, body: RegisterRequest): Promise<ApiResult<AuthResponse>> =>
+  /** Registro uniforme (correo §5.1): `202` sin cuerpo y sin sesión, exista o no el correo. */
+  register: (event: RequestEvent, body: RegisterRequest): Promise<ApiResult<void>> =>
     request(event, {
       method: 'POST',
       path: '/auth/register',
       body,
-      schema: authResponseSchema,
+      nonIdempotent: true,
+      expectStatus: 202, // auth.controller.ts: @HttpCode(202)
+    }),
+
+  // Verificación del correo (correo §9.1).
+
+  requestEmailVerification: (event: RequestEvent, email: string): Promise<ApiResult<void>> =>
+    request(event, {
+      method: 'POST',
+      path: '/auth/email-verification/request',
+      body: { email },
+      expectStatus: 202,
+    }),
+
+  /** Comprueba un enlace sin consumirlo; con la sesión, si la hay (`sessionMatches`). */
+  inspectEmailToken: (
+    event: RequestEvent,
+    body: EmailTokenInspectionRequest,
+    sessionToken?: string,
+  ): Promise<ApiResult<EmailTokenInspectionResponse>> =>
+    request(event, {
+      method: 'POST',
+      path: '/auth/email-tokens/inspection',
+      token: sessionToken,
+      body,
+      schema: emailTokenInspectionResponseSchema,
+    }),
+
+  /** No idempotente: tras un corte, el enlace ya puede estar consumido. */
+  verifyEmail: (
+    event: RequestEvent,
+    body: EmailVerificationRequest,
+    sessionToken?: string,
+  ): Promise<ApiResult<EmailVerificationResponse>> =>
+    request(event, {
+      method: 'POST',
+      path: '/auth/email-verification',
+      token: sessionToken,
+      body,
+      schema: emailVerificationResponseSchema,
       nonIdempotent: true,
     }),
 

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { closeDb } from './helpers/db.ts';
-import { fillRegister, PASSWORD, uniqueEmail } from './helpers/forms.ts';
+import { fillRegister, PASSWORD, uniqueEmail, registerAdult } from './helpers/forms.ts';
 import { startStack, type Stack } from './helpers/stack.ts';
 
 // Criterios de UX 31 (servidor parado) y 32 (límite de intentos) y acuerdo A14 (fallo al salir).
@@ -83,8 +83,9 @@ test('A14: si la API cae con la sesión abierta, «Cerrar sesión» no dice que 
   await withStack({}, async (stack) => {
     const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
     const page = await context.newPage();
-    await fillRegister(page, { email: uniqueEmail() });
-    await expect(page).toHaveURL('/account');
+    await registerAdult(page);
+    // Sin el aviso de la URL: el error de salir se pinta en /account (si no, la página se recarga).
+    await page.goto('/account');
 
     await stack.stopApi();
     await page.getByRole('button', { name: 'Cerrar sesión' }).click();
@@ -119,8 +120,7 @@ test('con la API caída, eliminar la cuenta da eliminar.error.servidor y la cuen
   await withStack({}, async (stack) => {
     const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
     const page = await context.newPage();
-    await fillRegister(page, { email: uniqueEmail() });
-    await expect(page).toHaveURL('/account');
+    await registerAdult(page);
     await page.goto('/account/delete');
 
     await stack.stopApi();
@@ -176,7 +176,7 @@ test('C32: el 6.º registro desde la misma IP en una hora muestra comun.error.li
 
     for (let attempt = 1; attempt <= 5; attempt++) {
       await fillRegister(page, { email: uniqueEmail() });
-      await expect(page, `registro ${attempt}`).toHaveURL('/account');
+      await expect(page, `registro ${attempt}`).toHaveURL('/register/check-email');
       await context.clearCookies();
     }
     const email = uniqueEmail();

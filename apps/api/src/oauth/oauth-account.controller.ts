@@ -12,6 +12,7 @@ import {
   CurrentSession,
   type ActiveSession,
 } from '../common/decorators/current-session.decorator.js';
+import { RequiresVerifiedEmail } from '../common/decorators/requires-verified-email.decorator.js';
 import {
   SESSION_PASSWORD_LIMIT,
   SESSION_THROTTLER,
@@ -31,9 +32,13 @@ export class OAuthAccountController {
     private readonly users: UsersService,
   ) {}
 
-  /** Reautenticarse con un proveedor unido, o añadir uno (este exige sesión reciente). */
+  /**
+   * Reautenticarse con un proveedor unido, o añadir uno (este exige sesión reciente). Exige el
+   * correo verificado (K7, correo §5.10): sin él, un ocupante uniría su propio proveedor.
+   */
   @Post('oauth/:provider/authorization')
   @HttpCode(201)
+  @RequiresVerifiedEmail()
   @Throttle({
     [SESSION_THROTTLER]: { limit: 5, ttl: THROTTLE_TTL.quarterHour },
     ...SESSION_PASSWORD_LIMIT,

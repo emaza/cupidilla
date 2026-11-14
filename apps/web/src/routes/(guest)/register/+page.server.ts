@@ -11,8 +11,8 @@ import {
 } from '#lib/forms/register.ts';
 import { api, configuredProviders } from '#lib/server/api-client.ts';
 import { currentMinAge } from '#lib/server/min-age.ts';
+import { setPendingEmail } from '#lib/server/email-cookies.ts';
 import { urlMessage } from '#lib/server/oauth-notices.ts';
-import { setSessionCookie } from '#lib/server/session-cookie.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 /** Botones de los proveedores configurados y avisos de la URL (UX §3.1 y §3.4). */
@@ -47,19 +47,16 @@ export const actions = {
     const { values } = parsed;
     const result = await api.register(event, parsed.request);
     if (result.ok) {
-      setSessionCookie(event.cookies, result.data.session.token, result.data.session.expiresAt);
-      redirect(303, '/account');
+      // Registro uniforme (correo §5.1): sin sesión y sin el correo en la URL. La cookie se pone
+      // igual exista o no la cuenta.
+      setPendingEmail(event.cookies, 'signup', parsed.request.email);
+      redirect(303, '/register/check-email');
     }
 
     const { code, fields } = result.error;
     switch (code) {
       case 'UNDERAGE':
         return fail(422, { underage: true as const });
-      case 'EMAIL_TAKEN':
-        return fail(409, {
-          values,
-          errors: onlyField({ email: 'registro.error.correo_existente' }),
-        });
       case 'TERMS_VERSION_OUTDATED':
         // La casilla vuelve desmarcada para que se lean y acepten las condiciones vigentes (A11).
         return fail(409, {

@@ -21,7 +21,13 @@ export type AccountSession = z.infer<typeof accountSessionSchema>;
 
 /** Respuesta de GET /users/me. */
 export const accountResponseSchema = z.object({
-  user: publicUserSchema.extend({ birthDate: z.iso.date() }),
+  user: publicUserSchema.extend({
+    birthDate: z.iso.date(),
+    /** Cuándo se verificó el correo; `null` si no lo está (correo §5.8). */
+    emailVerifiedAt: z.iso.datetime().nullable(),
+    /** Sin verificar, cuándo se borra la cuenta (`created_at` + 7 días); verificada, `null`. */
+    unverifiedDeletionAt: z.iso.datetime().nullable(),
+  }),
   consents: z.array(consentSchema),
   /**
    * Formas de entrar. Del proveedor solo se muestran fechas (unión y último uso), no su correo

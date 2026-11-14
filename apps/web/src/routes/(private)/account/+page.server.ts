@@ -3,10 +3,12 @@ import { errorMessages } from '#lib/errors/messages.ts';
 import { textField } from '#lib/forms/form-data.ts';
 import {
   accountDetailsView,
+  emailSectionView,
   openSessionsView,
   signInMethodsView,
 } from '#lib/server/account-view.ts';
 import { api, configuredProviders } from '#lib/server/api-client.ts';
+import { displayMailConfig } from '#lib/server/min-age.ts';
 import { connectMessages, isProvider } from '#lib/server/oauth-notices.ts';
 import { clearSessionCookie } from '#lib/server/session-cookie.ts';
 import type { TextKey } from '#lib/texts.ts';
@@ -18,11 +20,14 @@ export const load: PageServerLoad = async (event) => {
 
   if (result?.ok) {
     const signIn = signInMethodsView(result.data, await configuredProviders(event));
-    const { message, connect } = connectMessages(signIn, event.url.searchParams);
+    const { message, connect } = connectMessages(signIn, event.url.searchParams, {
+      correo: result.data.user.email,
+    });
     return {
       message,
       connect,
       account: accountDetailsView(result.data),
+      emailSection: emailSectionView(result.data, await displayMailConfig(event)),
       signIn,
       sessions: openSessionsView(result.data),
     };
@@ -34,12 +39,33 @@ export const load: PageServerLoad = async (event) => {
   // Sin JavaScript, tras un fallo al salir la página se vuelve a pintar: se muestra el aviso
   // de error aunque no se puedan cargar los datos. En una visita normal, página de error.
   if (event.request.method === 'POST') {
-    return { account: null, message: null, connect: null, signIn: null, sessions: null };
+    return {
+      account: null,
+      emailSection: null,
+      message: null,
+      connect: null,
+      signIn: null,
+      sessions: null,
+    };
   }
   error(503, 'API unavailable');
 };
 
 export const actions = {
+  /**
+   * «Enviar otro mensaje» (correo UX §3.7, técnico §9.1). Con el correo ya confirmado no se llama
+   * a la API: la web lo sabe en cada carga.
+   */
+  resendVerification: async (event) => {
+    const user = event.locals.user;
+    if (!user) redirect(303, '/login?next=/account');
+    if (user.emailVerified) redirect(303, '/account?notice=verification-already');
+    const result = await api.requestEmailVerification(event, user.email);
+    if (result.ok) redirect(303, '/account?notice=verification-sent');
+    if (result.status === 429) redirect(303, '/account?error=rate-limited');
+    redirect(303, '/account?error=verification-failed');
+  },
+
   logout: async (event) => {
     const token = event.locals.sessionToken;
     const result = token ? await api.logout(event, token) : null;

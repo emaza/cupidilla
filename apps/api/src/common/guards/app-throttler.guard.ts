@@ -27,6 +27,13 @@ export const ACCOUNT_THROTTLER = 'account';
  * con sesión y quitar un proveedor. Solo en las rutas que lo declaran.
  */
 export const SESSION_THROTTLER = 'session';
+/**
+ * Conjunto por correo del cuerpo, con un cubo propio de cada ruta (correo §7.3): registro,
+ * reenvío de la verificación y (fase C) recuperación. Se aplica igual exista o no la cuenta, así
+ * que un 429 no revela nada; por ruta, para que nadie bloquee la recuperación de otra persona
+ * registrándose con su correo. Solo en las rutas que lo declaran.
+ */
+export const EMAIL_THROTTLER = 'email';
 
 /**
  * Cubo `account` de la sesión, compartido por todas las rutas que comprueban una contraseña con
@@ -42,10 +49,15 @@ export const SESSION_PASSWORD_LIMIT = {
 };
 
 /** Conjuntos que solo actúan en las rutas que declaran su límite. */
-const OPT_IN_THROTTLERS = new Set([ACCOUNT_THROTTLER, SESSION_THROTTLER]);
+const OPT_IN_THROTTLERS = new Set([ACCOUNT_THROTTLER, SESSION_THROTTLER, EMAIL_THROTTLER]);
 
 const MINUTE = 60_000;
-export const THROTTLE_TTL = { minute: MINUTE, quarterHour: 15 * MINUTE, hour: 60 * MINUTE };
+export const THROTTLE_TTL = {
+  minute: MINUTE,
+  quarterHour: 15 * MINUTE,
+  hour: 60 * MINUTE,
+  day: 24 * 60 * MINUTE,
+};
 
 interface TrackedRequest {
   ip?: string;
@@ -75,6 +87,18 @@ export function accountTracker(req: TrackedRequest): string {
       ? authorization.slice('Bearer '.length)
       : '';
   return `session:${createHash('sha256').update(token).digest('hex')}`;
+}
+
+/**
+ * Correo normalizado del cuerpo (`email:<correo>`), o `email:none` si falta: el esquema rechazará
+ * después la petición. Normaliza como `emailSchema`, así que `Ana@x` y `ana@x` comparten cubo.
+ */
+export function emailTracker(req: TrackedRequest): string {
+  const body = req.body;
+  if (body && typeof body === 'object' && 'email' in body && typeof body.email === 'string') {
+    return `email:${body.email.trim().toLowerCase()}`;
+  }
+  return 'email:none';
 }
 
 /**

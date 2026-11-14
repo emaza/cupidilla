@@ -2,6 +2,7 @@ import type { AccountResponse } from '@cupidilla/contracts';
 import { describe, expect, it } from 'vitest';
 import {
   accountDetailsView,
+  emailSectionView,
   formatDateTime,
   formatDay,
   formatPlainDate,
@@ -14,7 +15,10 @@ const account: AccountResponse = {
     id: '6f1c2b0e-8d4a-4f6e-9c3b-2a1d0e9f8b7c',
     email: 'ana@example.com',
     createdAt: '2026-11-10T23:30:00.000Z',
+    emailVerified: true,
     birthDate: '1990-01-01',
+    emailVerifiedAt: '2026-11-10T23:30:00.000Z',
+    unverifiedDeletionAt: null,
   },
   consents: [
     {
@@ -82,6 +86,7 @@ describe('vistas de /account', () => {
   it('«Tus datos» lleva nacimiento, alta, inicio de la sesión y condiciones', () => {
     expect(accountDetailsView(account)).toEqual({
       email: 'ana@example.com',
+      emailVerified: true,
       birthDate: { iso: '1990-01-01', text: '1 de enero de 1990' },
       createdOn: { iso: '2026-11-10T23:30:00.000Z', text: '11 de noviembre de 2026' },
       sessionSince: {
@@ -149,5 +154,32 @@ describe('vistas de /account', () => {
     expect(signInMethodsView(both, []).confirmWith).toBe('facebook');
     const none = { ...account, signInMethods: { password: true, identities: [] } };
     expect(signInMethodsView(none, []).confirmWith).toBeNull();
+  });
+});
+
+describe('sección de correo sin confirmar (correo UX §3.7)', () => {
+  const unverified: AccountResponse = {
+    ...account,
+    user: {
+      ...account.user,
+      emailVerified: false,
+      emailVerifiedAt: null,
+      unverifiedDeletionAt: '2026-11-17T23:30:00.000Z',
+    },
+  };
+
+  it('con el correo confirmado no hay sección', () => {
+    expect(emailSectionView(account, { unverifiedReminder: true })).toBeNull();
+  });
+
+  it('B4-0a: la fecha de borrado como día de Madrid; el recordatorio solo si está activo', () => {
+    expect(emailSectionView(unverified, { unverifiedReminder: false })).toEqual({
+      email: 'ana@example.com',
+      duration: '24 horas',
+      // 23:30 UTC del 17 ya es día 18 en Madrid.
+      deletionOn: '18 de noviembre de 2026',
+      reminder: false,
+    });
+    expect(emailSectionView(unverified, { unverifiedReminder: true })?.reminder).toBe(true);
   });
 });

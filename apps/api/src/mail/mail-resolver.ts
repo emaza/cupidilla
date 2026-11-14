@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import {
   EMAIL_VERIFICATION_TTL_HOURS,
   PASSWORD_RESET_TTL_MINUTES,
-  UNVERIFIED_ACCOUNT_TTL_DAYS,
   type EmailTokenPurpose,
 } from '@cupidilla/contracts';
 import { eq } from 'drizzle-orm';
@@ -11,6 +10,7 @@ import type { Env } from '../config/env.schema.js';
 import type { Tx } from '../database/database.types.js';
 import { users } from '../database/schema/index.js';
 import { IdentitiesService } from '../oauth/identities.service.js';
+import { unverifiedDeletionAt } from '../users/unverified-deletion.js';
 import { EmailTokensService } from './email-tokens.service.js';
 import type { MailMessage } from './mailer.js';
 import type { MailKind } from './outbox.service.js';
@@ -22,7 +22,6 @@ import { renderVerifyEmail } from './templates/verify-email.js';
 import { renderVerifyReminder } from './templates/verify-reminder.js';
 
 const HOUR_MS = 60 * 60 * 1000;
-const DAY_MS = 24 * HOUR_MS;
 
 /** Ruta de la web de cada propósito de token. */
 const TOKEN_PATHS: Record<EmailTokenPurpose, string> = {
@@ -31,10 +30,6 @@ const TOKEN_PATHS: Record<EmailTokenPurpose, string> = {
 };
 
 type UserRow = Pick<typeof users.$inferSelect, 'id' | 'email' | 'emailVerifiedAt' | 'createdAt'>;
-
-/** `created_at + 7 días`: cuándo se borra una cuenta sin verificar (§6.3). */
-export const unverifiedDeletionAt = (createdAt: Date): Date =>
-  new Date(createdAt.getTime() + UNVERIFIED_ACCOUNT_TTL_DAYS * DAY_MS);
 
 /**
  * Decide, al enviar y siempre por `to_email`, a quién va un correo, qué variante toca y, si lleva

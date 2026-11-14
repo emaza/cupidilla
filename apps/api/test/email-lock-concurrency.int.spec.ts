@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { lockEmail } from '../src/database/email-lock.js';
 import { identities, users } from '../src/database/schema/index.js';
@@ -10,6 +10,7 @@ import {
   createTestApp,
   registerBody,
   registerUser,
+  resetRateLimits,
   TEST_NOW,
   truncateAll,
   type TestApp,
@@ -42,8 +43,13 @@ describe('Carrera real alta con contraseña vs. identidad con el mismo correo (R
   });
   beforeEach(async () => {
     await truncateAll(t.db);
+    resetRateLimits(t.app);
     t.clock.set(TEST_NOW);
   });
+
+  /** Con el registro uniforme (correo §5.1) siempre es 202: gana si se creó la cuenta. */
+  const accountCreated = async (email: string) =>
+    (await t.db.select().from(users).where(eq(users.email, email))).length === 1;
 
   it('exactamente uno gana, sin deadlock, en 20 rondas', async () => {
     const owner = await registerUser(t.app, { email: 'fenix@example.com' });
@@ -68,8 +74,8 @@ describe('Carrera real alta con contraseña vs. identidad con el mismo correo (R
           ),
       ]);
       // El alta nunca devuelve 500; la identidad puede chocar con la UNIQUE (owner, provider).
-      expect([201, 409]).toContain(registration.status);
-      if (registration.status === 201 && creation === 'created') {
+      expect(registration.status).toBe(202);
+      if ((await accountCreated(email)) && creation === 'created') {
         throw new Error(`Ronda ${round}: ganaron las dos (cuenta e identidad con ${email})`);
       }
       if (round >= 2) {
@@ -99,7 +105,7 @@ describe('Carrera real alta con contraseña vs. identidad con el mismo correo (R
         .send(registerBody({ email: 'nuevo@example.com' })),
       service.touch(known!.id, { providerEmail: 'nuevo@example.com', emailVerified: true }),
     ]);
-    expect([201, 409]).toContain(registration.status);
+    expect(registration.status).toBe(202);
   });
 
   it('7 (decisión 21): la unión espera al alta en curso de ese correo y se rechaza', async () => {
@@ -132,7 +138,7 @@ describe('Carrera real alta con contraseña vs. identidad con el mismo correo (R
     expect(await countRows(t.db, 'users')).toBe(2);
   });
 
-  it('7, al revés: si la unión llega primero, el alta de ese correo espera y da EMAIL_TAKEN', async () => {
+  it('7, al revés: si la unión llega primero, el alta de ese correo espera y no crea la cuenta', async () => {
     const owner = await registerUser(t.app, { email: 'fenix@example.com' });
     const service = t.app.get(IdentitiesService);
     let connect: Promise<'created' | 'email_in_other_account'> | undefined;
@@ -158,8 +164,8 @@ describe('Carrera real alta con contraseña vs. identidad con el mismo correo (R
 
     expect(await connect!).toBe('created');
     const response = await registration!;
-    expect(response.status).toBe(409);
-    expect(response.body.error?.code).toBe('EMAIL_TAKEN');
+    expect(response.status).toBe(202);
+    expect(await accountCreated('y@gmail.com')).toBe(false);
     expect(await countRows(t.db, 'users')).toBe(1);
     expect(await countRows(t.db, 'identities')).toBe(1);
   });

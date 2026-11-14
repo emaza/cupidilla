@@ -129,7 +129,7 @@ describe('registerRequestSchema y loginRequestSchema', () => {
 });
 
 describe('formatSpanishDate', () => {
-  it('escribe el día del instante en Europe/Madrid', () => {
+  it('B4-0b: escribe el día del instante en Europe/Madrid', () => {
     expect(formatSpanishDate('2026-11-18T10:00:00Z')).toBe('18 de noviembre de 2026');
     // A las 23:30 UTC ya es día 19 en Madrid.
     expect(formatSpanishDate(new Date('2026-11-18T23:30:00Z'))).toBe('19 de noviembre de 2026');
