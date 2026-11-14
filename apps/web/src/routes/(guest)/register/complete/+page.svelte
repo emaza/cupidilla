@@ -55,7 +55,7 @@
     <h1 tabindex="-1" bind:this={underageHeading} data-result-focus>
       {t('registro.menor.titulo')}
     </h1>
-    <p>{t('registro.menor.texto1')}</p>
+    <p>{fill('registro.menor.texto1', { edad: String(data.minAge) })}</p>
     {#if underage.provider}
       <p>{fill('alta.menor.texto3', { proveedor: NAMES[underage.provider] })}</p>
     {/if}
@@ -87,6 +87,7 @@
     {#key form}
       <form method="POST" action="?/signup" novalidate use:enhance={submission.submit}>
         <BirthDateFieldset
+          minAge={data.minAge}
           {values}
           error={fields.birthDate ? t(fields.birthDate) : undefined}
           {invalidParts}

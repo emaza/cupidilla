@@ -1,17 +1,19 @@
 <script lang="ts">
   import type { DatePart } from '#lib/forms/birth-date.ts';
-  import { t } from '#lib/texts.ts';
+  import { fill, t } from '#lib/texts.ts';
   import FieldError from './FieldError.svelte';
 
   /** Fecha de nacimiento en tres campos (H0 §3.2), común a /register y /register/complete. */
   interface Props {
+    /** Edad mínima configurada, para la ayuda. */
+    minAge: number;
     values?: { day?: string; month?: string; year?: string };
     error?: string;
     /** Partes que se marcan como erróneas. */
     invalidParts?: DatePart[];
   }
 
-  let { values, error, invalidParts = [] }: Props = $props();
+  let { minAge, values, error, invalidParts = [] }: Props = $props();
 
   const dateParts: {
     id: DatePart;
@@ -30,7 +32,9 @@
   aria-describedby={error ? 'birth-date-help birth-date-error' : 'birth-date-help'}
 >
   <legend>{t('registro.campo.nacimiento')}</legend>
-  <p id="birth-date-help" class="help">{t('registro.ayuda.nacimiento')}</p>
+  <p id="birth-date-help" class="help">
+    {fill('registro.ayuda.nacimiento', { edad: String(minAge) })}
+  </p>
   {#if error}
     <FieldError id="birth-date-error" text={error} />
   {/if}

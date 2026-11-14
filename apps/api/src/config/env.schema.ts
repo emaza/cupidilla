@@ -1,3 +1,4 @@
+import { DEFAULT_MIN_AGE, MIN_AGE_RANGE } from '@cupidilla/contracts';
 import { z } from 'zod';
 
 /**
@@ -108,6 +109,13 @@ export const envSchema = z
     DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(1).max(4000).default(4000),
     DB_IDLE_IN_TRANSACTION_TIMEOUT_MS: z.coerce.number().int().min(1).max(600_000).default(10_000),
     INTERNAL_API_KEY: z.string().min(32),
+    // Edad mínima para usar la app en esta instalación (cada país). Sin reinicio en caliente.
+    MIN_AGE: z.coerce
+      .number({ error: 'MIN_AGE tiene que ser un número entero.' })
+      .int({ error: 'MIN_AGE tiene que ser un número entero.' })
+      .min(MIN_AGE_RANGE.min, { error: `MIN_AGE no puede ser menor que ${MIN_AGE_RANGE.min}.` })
+      .max(MIN_AGE_RANGE.max, { error: `MIN_AGE no puede ser mayor que ${MIN_AGE_RANGE.max}.` })
+      .default(DEFAULT_MIN_AGE),
     SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
     RATE_LIMIT_FACTOR: z.coerce.number().int().min(1).max(1000).default(1),
     LOG_FORMAT: z.enum(['pretty', 'json']).default('pretty'),

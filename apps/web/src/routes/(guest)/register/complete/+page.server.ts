@@ -8,10 +8,12 @@ import { errorMessages } from '#lib/errors/messages.ts';
 import { firstApiIssueByField } from '#lib/forms/form-data.ts';
 import {
   oauthSignupErrorsFromIssues,
+  oauthSignupValues,
   parseOAuthSignupForm,
   type OAuthSignupErrors,
 } from '#lib/forms/oauth-signup.ts';
 import { api } from '#lib/server/api-client.ts';
+import { currentMinAge } from '#lib/server/min-age.ts';
 import { clearOAuthToken, getOAuthToken } from '#lib/server/oauth-cookie.ts';
 import { safeReturnPath } from '#lib/server/return-path.ts';
 import { setSessionCookie } from '#lib/server/session-cookie.ts';
@@ -75,7 +77,17 @@ export const actions = {
     const token = getOAuthToken(event.cookies);
     if (!token) redirect(303, EXPIRED);
     const data = await event.request.formData();
-    const parsed = parseOAuthSignupForm(data, token, referenceToday(new Date()));
+    // Sin la edad mínima no se puede validar: igual que con la API caída (la API decide).
+    const minAge = await currentMinAge(event);
+    if (minAge === null) {
+      const errors: OAuthSignupErrors = {
+        fields: {},
+        dateParts: [],
+        general: errorMessages.signup.API_UNAVAILABLE,
+      };
+      return fail(503, { values: oauthSignupValues(data), errors });
+    }
+    const parsed = parseOAuthSignupForm(data, token, referenceToday(new Date()), minAge);
 
     if (parsed.kind === 'underage') {
       // El proveedor solo hace falta para la frase «No hemos guardado nada de tu cuenta de …».

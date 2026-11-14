@@ -11,7 +11,7 @@
   import SubmitButton from '#lib/components/SubmitButton.svelte';
   import type { DatePart } from '#lib/forms/birth-date.ts';
   import { createSubmission } from '#lib/forms/submission.svelte.ts';
-  import { pageTitle, t } from '#lib/texts.ts';
+  import { fill, pageTitle, t } from '#lib/texts.ts';
   import type { PageProps } from './$types';
 
   let { data, form }: PageProps = $props();
@@ -61,7 +61,7 @@
     <h1 tabindex="-1" bind:this={underageHeading} data-result-focus>
       {t('registro.menor.titulo')}
     </h1>
-    <p>{t('registro.menor.texto1')}</p>
+    <p>{fill('registro.menor.texto1', { edad: String(data.minAge) })}</p>
     <p>{t('registro.menor.texto2')}</p>
   </div>
   <div class="actions">
@@ -108,6 +108,7 @@
         />
 
         <BirthDateFieldset
+          minAge={data.minAge}
           {values}
           error={fields.birthDate ? t(fields.birthDate) : undefined}
           {invalidParts}

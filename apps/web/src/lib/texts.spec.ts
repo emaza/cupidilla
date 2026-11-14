@@ -51,7 +51,9 @@ describe('Textos de interfaz = tabla de UX §5 (criterio 49)', () => {
 
   it('cada clave de texts.ts existe en una de las tablas con exactamente el mismo texto', () => {
     const different: string[] = [];
-    for (const [key, text] of Object.entries(texts)) {
+    for (const [key, rawText] of Object.entries(texts)) {
+      // La edad mínima es configurable: las tablas de UX describen el valor por defecto, 18.
+      const text = rawText.replaceAll('{edad}', '18');
       const expected = table.get(key) ?? oauthTable.get(key);
       if (expected === undefined) different.push(`${key}: no está en ninguna tabla de UX §5`);
       else if (expected !== text) different.push(`${key}: «${text}» ≠ «${expected}»`);
@@ -93,7 +95,8 @@ const versions = [
 
 describe.each(versions)('Condiciones de uso: $file = UX §5.9', ({ file, rows }) => {
   const terms = legal(file);
-  const page = flat(terms);
+  // La edad mínima es configurable: la tabla de UX describe el valor por defecto, 18.
+  const page = flat(terms).replaceAll('{minAge}', '18');
   const keys = [...rows.keys()].filter((key) => key.startsWith('condiciones.'));
 
   it('hay textos de §5.9 que comprobar', () => {

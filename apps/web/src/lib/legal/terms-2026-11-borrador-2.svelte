@@ -1,3 +1,8 @@
+<script lang="ts">
+  /** Edad mínima configurada en la instalación (viene de la API). */
+  let { minAge }: { minAge: number } = $props();
+</script>
+
 <!--
   Borrador de /legal/terms, versión 2026-11-borrador-2 (SERVICE_TERMS_VERSION).
   Texto de H0 UX §5.9 con las secciones 4, 5, 7 y 9 del diseño UX de la entrada con terceros
@@ -33,7 +38,7 @@
 
   <h2>3. Quién puede usarla</h2>
   <p>
-    Solo personas que hayan cumplido 18 años. Al registrarte declaras tu fecha de nacimiento; de
+    Solo personas que hayan cumplido {minAge} años. Al registrarte declaras tu fecha de nacimiento; de
     momento no la verificamos. Debe ser la tuya y debe ser cierta.
   </p>
 

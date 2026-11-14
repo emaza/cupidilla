@@ -2,7 +2,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import Notice from '#lib/components/Notice.svelte';
-  import { pageTitle, t, type TextKey } from '#lib/texts.ts';
+  import { fill, pageTitle, t, type TextKey } from '#lib/texts.ts';
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
@@ -38,4 +38,4 @@
   {/if}
 </div>
 
-<p class="small-print">{t('comun.pie.edad')}</p>
+<p class="small-print">{fill('comun.pie.edad', { edad: String(data.minAge) })}</p>

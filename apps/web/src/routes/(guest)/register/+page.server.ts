@@ -5,10 +5,12 @@ import { firstApiIssueByField } from '#lib/forms/form-data.ts';
 import {
   hasErrors,
   parseRegisterForm,
+  registerValues,
   registerErrorsFromIssues,
   type RegisterErrors,
 } from '#lib/forms/register.ts';
 import { api, configuredProviders } from '#lib/server/api-client.ts';
+import { currentMinAge } from '#lib/server/min-age.ts';
 import { urlMessage } from '#lib/server/oauth-notices.ts';
 import { setSessionCookie } from '#lib/server/session-cookie.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -23,7 +25,18 @@ const onlyField = (fields: RegisterErrors['fields']): RegisterErrors => ({ field
 
 export const actions = {
   default: async (event) => {
-    const parsed = parseRegisterForm(await event.request.formData(), referenceToday(new Date()));
+    const data = await event.request.formData();
+    // Sin la edad mínima no se puede validar: igual que con la API caída (la API decide).
+    const minAge = await currentMinAge(event);
+    if (minAge === null) {
+      const errors: RegisterErrors = {
+        fields: {},
+        dateParts: [],
+        general: errorMessages.register.API_UNAVAILABLE,
+      };
+      return fail(503, { values: registerValues(data), errors });
+    }
+    const parsed = parseRegisterForm(data, referenceToday(new Date()), minAge);
 
     // Con un menor no vuelve ningún valor y no se llama a la API (acuerdos A3 y A4).
     if (parsed.kind === 'underage') return fail(422, { underage: true as const });

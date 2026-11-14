@@ -1,4 +1,4 @@
-import { latestAdultBirthDate, referenceToday } from '@cupidilla/contracts';
+import { DEFAULT_MIN_AGE, latestAdultBirthDate, referenceToday } from '@cupidilla/contracts';
 import { expect, test, type Page } from '@playwright/test';
 import { closeDb, rowsForEmail } from './helpers/db.ts';
 import { fillRegister, registerAdult, uniqueEmail } from './helpers/forms.ts';
@@ -7,7 +7,9 @@ test.afterAll(closeDb);
 
 /** Quien cumple 18 años mañana (hora de Madrid). */
 function minorBirthDate(): { day: string; month: string; year: string } {
-  const latest = new Date(`${latestAdultBirthDate(referenceToday(new Date()))}T00:00:00Z`);
+  const latest = new Date(
+    `${latestAdultBirthDate(referenceToday(new Date()), DEFAULT_MIN_AGE)}T00:00:00Z`,
+  );
   latest.setUTCDate(latest.getUTCDate() + 1);
   return {
     day: String(latest.getUTCDate()),

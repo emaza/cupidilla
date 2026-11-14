@@ -2,6 +2,7 @@ import {
   accountResponseSchema,
   apiErrorSchema,
   authResponseSchema,
+  configResponseSchema,
   oauthAuthResponseSchema,
   oauthCallbackResponseSchema,
   oauthProvidersResponseSchema,
@@ -10,6 +11,7 @@ import {
   sessionResponseSchema,
   type AccountResponse,
   type AuthResponse,
+  type ConfigResponse,
   type DeleteAccountRequest,
   type FieldError,
   type LoginRequest,
@@ -184,7 +186,18 @@ async function request<T>(
   return nonIdempotent ? outcomeUnknown() : unavailable(502);
 }
 
+/** Tiempo máximo de GET /config: se pide en cada página y no debe retrasarlas si la API no responde. */
+export const CONFIG_TIMEOUT_MS = 2000;
+
 export const api = {
+  config: (event: RequestEvent): Promise<ApiResult<ConfigResponse>> =>
+    request(event, {
+      method: 'GET',
+      path: '/config',
+      schema: configResponseSchema,
+      timeoutMs: CONFIG_TIMEOUT_MS,
+    }),
+
   register: (event: RequestEvent, body: RegisterRequest): Promise<ApiResult<AuthResponse>> =>
     request(event, {
       method: 'POST',

@@ -14,6 +14,7 @@ const api = vi.hoisted(() => ({
   account: vi.fn(),
 }));
 vi.mock('#lib/server/api-client.ts', () => ({ api }));
+vi.mock('#lib/server/min-age.ts', () => ({ currentMinAge: () => Promise.resolve(18) }));
 
 const start = await import('./[provider=provider]/+server.ts');
 const back = await import('./[provider=provider]/callback/+server.ts');
