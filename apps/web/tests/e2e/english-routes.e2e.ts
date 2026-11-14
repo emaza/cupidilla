@@ -116,78 +116,79 @@ async function expectClean(page: Page, label: string): Promise<void> {
   });
 }
 
-test('las pantallas, con sus estados de error, no tienen referencias rotas ni clases sin estilo', async ({
-  browser,
-  javaScriptEnabled,
-}) => {
-  const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
-  const page = await context.newPage();
+test(
+  'las pantallas, con sus estados de error, no tienen referencias rotas ni clases sin estilo',
+  { tag: '@nojs' },
+  async ({ browser, javaScriptEnabled }) => {
+    const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
+    const page = await context.newPage();
 
-  for (const path of [
-    '/',
-    '/?notice=signed-out',
-    '/?notice=account-deleted',
-    '/register',
-    '/login',
-    '/login?next=/account/delete',
-    '/legal/terms',
-    '/no-existe',
-  ]) {
-    await page.goto(path);
-    await expectClean(page, path);
-  }
+    for (const path of [
+      '/',
+      '/?notice=signed-out',
+      '/?notice=account-deleted',
+      '/register',
+      '/login',
+      '/login?next=/account/delete',
+      '/legal/terms',
+      '/no-existe',
+    ]) {
+      await page.goto(path);
+      await expectClean(page, path);
+    }
 
-  // /register con todos los errores a la vez, y con cada campo por separado.
-  await page.goto('/register');
-  await page.getByRole('button', { name: 'Crear cuenta' }).click();
-  await expect(page.locator('.error-summary')).toBeVisible();
-  await expectClean(page, '/register vacío enviado');
-  expect(await page.locator('[aria-invalid="true"]').count()).toBeGreaterThanOrEqual(4);
+    // /register con todos los errores a la vez, y con cada campo por separado.
+    await page.goto('/register');
+    await page.getByRole('button', { name: 'Crear cuenta' }).click();
+    await expect(page.locator('.error-summary')).toBeVisible();
+    await expectClean(page, '/register vacío enviado');
+    expect(await page.locator('[aria-invalid="true"]').count()).toBeGreaterThanOrEqual(4);
 
-  await page.goto('/register');
-  await page.getByLabel('Correo electrónico').fill('ana@');
-  await page.getByLabel('Contraseña', { exact: true }).fill('corta');
-  await page.getByLabel('Día').fill('31');
-  await page.getByLabel('Mes').fill('2');
-  await page.getByLabel('Año').fill('1990');
-  await page.getByRole('button', { name: 'Crear cuenta' }).click();
-  await expect(page.locator('.error-summary')).toBeVisible();
-  await expectClean(page, '/register con formato, contraseña corta y fecha imposible');
+    await page.goto('/register');
+    await page.getByLabel('Correo electrónico').fill('ana@');
+    await page.getByLabel('Contraseña', { exact: true }).fill('corta');
+    await page.getByLabel('Día').fill('31');
+    await page.getByLabel('Mes').fill('2');
+    await page.getByLabel('Año').fill('1990');
+    await page.getByRole('button', { name: 'Crear cuenta' }).click();
+    await expect(page.locator('.error-summary')).toBeVisible();
+    await expectClean(page, '/register con formato, contraseña corta y fecha imposible');
 
-  // Menor.
-  await fillRegister(page, { email: uniqueEmail(), year: String(new Date().getFullYear() - 10) });
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('No podemos crear tu cuenta');
-  await expectClean(page, '/register menor');
+    // Menor.
+    await fillRegister(page, { email: uniqueEmail(), year: String(new Date().getFullYear() - 10) });
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('No podemos crear tu cuenta');
+    await expectClean(page, '/register menor');
 
-  // /login vacío y con credenciales malas.
-  await page.goto('/login');
-  await page.getByRole('button', { name: 'Entrar' }).click();
-  await expect(page.locator('.error-summary')).toBeVisible();
-  await expectClean(page, '/login vacío enviado');
-  await login(page, 'nadie@example.com', 'contraseña-que-no-es');
-  await expect(page.locator('.error-summary')).toContainText('Correo o contraseña incorrectos.');
-  await expectClean(page, '/login credenciales incorrectas');
+    // /login vacío y con credenciales malas.
+    await page.goto('/login');
+    await page.getByRole('button', { name: 'Entrar' }).click();
+    await expect(page.locator('.error-summary')).toBeVisible();
+    await expectClean(page, '/login vacío enviado');
+    await login(page, 'nadie@example.com', 'contraseña-que-no-es');
+    await expect(page.locator('.error-summary')).toContainText('Correo o contraseña incorrectos.');
+    await expectClean(page, '/login credenciales incorrectas');
 
-  // Con sesión: /account, /account/delete y sus errores.
-  const email = uniqueEmail();
-  await registerAdult(page, email);
-  await expectClean(page, '/account');
-  await page.goto('/account/delete');
-  await expectClean(page, '/account/delete');
-  await page.getByRole('button', { name: 'Eliminar mi cuenta definitivamente' }).click();
-  await expect(page.locator('.error-summary')).toBeVisible();
-  await expectClean(page, '/account/delete vacío enviado');
-  await page.getByLabel('Contraseña', { exact: true }).fill('contraseña-incorrecta');
-  await page.getByRole('button', { name: 'Eliminar mi cuenta definitivamente' }).click();
-  await expect(page.locator('.error-summary')).toContainText('La contraseña no es correcta.');
-  await expectClean(page, '/account/delete contraseña incorrecta');
-  await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
-  await page.getByRole('button', { name: 'Eliminar mi cuenta definitivamente' }).click();
-  await expect(page).toHaveURL('/?notice=account-deleted');
-  await expectClean(page, '/?notice=account-deleted tras borrar');
+    // Con sesión: /account, /account/delete y sus errores.
+    const email = uniqueEmail();
+    await registerAdult(page, email);
+    await expectClean(page, '/account');
+    await page.goto('/account/delete');
+    await expectClean(page, '/account/delete');
+    await page.getByRole('button', { name: 'Eliminar mi cuenta definitivamente' }).click();
+    await expect(page.locator('.error-summary')).toBeVisible();
+    await expectClean(page, '/account/delete vacío enviado');
+    await page.getByLabel('Contraseña', { exact: true }).fill('contraseña-incorrecta');
+    await page.getByRole('button', { name: 'Eliminar mi cuenta definitivamente' }).click();
+    await expect(page.locator('.error-summary')).toContainText('La contraseña no es correcta.');
+    await expectClean(page, '/account/delete contraseña incorrecta');
+    await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
+    await page.getByRole('button', { name: 'Eliminar mi cuenta definitivamente' }).click();
+    await expect(page).toHaveURL('/?notice=account-deleted');
+    await expectClean(page, '/?notice=account-deleted tras borrar');
 
-  await context.close();
-});
+    await context.close();
+  },
+);
 
 // ---------------------------------------------------------------------------------------------
 // Seguridad: guardia de rutas, `next`, URLs viejas, CSRF y CSP.
@@ -213,45 +214,45 @@ test('las URLs de antes dan 404 (con y sin sesión) y no redirigen', async ({ pl
   await anonymous.dispose();
 });
 
-test('guardia de rutas: sin sesión, /account y /account/delete llevan a /login?next=; con sesión, /login y /register llevan a /account', async ({
-  browser,
-  playwright,
-  javaScriptEnabled,
-}) => {
-  const anonymous = await playwright.request.newContext({ baseURL: stack.webUrl });
-  const account = await anonymous.get('/account', { maxRedirects: 0 });
-  expect(account.status()).toBe(303);
-  expect(account.headers().location).toBe('/login?next=/account');
-  const del = await anonymous.get('/account/delete', { maxRedirects: 0 });
-  expect(del.status()).toBe(303);
-  expect(del.headers().location).toBe('/login?next=/account/delete');
-  // Un formulario enviado sin sesión también se corta (sin tocar nada) y vuelve a /account.
-  const post = await anonymous.post('/account/delete', {
-    form: { password: PASSWORD },
-    headers: { origin: stack.webUrl, accept: 'text/html' },
-    maxRedirects: 0,
-  });
-  expect(post.status()).toBe(303);
-  expect(post.headers().location).toBe('/login?next=/account');
-  // Rutas públicas.
-  for (const path of ['/', '/legal/terms', '/login', '/register']) {
-    expect((await anonymous.get(path, { maxRedirects: 0 })).status(), path).toBe(200);
-  }
-  await anonymous.dispose();
+test(
+  'guardia de rutas: sin sesión, /account y /account/delete llevan a /login?next=; con sesión, /login y /register llevan a /account',
+  { tag: '@nojs' },
+  async ({ browser, playwright, javaScriptEnabled }) => {
+    const anonymous = await playwright.request.newContext({ baseURL: stack.webUrl });
+    const account = await anonymous.get('/account', { maxRedirects: 0 });
+    expect(account.status()).toBe(303);
+    expect(account.headers().location).toBe('/login?next=/account');
+    const del = await anonymous.get('/account/delete', { maxRedirects: 0 });
+    expect(del.status()).toBe(303);
+    expect(del.headers().location).toBe('/login?next=/account/delete');
+    // Un formulario enviado sin sesión también se corta (sin tocar nada) y vuelve a /account.
+    const post = await anonymous.post('/account/delete', {
+      form: { password: PASSWORD },
+      headers: { origin: stack.webUrl, accept: 'text/html' },
+      maxRedirects: 0,
+    });
+    expect(post.status()).toBe(303);
+    expect(post.headers().location).toBe('/login?next=/account');
+    // Rutas públicas.
+    for (const path of ['/', '/legal/terms', '/login', '/register']) {
+      expect((await anonymous.get(path, { maxRedirects: 0 })).status(), path).toBe(200);
+    }
+    await anonymous.dispose();
 
-  const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
-  const page = await context.newPage();
-  await registerAdult(page);
-  for (const path of ['/login', '/register', '/login?next=/account/delete']) {
-    const response = await context.request.get(path, { maxRedirects: 0 });
-    expect(response.status(), path).toBe(303);
-    expect(response.headers().location, path).toBe('/account');
-  }
-  for (const path of ['/', '/legal/terms', '/account', '/account/delete']) {
-    expect((await context.request.get(path, { maxRedirects: 0 })).status(), path).toBe(200);
-  }
-  await context.close();
-});
+    const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
+    const page = await context.newPage();
+    await registerAdult(page);
+    for (const path of ['/login', '/register', '/login?next=/account/delete']) {
+      const response = await context.request.get(path, { maxRedirects: 0 });
+      expect(response.status(), path).toBe(303);
+      expect(response.headers().location, path).toBe('/account');
+    }
+    for (const path of ['/', '/legal/terms', '/account', '/account/delete']) {
+      expect((await context.request.get(path, { maxRedirects: 0 })).status(), path).toBe(200);
+    }
+    await context.close();
+  },
+);
 
 const HOSTILE_NEXT = [
   'https://evil.com',
@@ -284,67 +285,67 @@ const HOSTILE_NEXT = [
   '%2Faccount',
 ];
 
-test('`next`: solo /account y /account/delete exactos; todo lo demás se descarta (campo oculto y redirección)', async ({
-  browser,
-  playwright,
-  javaScriptEnabled,
-}) => {
-  const anonymous = await playwright.request.newContext({ baseURL: stack.webUrl });
-  const email = uniqueEmail();
-  // Una cuenta para poder entrar con la petición cruda.
-  const setup = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
-  const setupPage = await setup.newPage();
-  await registerAdult(setupPage, email);
-  await setup.close();
+test(
+  '`next`: solo /account y /account/delete exactos; todo lo demás se descarta (campo oculto y redirección)',
+  { tag: '@nojs' },
+  async ({ browser, playwright, javaScriptEnabled }) => {
+    const anonymous = await playwright.request.newContext({ baseURL: stack.webUrl });
+    const email = uniqueEmail();
+    // Una cuenta para poder entrar con la petición cruda.
+    const setup = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
+    const setupPage = await setup.newPage();
+    await registerAdult(setupPage, email);
+    await setup.close();
 
-  for (const next of ['/account', '/account/delete']) {
-    const html = await (await anonymous.get(`/login?next=${encodeURIComponent(next)}`)).text();
-    expect(html, next).toMatch(
-      new RegExp(`name="next"[^>]*value="${next}"|value="${next}"[^>]*name="next"`),
-    );
-  }
-  for (const next of HOSTILE_NEXT) {
-    // Contexto nuevo cada vez: un login correcto deja cookie y /login redirigiría a /account.
-    const fresh = await playwright.request.newContext({ baseURL: stack.webUrl });
-    const page = await fresh.get(`/login?next=${encodeURIComponent(next)}`, {
-      maxRedirects: 0,
-    });
-    expect(page.status(), next).toBe(200);
-    const html = await page.text();
-    // El campo oculto, si existe, no puede llevar el valor hostil.
-    expect(html, `next=${JSON.stringify(next)}`).not.toMatch(/name="next"[^>]*value="[^"]/);
-    // La acción: con `next` hostil, entrar lleva a /account y nunca fuera.
-    const login = await fresh.post('/login', {
-      form: { email, password: PASSWORD, next },
-      headers: { origin: stack.webUrl, accept: 'text/html' },
-      maxRedirects: 0,
-    });
-    expect(login.status(), `POST next=${JSON.stringify(next)}`).toBe(303);
-    expect(login.headers().location, `POST next=${JSON.stringify(next)}`).toBe('/account');
-    await fresh.dispose();
-  }
-  // Los válidos sí se respetan en la acción.
-  for (const next of ['/account', '/account/delete']) {
-    const fresh = await playwright.request.newContext({ baseURL: stack.webUrl });
-    const login = await fresh.post('/login', {
-      form: { email, password: PASSWORD, next },
-      headers: { origin: stack.webUrl, accept: 'text/html' },
-      maxRedirects: 0,
-    });
-    expect(login.headers().location).toBe(next);
-    await fresh.dispose();
-  }
-  // Parámetro repetido o en forma de lista: gana el primero o se descarta, pero nunca algo hostil.
-  for (const query of [
-    'next=/account&next=https://evil.com',
-    'next=https://evil.com&next=/account',
-    'next[]=/account',
-  ]) {
-    const html = await (await anonymous.get(`/login?${query}`)).text();
-    expect(html, query).not.toContain('evil.com');
-  }
-  await anonymous.dispose();
-});
+    for (const next of ['/account', '/account/delete']) {
+      const html = await (await anonymous.get(`/login?next=${encodeURIComponent(next)}`)).text();
+      expect(html, next).toMatch(
+        new RegExp(`name="next"[^>]*value="${next}"|value="${next}"[^>]*name="next"`),
+      );
+    }
+    for (const next of HOSTILE_NEXT) {
+      // Contexto nuevo cada vez: un login correcto deja cookie y /login redirigiría a /account.
+      const fresh = await playwright.request.newContext({ baseURL: stack.webUrl });
+      const page = await fresh.get(`/login?next=${encodeURIComponent(next)}`, {
+        maxRedirects: 0,
+      });
+      expect(page.status(), next).toBe(200);
+      const html = await page.text();
+      // El campo oculto, si existe, no puede llevar el valor hostil.
+      expect(html, `next=${JSON.stringify(next)}`).not.toMatch(/name="next"[^>]*value="[^"]/);
+      // La acción: con `next` hostil, entrar lleva a /account y nunca fuera.
+      const login = await fresh.post('/login', {
+        form: { email, password: PASSWORD, next },
+        headers: { origin: stack.webUrl, accept: 'text/html' },
+        maxRedirects: 0,
+      });
+      expect(login.status(), `POST next=${JSON.stringify(next)}`).toBe(303);
+      expect(login.headers().location, `POST next=${JSON.stringify(next)}`).toBe('/account');
+      await fresh.dispose();
+    }
+    // Los válidos sí se respetan en la acción.
+    for (const next of ['/account', '/account/delete']) {
+      const fresh = await playwright.request.newContext({ baseURL: stack.webUrl });
+      const login = await fresh.post('/login', {
+        form: { email, password: PASSWORD, next },
+        headers: { origin: stack.webUrl, accept: 'text/html' },
+        maxRedirects: 0,
+      });
+      expect(login.headers().location).toBe(next);
+      await fresh.dispose();
+    }
+    // Parámetro repetido o en forma de lista: gana el primero o se descarta, pero nunca algo hostil.
+    for (const query of [
+      'next=/account&next=https://evil.com',
+      'next=https://evil.com&next=/account',
+      'next[]=/account',
+    ]) {
+      const html = await (await anonymous.get(`/login?${query}`)).text();
+      expect(html, query).not.toContain('evil.com');
+    }
+    await anonymous.dispose();
+  },
+);
 
 test('CSRF y CSP siguen activos con las rutas nuevas', async ({ playwright }) => {
   const anonymous = await playwright.request.newContext({ baseURL: stack.webUrl });

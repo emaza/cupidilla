@@ -32,6 +32,8 @@
     "format": "prettier --write .",
     "test": "npm run build:contracts && npm run test --workspaces --if-present",
     "test:e2e": "npm run mail:up && npm run build:contracts && npm run test:e2e -w @cupidilla/web",
+    "test:e2e:reuse": "E2E_REUSE=1 npm run test:e2e -w @cupidilla/web --",
+    "test:e2e:serve": "npm run mail:up && npm run build:contracts && node --env-file-if-exists=.env apps/web/tests/e2e/serve.ts",
     "e2e:install": "npx playwright install chromium"
   },
   "devDependencies": {
