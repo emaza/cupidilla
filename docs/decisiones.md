@@ -28,6 +28,7 @@ Registro de lo que está decidido y de lo que sigue abierto. Cuando una decisió
 | 18 | **URLs y nombres internos de la web en inglés**: `/register`, `/login`, `/account`, `/account/delete`, `/legal/terms`, con parámetros, acciones y campos de formulario también en inglés. Los textos de la interfaz y sus claves siguen en español. Se hace en un PR aparte después de fusionar H0 y antes de H1 ([plan](plan-rutas-en-ingles.md)) | 13 de noviembre de 2026, el CEO |
 | 19 | **Entrada con Google y Facebook**, antes de H1. Authorization Code con PKCE; la API guarda los secretos y canjea el código. La primera vez se piden la fecha de nacimiento y las condiciones. Si el correo ya tiene cuenta, se pide la contraseña una vez para unirlas. Desde `/account` se puede añadir o quitar un proveedor y crear una contraseña. Borrar sin contraseña exige escribir «ELIMINAR» y haber entrado hace menos de 10 minutos. Las condiciones suben de versión sin volver a pedir la aceptación ([técnico](login-terceros-diseno-tecnico.md), [UX](login-terceros-diseno-ux.md)) | 13 de noviembre de 2026, el CEO con el CTO |
 | 20 | **Confirmar los cambios de la cuenta.** Con contraseña, se pide la contraseña en el mismo formulario para añadir o quitar Google o Facebook y para borrar la cuenta, sin la regla de los 10 minutos. Sin contraseña: quitar un proveedor (si queda otro) no pide nada, y borrar pide solo escribir «ELIMINAR». Crear una contraseña y añadir un proveedor siguen pidiendo una sesión de menos de 10 minutos o volver a entrar con el proveedor, porque convertirían una sesión robada en un acceso permanente. Cambia la parte de la 19 sobre el borrado sin contraseña ([técnico](login-terceros-diseno-tecnico.md#9-cuentas-sin-contraseña-y-account)) | 13 de noviembre de 2026, el CEO con el CTO |
+| 23 | **Autenticación propia, congelada hasta la beta.** Se sigue con la autenticación propia: migrar a un servicio no ahorra esfuerzo ahora, añade cuota y un encargado del tratamiento con los datos de una web de citas, y cambiar más adelante cuesta solo 2–3 días más. Plan B: Logto (nube de la UE o autohospedado), si se cumple alguna condición del análisis. La autenticación se congela: solo se cierra el PR #6, y lo que falta (recuperación de contraseña, endurecimiento, revisión OWASP ASVS, apps de producción) va en un único bloque antes de la beta, con un tope de 3 días. Corrige el «antes de H1» de la 19: lo siguiente es H1. Beta cerrada y sin auditoría externa; la auditoría y la revisión legal, antes de abrir al público. Facebook se mantiene en la beta. Dominio: `cupidilla.com` ([análisis](arquitectura/auth-propia-vs-servicio.md)) | 14 de noviembre de 2026, el cliente con el CEO, el CTO y el arquitecto |
 
 ## Abiertas
 
@@ -37,7 +38,7 @@ Ordenadas por cuándo bloquean. La recomendación es mía; quien decide aparece 
 
 | Decisión | Opciones | Recomendación | Decide |
 |---|---|---|---|
-| **Marca y dominio** | Comprobar OEPM, EUIPO y dominios | Hacerlo cuanto antes: cuesta poco y condiciona cualquier inversión en identidad | Tú |
+| **Marca y dominio** | Comprobar OEPM, EUIPO y dominios | Dominio decidido: `cupidilla.com` (decisión 23). Falta comprobar la marca en OEPM y EUIPO | Tú |
 
 ### Antes de diseñar H1
 
