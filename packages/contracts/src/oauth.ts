@@ -3,6 +3,7 @@ import {
   authResponseSchema,
   birthDateSchema,
   emailSchema,
+  newPasswordSchema,
   passwordInputSchema,
   publicUserSchema,
   registerRequestSchema,
@@ -19,12 +20,15 @@ export type OAuthEntryPoint = (typeof OAUTH_ENTRY_POINTS)[number];
 
 /** Vida de la fila de `oauth_states` (flujo en curso). */
 export const OAUTH_FLOW_TTL_MINUTES = 10;
+/**
+ * Vida de la fila `connect` que crea la vuelta de una reautenticación confirmada (decisión 21):
+ * la confirmación de una cuenta sin contraseña para añadir un proveedor.
+ */
+export const OAUTH_CONFIRMED_CONNECT_TTL_MINUTES = 5;
 /** Vida de la fila de `pending_identities` (alta o unión pendiente). */
 export const OAUTH_PENDING_TTL_MINUTES = 30;
 /** Fallos de contraseña permitidos en una unión antes de borrar el estado pendiente. */
 export const OAUTH_LINK_MAX_FAILURES = 5;
-/** Una sesión es reciente si se autenticó hace menos de esto (§9.1). */
-export const RECENT_AUTH_MAX_AGE_MINUTES = 10;
 
 const entryPointSchema = z.enum(OAUTH_ENTRY_POINTS, { error: 'invalid' });
 
@@ -62,16 +66,34 @@ export const oauthStartRequestSchema = z.strictObject(
 export type OAuthStartRequest = z.infer<typeof oauthStartRequestSchema>;
 
 /**
- * POST /users/me/oauth/:provider/authorization (con sesión). Al añadir un proveedor (`connect`),
- * una cuenta con contraseña la escribe en el mismo formulario (decisión 20).
+ * POST /users/me/oauth/:provider/authorization (con sesión, decisión 21):
+ * - `connect`: añadir `:provider`. Con contraseña en la cuenta, se escribe en el mismo formulario;
+ *   sin ella, la API empieza antes una reautenticación con un proveedor ya unido.
+ * - `create_password`: crear la contraseña de una cuenta que no tiene. `:provider` es el proveedor
+ *   unido con el que se confirma; la contraseña se guarda al volver de él.
+ * - `reauthenticate`: confirmar la identidad con `:provider`, ya unido.
  */
-export const oauthSessionStartRequestSchema = z.strictObject(
-  {
-    purpose: z.enum(['reauthenticate', 'connect'], { error: 'invalid' }),
-    returnPath: returnPathSchema.optional(),
-    password: passwordInputSchema.optional(),
-  },
-  { error: strictObjectError },
+export const oauthSessionStartRequestSchema = z.discriminatedUnion(
+  'purpose',
+  [
+    z.strictObject(
+      {
+        purpose: z.enum(['reauthenticate', 'connect'], { error: 'invalid' }),
+        returnPath: returnPathSchema.optional(),
+        password: passwordInputSchema.optional(),
+      },
+      { error: strictObjectError },
+    ),
+    z.strictObject(
+      {
+        purpose: z.literal('create_password', { error: 'invalid' }),
+        returnPath: returnPathSchema.optional(),
+        password: newPasswordSchema,
+      },
+      { error: strictObjectError },
+    ),
+  ],
+  { error: 'invalid' },
 );
 export type OAuthSessionStartRequest = z.infer<typeof oauthSessionStartRequestSchema>;
 
@@ -100,6 +122,10 @@ export const OAUTH_FAILURE_REASONS = [
   'identity_mismatch',
   'identity_in_use',
   'already_linked',
+  // `connect`: el correo del proveedor ya es el de otra cuenta. La web da un mensaje genérico.
+  'connect_refused',
+  // `create_password`: la cuenta ya tenía contraseña al volver del proveedor (otra pestaña).
+  'password_already_set',
 ] as const;
 export type OAuthFailureReason = (typeof OAUTH_FAILURE_REASONS)[number];
 
@@ -119,6 +145,9 @@ export const oauthCallbackResponseSchema = z.discriminatedUnion('result', [
   }),
   z.object({ result: z.literal('reauthenticated'), returnPath: returnPathSchema.nullable() }),
   z.object({ result: z.literal('connected') }),
+  // Reautenticación confirmada para añadir un proveedor: la web sigue sin parar hacia `next`.
+  z.object({ result: z.literal('connect_confirmed'), next: oauthStartResponseSchema }),
+  z.object({ result: z.literal('password_created') }),
   z.object({
     result: z.literal('failed'),
     reason: z.enum(OAUTH_FAILURE_REASONS),

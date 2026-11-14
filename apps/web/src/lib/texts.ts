@@ -110,8 +110,22 @@ export const texts = {
   'cuenta.titulo': 'Tu cuenta',
   'cuenta.datos.titulo': 'Tus datos',
   'cuenta.datos.correo': 'Correo',
+  'cuenta.datos.nacimiento': 'Fecha de nacimiento',
+  'cuenta.datos.alta': 'Cuenta creada el',
+  'cuenta.datos.sesion': 'Inicio de la sesión actual',
   'cuenta.datos.condiciones': 'Condiciones aceptadas',
   'cuenta.datos.condiciones_valor': 'versión {version}, el {fecha}',
+  'cuenta.sesiones.titulo': 'Sesiones abiertas',
+  'cuenta.sesiones.intro':
+    'Estas son las sesiones que siguen abiertas con tu cuenta. De cada una solo guardamos las fechas, no el dispositivo ni el lugar.',
+  'cuenta.sesiones.nombre': 'Sesión {n}',
+  'cuenta.sesiones.actual': 'Esta sesión',
+  'cuenta.sesiones.item_actual_oculto': ', es la sesión desde la que estás viendo esta página',
+  'cuenta.sesiones.creada': 'Abierta el',
+  'cuenta.sesiones.ultimo_inicio': 'Último inicio de sesión',
+  'cuenta.sesiones.caduca': 'Caduca el',
+  'cuenta.sesiones.unica': 'Solo tienes esta sesión abierta.',
+  'cuenta.sesiones.nota': 'Las sesiones caducadas desaparecen de la lista solas.',
   'cuenta.cupidilla.titulo': 'Cupidilla',
   'cuenta.cupidilla.texto':
     'Cupidilla todavía no conversa. Pronto te hará unas preguntas para conocerte; cuando esté lista, lo verás aquí.',
@@ -226,6 +240,7 @@ export const texts = {
   'cuenta.acceso.estado_sin_contrasena': 'No tienes contraseña',
   'cuenta.acceso.enlace_crear_contrasena': 'Crear contraseña',
   'cuenta.acceso.estado_unido': 'Unido el {fecha}',
+  'cuenta.acceso.ultimo_uso': 'Último uso: {fecha}',
   'cuenta.acceso.estado_no_unido': 'No unido',
   'cuenta.acceso.boton_quitar': 'Quitar {proveedor}',
   'cuenta.acceso.boton_quitando': 'Quitando…',
@@ -246,18 +261,26 @@ export const texts = {
     'Esa cuenta de {proveedor} ya está unida a otra cuenta de Cupidilla. Si es tuya, entra en esa cuenta y quítala desde allí.',
   'cuenta.error.ya_unido':
     'Esa cuenta de {proveedor} ya está unida a tu cuenta. No hemos hecho ningún cambio.',
+  'cuenta.error.sin_correo':
+    '{proveedor} no nos ha enviado tu correo y lo necesitamos para unir {proveedor} a tu cuenta. Comprueba en {proveedor} que tu cuenta tiene un correo y que has dado permiso para compartirlo, e inténtalo de nuevo. No hemos hecho ningún cambio.',
+  'cuenta.error.correo_sin_verificar':
+    'El correo de tu cuenta de {proveedor} todavía no está verificado y no podemos usarlo. Verifícalo en {proveedor} e inténtalo de nuevo. No hemos hecho ningún cambio.',
+  'cuenta.error.union_rechazada':
+    'No hemos podido unir esta cuenta de {proveedor} a la tuya. No hemos hecho ningún cambio. Prueba con otra cuenta de {proveedor} o sigue entrando como hasta ahora.',
+  'cuenta.confirmar.titulo': 'Confirma que eres tú',
+  'cuenta.confirmar.texto':
+    'Como no tienes contraseña, para añadir {proveedorNuevo} primero entrarás con {proveedor} para confirmar que eres tú y después con {proveedorNuevo}. No cambiamos nada en tus cuentas de esos servicios.',
+  'cuenta.confirmar.boton': 'Confirmar con {proveedor}',
+  'cuenta.confirmar.cancelar': 'Cancelar',
+  'cuenta.confirmar.error.caducada':
+    'Ha pasado demasiado tiempo desde que empezaste y la confirmación ha caducado. No hemos hecho ningún cambio. Vuelve a confirmar con {proveedor}.',
+  'cuenta.confirmar.exito':
+    'Hemos añadido {proveedorNuevo}. Ya puedes entrar con cualquiera de tus formas de entrar.',
   'cuenta.error.proveedor_fallo':
     '{proveedor} no ha respondido como esperábamos y no hemos podido completar el paso. No hemos hecho ningún cambio. Inténtalo de nuevo en unos minutos.',
-  'verificar.titulo': 'Confirma que eres tú',
-  'verificar.texto':
-    'Por seguridad, para {accion} tienes que haber entrado hace menos de {minutos} minutos. Vuelve a entrar y continuarás en esta página.',
-  'verificar.accion.anadir': 'añadir una forma de entrar',
-  'verificar.accion.contrasena': 'crear una contraseña',
   'verificar.aviso.confirmada': 'Listo, hemos confirmado que eres tú.',
   'verificar.aviso.cancelado':
     'No has continuado con {proveedor}, así que no hemos confirmado nada ni hemos hecho ningún cambio.',
-  'verificar.error.necesaria':
-    'Han pasado más de {minutos} minutos desde que entraste. Confirma que eres tú para continuar. No hemos hecho ningún cambio.',
   'verificar.error.otra_cuenta':
     'Has entrado con una cuenta de {proveedor} distinta de la que tienes unida a Cupidilla. Vuelve a intentarlo con la cuenta correcta.',
   'contrasena.meta.titulo': 'Crear contraseña',
@@ -266,17 +289,14 @@ export const texts = {
     'Desde este momento también podrás entrar con tu correo y tu contraseña, además de con {proveedores}. Tu cuenta de {proveedores} no cambia.',
   'contrasena.campo.correo': 'Tu correo',
   'contrasena.campo.contrasena': 'Contraseña',
+  'contrasena.confirmar.texto':
+    'Al pulsar «Crear contraseña», iremos a {proveedor} para que confirmes que eres tú. Cuando vuelvas, tu contraseña estará creada. No cambiamos nada en tu cuenta de {proveedor}.',
   'contrasena.boton.enviar': 'Crear contraseña',
-  'contrasena.boton.enviando': 'Creando contraseña…',
-  'contrasena.estado.enviando': 'Creando tu contraseña…',
   'contrasena.enlace.cancelar': 'Cancelar',
   'contrasena.aviso.creada':
     'Hemos creado tu contraseña. Ya puedes entrar con tu correo y tu contraseña.',
   'contrasena.error.servidor':
     'Algo ha fallado por nuestra parte y no hemos podido crear tu contraseña. Inténtalo de nuevo en unos minutos.',
-  'contrasena.error.resultado_incierto':
-    'No sabemos si tu contraseña se ha creado: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta: si en «Formas de entrar» pone «Correo y contraseña: Activa», ya está creada. Si no, vuelve a intentarlo.',
-  'contrasena.enlace.comprobar': 'Ir a mi cuenta para comprobarlo',
   'eliminar.texto.alcance_proveedor':
     'Se borrará de inmediato tu cuenta y todo lo que hemos guardado de ti: correo, fecha de nacimiento, consentimientos y las uniones con {proveedores}. No tocamos nada en tu cuenta de {proveedores}.',
   'eliminar.texto.alcance_mixta':

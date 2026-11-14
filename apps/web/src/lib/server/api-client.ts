@@ -10,7 +10,6 @@ import {
   sessionResponseSchema,
   type AccountResponse,
   type AuthResponse,
-  type CreatePasswordRequest,
   type DeleteAccountRequest,
   type FieldError,
   type LoginRequest,
@@ -322,20 +321,6 @@ export const api = {
       token,
       body,
       expectStatus: 204,
-    }),
-
-  createPassword: (
-    event: RequestEvent,
-    token: string,
-    body: CreatePasswordRequest,
-  ): Promise<ApiResult<void>> =>
-    request(event, {
-      method: 'POST',
-      path: '/users/me/password',
-      token,
-      body,
-      nonIdempotent: true,
-      expectStatus: 204, // users.controller.ts: @HttpCode(204)
     }),
 
   removeIdentity: (

@@ -267,7 +267,18 @@ test('el token de sesión no aparece nunca en el HTML, en los datos de la págin
   for (const path of ['/account/__data.json', '/__data.json']) {
     const response = await page.request.get(path);
     expect(await response.text(), path).not.toContain(token);
-    expect(await response.text(), path).not.toContain('birthDate');
+    // La fecha de nacimiento ya se muestra en /account (la ve su titular), así que su clave puede
+    // estar en los datos de la página. Lo que no puede llegar nunca al cliente son los datos
+    // internos de la cuenta, de las sesiones ni del proveedor.
+    for (const internal of [
+      'tokenHash',
+      'token_hash',
+      'passwordHash',
+      'subject',
+      'providerEmail',
+    ]) {
+      expect(await response.text(), `${path} ${internal}`).not.toContain(internal);
+    }
   }
   // Un error de contraseña al eliminar tampoco lo devuelve.
   await page.goto('/account/delete');

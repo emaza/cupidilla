@@ -19,10 +19,6 @@ function goToProvider(
     redirect(303, result.data.authorizationUrl, { external: true });
   }
   if (result.status === 429) redirect(303, `${page}?error=rate-limited`);
-  // La sesión envejeció entre cargar la página y pulsar «añadir» (UX §3.5.2).
-  if (result.error.code === 'REAUTHENTICATION_REQUIRED') {
-    redirect(303, `${page}?error=reauth-required`);
-  }
   redirect(303, `${page}?error=provider-failed&provider=${provider}`);
 }
 

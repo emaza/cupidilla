@@ -75,6 +75,7 @@ Este documento manda en código, datos, API y seguridad; el de UX manda en panta
 | En `/account` se puede crear una contraseña si no hay. Cambiarla queda fuera | CEO | §9.5 |
 | Las condiciones suben de versión para las altas nuevas; a quien aceptó la anterior no se le vuelve a pedir | CEO | §13 |
 | Las apps de Google y Meta las crea el CEO, solo para `localhost`; producción, pendiente de «Marca y dominio» | CEO | §15 |
+| **Decisión 21 (14 de noviembre de 2026).** Sin contraseña en la cuenta, añadir un proveedor y crear una contraseña ya no dependen de la regla de los 10 minutos: se confirman siempre con un proveedor ya unido, y la acción se ejecuta en la vuelta de esa reautenticación. Al añadir, la web encadena los dos viajes (el proveedor unido y el nuevo) con un solo clic. Además, `connect` exige un correo verificado y rechaza el correo de otra cuenta (`users.email` o `provider_email` verificado de una identidad), y R7b solo cuenta identidades verificadas. Se retiran `POST /users/me/password`, `REAUTHENTICATION_REQUIRED` y `RECENT_AUTH_MAX_AGE_MINUTES` | CTO | §5.2, §5.3, §6 (R7b), §9, §10.2, §10.3, §11.3, §11.4, §14.2 |
 
 ### 1.3 Diferencias con la propuesta de UX
 
@@ -232,6 +233,8 @@ Los tokens se generan y se hashean con las funciones de `sessions.service.ts`, q
 
 Restricciones: `UNIQUE (provider, subject)` (`identities_provider_subject_unique`), porque una identidad pertenece a una sola cuenta; y `UNIQUE (user_id, provider)` (`identities_user_provider_unique`), con un Google y un Facebook como mucho por cuenta. Su columna inicial cubre el borrado en cascada, así que no hace falta otro índice en `user_id`.
 
+Índice de expresión `identities_provider_email_normalized_idx` sobre `lower(btrim(provider_email))` (decisión 21). No es parcial: lo usan todas las búsquedas por correo de proveedor (R7, R7b y `connect`), que comparan con esa misma expresión.
+
 ### 5.3 `oauth_states` (flujo en curso)
 
 | Columna | Tipo | Restricciones |
@@ -245,7 +248,11 @@ Restricciones: `UNIQUE (provider, subject)` (`identities_provider_subject_unique
 | `code_verifier` | `text` | `NOT NULL` |
 | `nonce` | `text` | `NOT NULL` (en Facebook se genera igual y no se usa) |
 | `return_path` | `text` | `NULL`, `CHECK (char_length(return_path) <= 64)` |
-| `created_at`, `expires_at` | `timestamptz` | `NOT NULL`; `expires_at = created_at + 10 min` |
+| `connect_provider` | `text` | `NULL`, `CHECK (connect_provider IN ('google','facebook'))` (`oauth_states_connect_provider_known`). Decisión 21: en una reautenticación, el proveedor que se añade al volver |
+| `new_password_hash` | `text` | `NULL`. Decisión 21: en una reautenticación, el hash argon2id de la contraseña que se crea al volver. Es el mismo dato que luego vive en `users` y dura como mucho 10 minutos |
+| `created_at`, `expires_at` | `timestamptz` | `NOT NULL`; `expires_at = created_at + 10 min`, salvo la fila `connect` que crea una reautenticación confirmada: 5 min (`OAUTH_CONFIRMED_CONNECT_TTL_MINUTES`) |
+
+`CHECK (connect_provider IS NULL OR (purpose = 'reauthenticate' AND connect_provider <> provider))` (`oauth_states_connect_provider_shape`): el proveedor que se añade nunca confirma. `CHECK (new_password_hash IS NULL OR (purpose = 'reauthenticate' AND connect_provider IS NULL))` (`oauth_states_new_password_hash_shape`): una fila confirma una sola acción.
 
 `CHECK ((purpose = 'sign_in') = (entry_point IS NOT NULL) AND (purpose = 'sign_in') = (session_token_hash IS NULL))` (`oauth_states_purpose_shape`). Con `sign_in` exige `entry_point` y prohíbe `session_token_hash`; con `reauthenticate` y `connect`, al revés. Índice en `expires_at`. `state` y `code_verifier` van en claro: duran 10 minutos, son de un solo uso y por sí solos no sirven sin el código, que solo llega al navegador de la persona.
 
@@ -273,6 +280,8 @@ Restricciones: `UNIQUE (provider, subject)` (`identities_provider_subject_unique
 - **Despliegue: parar la API antigua antes de migrar.** Tras la migración, `sessions.authenticated_at` es `NOT NULL` y sin `DEFAULT`. La API de H0 no escribe esa columna, así que fallaría al crear sesiones (registro y login). El orden es: parar la API, `npm run db:migrate` y arrancar la versión nueva. No se pone un `DEFAULT`: la aplicación escribe siempre la columna con el `Clock`, y un `DEFAULT now()` taparía que algún `INSERT` la olvide. Como todavía no hay producción ni varias instancias, parar unos segundos no cuesta nada.
 - El test I-16 de H0 recorre las tablas con FK a `users`, así que cubre solo `identities` y `pending_identities`. `oauth_states` cuelga de `sessions`, y su comprobación se añade explícitamente (O-17).
 
+> **Nota (14 de noviembre de 2026): migración única.** Las migraciones `0000_init`, `0001_oauth_identities` y `0002_decision_21` se han juntado en una sola `0000_init`, generada con `drizzle-kit generate --name init`. El texto de arriba describe cómo se llegó al esquema, no migraciones que existan hoy. Mientras no haya usuarios reales, cualquier cambio de esquema regenera `0000_init` (se borra `apps/api/drizzle/`, `npm run db:generate -- --name init`) y se hace `npm run db:reset`. Antes del lanzamiento se vuelve a migraciones incrementales.
+
 ---
 
 ## 6. Reglas en la vuelta del proveedor
@@ -290,6 +299,7 @@ Para `purpose = 'sign_in'`, en este orden:
 | 5 | Correo no verificado (Google) | `failed`, `reason: 'email_unverified'` |
 | 6 | Hay un `users` con ese correo **y** contraseña | Fila `pending_identities` `kind = 'link'` → `link_required` |
 | 7 | Hay un `users` con ese correo **sin** contraseña | `use_other_provider` con los proveedores de esa cuenta. No se une nada. Puede añadirlo después desde `/account` (§9.3) |
+| 7b | No hay `users` con ese correo, pero es el `provider_email` verificado de una identidad de otra cuenta | `use_other_provider` con los proveedores de esa cuenta, tenga o no contraseña. No se une nada (R7b) |
 | 8 | No hay cuenta con ese correo | Fila `pending_identities` `kind = 'signup'` → `signup_required` |
 
 Si la fila de `oauth_states` no existe, ha caducado, ya se usó, es de otro proveedor o el `state` no coincide, la respuesta es `400 OAUTH_FLOW_INVALID`, sin más detalle. Es lo que UX llama «caducado».
@@ -345,25 +355,31 @@ La unión es `nonIdempotent` en la web. Un reintento tras `OUTCOME_UNKNOWN` no d
 >
 > | Cambio | Cuenta con contraseña | Cuenta sin contraseña |
 > |---|---|---|
-> | Añadir un proveedor | La contraseña, en el mismo formulario | Sesión reciente o volver a entrar con el proveedor |
+> | Añadir un proveedor | La contraseña, en el mismo formulario | Confirmar siempre con un proveedor ya unido (decisión 21) |
 > | Quitar un proveedor | La contraseña, en el mismo formulario | Nada (si queda otra forma de entrar) |
-> | Crear una contraseña | (No aplica) | Sesión reciente o volver a entrar con el proveedor |
+> | Crear una contraseña | (No aplica) | Confirmar siempre con un proveedor ya unido (decisión 21) |
 > | Borrar la cuenta | La contraseña (H0) | Solo escribir «ELIMINAR» |
 >
-> Con contraseña no hay regla de los 10 minutos. Sin contraseña, solo la mantienen los dos cambios que convertirían una sesión robada en un acceso permanente: crear una contraseña y añadir un proveedor.
+> **Decisión 21 (14 de noviembre de 2026).** Ya no hay regla de los 10 minutos. Los dos cambios que convertirían una sesión robada en un acceso permanente (crear una contraseña y añadir un proveedor) se confirman siempre, en una cuenta sin contraseña, con una reautenticación con un proveedor ya unido, y se ejecutan en su vuelta. Basta con haber entrado hace un momento: quien encuentre la sesión abierta no puede dejar unido su propio Google ni crear una contraseña sin pasar por el proveedor de la cuenta.
 
-### 9.1 Sesión reciente
+### 9.1 Reautenticación con un proveedor (decisión 21)
 
-Una sesión es **reciente** si `now − sessions.authenticated_at < RECENT_AUTH_MAX_AGE_MINUTES` (10). Desde la decisión 20, solo la exigen, y solo en cuentas **sin** contraseña:
-- añadir un proveedor;
-- crear una contraseña.
+Desde la decisión 21 ninguna operación exige una sesión reciente: `RECENT_AUTH_MAX_AGE_MINUTES`, `assertRecent` y `REAUTHENTICATION_REQUIRED` ya no existen. `sessions.authenticated_at` se sigue actualizando al reautenticarse y se muestra en `/account`.
 
-Si no es reciente, la API responde 403 `REAUTHENTICATION_REQUIRED` y la web ofrece renovarla con el botón «Confirmar con {proveedor}», uno por cada identidad → `POST /auth/{provider}` con `from=account`, `intent=reauthenticate` y `next`. La API responde a `POST /users/me/oauth/:provider/authorization` `{ purpose: 'reauthenticate' }` guardando `session_token_hash` en la fila. En la vuelta exige tres cosas:
+`POST /users/me/oauth/:provider/authorization` guarda `session_token_hash` en una fila con `purpose = 'reauthenticate'` en tres casos:
+
+| Petición | Proveedor de la fila | Columna | Vuelta confirmada |
+|---|---|---|---|
+| `{ purpose: 'reauthenticate' }` | `:provider`, que tiene que estar unido (si no, 404) | — | `reauthenticated` con `returnPath` |
+| `{ purpose: 'connect' }` en una cuenta sin contraseña (§9.3) | El proveedor unido con `provider ≠ :provider` y `last_used_at` más reciente (si no hay, 404) | `connect_provider = :provider` | `connect_confirmed` |
+| `{ purpose: 'create_password', password }` (§9.5) | `:provider`, que tiene que estar unido (si no, 404) | `new_password_hash` | `password_created` |
+
+La URL lleva `reauthenticate: true` (`prompt=select_account` y `auth_type=reauthenticate`) y el `login_hint` del proveedor unido. En la vuelta (`sessionCallback`) se exige, en este orden:
 - que la web envíe el `Bearer` de esa misma sesión (si no, `OAUTH_FLOW_INVALID`);
-- que la sesión siga viva;
-- que `(provider, subject)` sea una identidad de ese usuario (si no, `failed`, `identity_mismatch`).
+- que la sesión siga viva (si no, `OAUTH_FLOW_INVALID`; cerrarla borra antes la fila en cascada);
+- que `(provider, subject)` sea una identidad de ese usuario (si no, `failed`, `identity_mismatch`, sin renovar nada).
 
-Entonces actualiza `authenticated_at` y responde `reauthenticated` con `returnPath`.
+Entonces actualiza `authenticated_at` y, según la fila, ejecuta la acción que llevaba. **La confirmación es la propia fila**: de un solo uso (`DELETE … RETURNING`), ligada a la sesión y con caducidad. Ningún token de confirmación viaja al navegador.
 
 `POST /users/me/reauthentication` `{ password }` (renovar con la contraseña) sigue en la API, pero la web ya no lo usa: una cuenta con contraseña la escribe en el propio cambio.
 
@@ -376,21 +392,31 @@ Entonces actualiza `authenticated_at` y responde `reauthenticated` con `returnPa
 `deleteAccountRequestSchema = z.strictObject({ password: passwordInputSchema.optional() })`. En `UsersService.deleteAccount`:
 
 - Si hay `password_hash`: H0 sin cambios. Sin `password`, 400 `required`; si es incorrecta, 403 `PASSWORD_INCORRECT`.
-- Si no lo hay: `DELETE FROM users`, sin sesión reciente (decisión 20). Un `password` en el cuerpo no cambia nada.
+- Si no lo hay: `DELETE FROM users`, sin pedir nada más (decisión 20). Un `password` en el cuerpo no cambia nada.
 - La palabra «ELIMINAR» la valida la acción de la web: es una confirmación de intención y la API no la necesita. La web solo envía la petición si la palabra es correcta.
 
 El `DELETE FROM users` arrastra en cascada `identities`, `pending_identities`, `sessions`, `consents` y, a través de `sessions`, `oauth_states`.
 
 ### 9.3 Añadir un proveedor
 
-`POST /auth/{provider}` con `from=account` e `intent=connect`; con contraseña en la cuenta, el formulario lleva también el campo `password`, que la web reenvía en `POST /users/me/oauth/:provider/authorization` `{ purpose: 'connect', password }`. La API comprueba antes la contraseña (§9.1) o, sin contraseña en la cuenta, que la sesión sea reciente (403 `REAUTHENTICATION_REQUIRED`). Así una sesión robada no puede dejar unida una identidad del atacante como acceso permanente. Se guarda la fila con `purpose = 'connect'`, y en la vuelta se comprueba el `Bearer` como en §9.1. Después:
+`POST /auth/{provider}` con `from=account` e `intent=connect`, que la web reenvía en `POST /users/me/oauth/:provider/authorization` `{ purpose: 'connect', password? }`.
+
+- **Con contraseña en la cuenta**: el formulario lleva el campo `password`; la API lo comprueba (§9.1) y guarda la fila con `purpose = 'connect'` de `:provider` (10 min).
+- **Sin contraseña** (decisión 21): no se crea ninguna fila `connect`. La API empieza una reautenticación con el proveedor ya unido (§9.1) con `connect_provider = :provider` y devuelve su URL con la misma forma de respuesta. Si vuelve el mismo `(provider, subject)`, la vuelta crea la fila `connect` de `:provider`, ligada a la misma sesión y con 5 minutos de vida, y responde `{ result: 'connect_confirmed', next: OAuthStartResponse }`. La web guarda `next.flowToken` en `cupidilla_oauth` y redirige a `next.authorizationUrl` sin volver a `/account`: un solo clic y dos proveedores. Siempre son dos: el que se añade aún no está unido y no puede confirmar nada. Si `:provider` dejó de estar configurado entre los dos viajes, `failed`, `provider_failed`. Cualquier fallo en el segundo viaje consume la confirmación, y para reintentar hay que volver a confirmar.
+
+Así una sesión robada no puede dejar unida una identidad del atacante como acceso permanente. En la vuelta de la fila `connect` se comprueba el `Bearer` como en §9.1. Después, en este orden:
 
 | Situación | Resultado |
 |---|---|
 | La identidad ya es de este usuario | `connected` sin cambios |
 | La identidad es de otra cuenta | `failed`, `identity_in_use` |
+| El proveedor no envía correo | `failed`, `email_missing` |
+| El correo no está verificado (Google; Facebook cuenta como verificado si lo envía, R1) | `failed`, `email_unverified` |
+| El correo es el `users.email` de **otra** cuenta, o el `provider_email` verificado de una identidad de otra cuenta | `failed`, `connect_refused`. La web da un mensaje genérico, sin revelar el motivo |
 | El usuario ya tiene otra identidad de ese proveedor (`identities_user_provider_unique`) | `failed`, `already_linked` |
-| No existe | `INSERT identities` → `connected`. El correo del proveedor puede ser distinto del de la cuenta, y no hace falta que esté verificado: la contraseña o la sesión reciente ya prueban quién es |
+| No existe | `INSERT identities` → `connected`. El correo del proveedor puede ser distinto del de la cuenta |
+
+Las tres últimas filas van en `IdentitiesService.createForConnect`, en una sola transacción que toma antes `lockEmail` sobre el correo del proveedor: un alta simultánea de ese correo (con contraseña o con proveedor) va antes o después, nunca a la vez. Si el alta llega primero, la unión ve el `users.email` y se rechaza; si la unión llega primero, el alta ve el `provider_email` y da 409 `EMAIL_TAKEN` (R7b). Los bloqueos *advisory* son reentrantes en la misma sesión, así que `create` vuelve a tomarlo sin esperar.
 
 ### 9.4 Quitar un proveedor
 
@@ -406,15 +432,16 @@ No cierra sesiones ni revoca nada en el proveedor.
 
 Solo para cuentas sin contraseña. Cambiar una contraseña existente queda fuera.
 
-`POST /users/me/password` (S) `{ password }`, con `createPasswordRequestSchema = z.strictObject({ password: newPasswordSchema })`: las mismas reglas que el registro, de 10 a 128 puntos de código tras NFKC y sin reglas de composición.
+Decisión 21: `POST /users/me/password` ya no existe. Se crea con `POST /users/me/oauth/:provider/authorization` `{ purpose: 'create_password', password, returnPath? }`, donde `password` sigue `newPasswordSchema` (las mismas reglas que el registro, de 10 a 128 puntos de código tras NFKC y sin reglas de composición) y `:provider` es el proveedor unido con el que se confirma (la web envía el usado más recientemente).
 
-1. El *throttler*: `account` (cubo de la sesión, compartido con borrado y reautenticación, §12.5) e `ip` general.
-2. Si la sesión no es reciente, 403 `REAUTHENTICATION_REQUIRED`.
+1. El *throttler*: el de la ruta (5 por sesión cada 15 min) más el cubo `account` de la sesión (§12.5) e `ip` general.
+2. Si la cuenta ya tiene contraseña, 409 `PASSWORD_ALREADY_SET`; si `:provider` no está unido, 404.
 3. `PasswordService.hash` (argon2id con los parámetros de H0 §8.1 y NFKC), **fuera** de cualquier transacción.
-4. `UPDATE users SET password_hash = $1, updated_at = now WHERE id = $2 AND password_hash IS NULL`. Es una sola sentencia y atómica: si afecta a 0 filas, ya había contraseña (otra pestaña) y se responde 409 `PASSWORD_ALREADY_SET`. Si afecta a 1, 204.
-5. Se registra `{ event: 'password_created' }`, sin identificadores. No se cierran las otras sesiones: no ha cambiado una credencial existente.
+4. Fila de reautenticación de `:provider` con `new_password_hash` (§9.1) y respuesta `201 OAuthStartResponse`: la web redirige al proveedor.
+5. En la vuelta confirmada: `UPDATE users SET password_hash = $1, updated_at = now WHERE id = $2 AND password_hash IS NULL`. Es una sola sentencia y atómica: si afecta a 0 filas, ya había contraseña (otra pestaña) y se responde `failed`, `password_already_set`. Si afecta a 1, `{ result: 'password_created' }`.
+6. Se registra `{ event: 'password_created' }`, sin identificadores. No se cierran las otras sesiones: no ha cambiado una credencial existente. La reautenticación sí renueva `authenticated_at`.
 
-Después, `/login` con `users.email` y esa contraseña funciona sin cambios, porque `findCredentialsByEmail` ya devuelve el hash. Desde ese momento, el borrado pide la contraseña (§9.2) y se puede quitar el último proveedor (§9.4). Lo comprueba O-24. En la web es `nonIdempotent`: un reintento tras un corte da 409, y la comprobación es entrar con esa contraseña.
+Después, `/login` con `users.email` y esa contraseña funciona sin cambios, porque `findCredentialsByEmail` ya devuelve el hash. Desde ese momento, el borrado pide la contraseña (§9.2) y se puede quitar el último proveedor (§9.4). Lo comprueba O-24. El hash espera en `oauth_states` como mucho 10 minutos y se borra con la fila (un solo uso, caducidad o cierre de la sesión).
 
 ### 9.6 Entrar con correo sin tener contraseña
 
@@ -445,7 +472,7 @@ apps/api/src/
 │  │  └─ facebook.client.ts
 │  └─ *.spec.ts
 ├─ users/
-│  ├─ users.controller.ts                 # + POST /users/me/password, POST /users/me/reauthentication
+│  ├─ users.controller.ts                 # + POST /users/me/reauthentication (POST /users/me/password, retirado en la decisión 21)
 │  └─ users.service.ts                    # + createPassword, reauthenticateWithPassword; deleteAccount cambia
 └─ test/oauth-*.int.spec.ts, account-security.int.spec.ts
 ```
@@ -482,17 +509,21 @@ export interface ProviderClient {
 export const OAUTH_PROVIDERS = ['google', 'facebook'] as const;
 export const OAUTH_ENTRY_POINTS = ['login', 'register'] as const;
 export const OAUTH_FLOW_TTL_MINUTES = 10;
+export const OAUTH_CONFIRMED_CONNECT_TTL_MINUTES = 5;              // decisión 21
 export const OAUTH_PENDING_TTL_MINUTES = 30;
 export const OAUTH_LINK_MAX_FAILURES = 5;
-export const RECENT_AUTH_MAX_AGE_MINUTES = 10;
 
 const opaqueToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 const returnPath = z.string().max(64).regex(/^\/[a-z/-]*$/)
   .refine((v) => !v.includes('//'), 'invalid_format');          // la regex sola acepta «//x»; la web aplica además safeReturnPath
 
 export const oauthStartRequestSchema = z.strictObject({ entryPoint: z.enum(OAUTH_ENTRY_POINTS), returnPath: returnPath.optional() });
-export const oauthSessionStartRequestSchema = z.strictObject({ purpose: z.enum(['reauthenticate', 'connect']), returnPath: returnPath.optional(),
-  password: passwordInputSchema.optional() });                   // con `connect`, en cuentas con contraseña (decisión 20)
+export const oauthSessionStartRequestSchema = z.discriminatedUnion('purpose', [
+  z.strictObject({ purpose: z.enum(['reauthenticate', 'connect']), returnPath: returnPath.optional(),
+    password: passwordInputSchema.optional() }),                 // con `connect`, en cuentas con contraseña (decisión 20)
+  z.strictObject({ purpose: z.literal('create_password'), returnPath: returnPath.optional(),
+    password: newPasswordSchema }),                              // decisión 21: sustituye a POST /users/me/password
+]);
 export const removeIdentityRequestSchema = z.strictObject({ password: passwordInputSchema.optional() });
 export const oauthStartResponseSchema = z.object({ authorizationUrl: z.url(), flowToken: opaqueToken, expiresAt: z.iso.datetime() });
 
@@ -504,8 +535,11 @@ export const oauthCallbackResponseSchema = z.discriminatedUnion('result', [
   z.object({ result: z.literal('use_other_provider'), providers: z.array(z.enum(OAUTH_PROVIDERS)).min(1) }),
   z.object({ result: z.literal('reauthenticated'), returnPath: returnPath.nullable() }),
   z.object({ result: z.literal('connected') }),
+  z.object({ result: z.literal('connect_confirmed'), next: oauthStartResponseSchema }),  // decisión 21
+  z.object({ result: z.literal('password_created') }),                                  // decisión 21
   z.object({ result: z.literal('failed'), reason: z.enum(['cancelled', 'provider_failed', 'email_missing',
-    'email_unverified', 'identity_mismatch', 'identity_in_use', 'already_linked']),
+    'email_unverified', 'identity_mismatch', 'identity_in_use', 'already_linked',
+    'connect_refused', 'password_already_set']),                // decisión 21
     entryPoint: z.enum([...OAUTH_ENTRY_POINTS, 'account']), returnPath: returnPath.nullable() }),
 ]);
 // pendingTokenSchema = { token: opaqueToken, expiresAt }, sessionTokenSchema = { token, expiresAt }
@@ -519,7 +553,6 @@ export const oauthAuthResponseSchema = authResponseSchema.extend({ returnPath: r
 export const oauthProvidersResponseSchema = z.object({ providers: z.array(z.enum(OAUTH_PROVIDERS)) });
 
 // users.ts
-export const createPasswordRequestSchema = z.strictObject({ password: newPasswordSchema });
 export const reauthenticateRequestSchema = z.strictObject({ password: passwordInputSchema });
 export const deleteAccountRequestSchema = z.strictObject({ password: passwordInputSchema.optional() });
 ```
@@ -530,7 +563,7 @@ export const deleteAccountRequestSchema = z.strictObject({ password: passwordInp
 - `signInMethods: { password: z.boolean(), identities: z.array({ provider, linkedAt: z.iso.datetime() }) }`;
 - `session: { authenticatedAt: z.iso.datetime() }`.
 
-No incluye el correo del proveedor, porque UX solo muestra la fecha. La web decide qué pintar comparando `authenticatedAt` con `RECENT_AUTH_MAX_AGE_MINUTES`; la API lo vuelve a comprobar siempre.
+No incluye el correo del proveedor, porque UX solo muestra la fecha. `authenticatedAt` solo se muestra: desde la decisión 21 ninguna operación depende de él. La web elige el proveedor con el que confirmar (el de `lastUsedAt` más reciente, como la API).
 
 Códigos de error nuevos en `ERROR_CODES`:
 
@@ -538,7 +571,6 @@ Códigos de error nuevos en `ERROR_CODES`:
 |---|---|---|
 | `OAUTH_FLOW_INVALID` | 400 | Flujo o estado pendiente inexistente, caducado, ya usado o de otro proveedor; `state` o `Bearer` que no coinciden; `email` que no coincide en la unión |
 | `LINK_ATTEMPTS_EXCEEDED` | 403 | 5.º fallo de contraseña en una unión; la fila ya está borrada |
-| `REAUTHENTICATION_REQUIRED` | 403 | En una cuenta sin contraseña, añadir un proveedor o crear una contraseña sin sesión reciente (decisión 20) |
 | `ACCOUNT_USES_OTHER_PROVIDER` | 409 | Carrera en el alta contra una cuenta sin contraseña |
 | `LAST_SIGN_IN_METHOD` | 409 | Quitar la última forma de entrar |
 | `PASSWORD_ALREADY_SET` | 409 | Crear una contraseña cuando ya hay una |
@@ -547,7 +579,7 @@ Códigos de error nuevos en `ERROR_CODES`:
 
 ### 10.3 Endpoints
 
-Todos con `X-Internal-Api-Key`. **S** = exige sesión. **R** = exige sesión reciente.
+Todos con `X-Internal-Api-Key`. **S** = exige sesión. `POST /users/me/password` y la sesión reciente (**R**) se retiraron con la decisión 21.
 
 | Método y ruta | S | Entrada | Éxito | Errores | Límite (× `RATE_LIMIT_FACTOR`) |
 |---|---|---|---|---|---|
@@ -558,13 +590,12 @@ Todos con `X-Internal-Api-Key`. **S** = exige sesión. **R** = exige sesión rec
 | `POST /auth/oauth/signup` | — | `OAuthSignupRequest` | `201 OAuthAuthResponse` | 400, 400 `OAUTH_FLOW_INVALID`, 409 `TERMS_VERSION_OUTDATED`/`EMAIL_TAKEN`/`ACCOUNT_USES_OTHER_PROVIDER`, 422 `UNDERAGE` | 5 por IP y hora |
 | `POST /auth/oauth/link` | — | `OAuthLinkRequest` | `200 OAuthAuthResponse` | 400, 400 `OAUTH_FLOW_INVALID`, 403 `PASSWORD_INCORRECT`/`LINK_ATTEMPTS_EXCEEDED`, 429 | 10 por IP + cubo de correo |
 | `POST /auth/oauth/pending/cancellation` | — | `{ pendingToken }` | `204` | 400 | general |
-| `POST /users/me/oauth/:provider/authorization` | S (con `connect`: contraseña o, sin ella en la cuenta, R) | `OAuthSessionStartRequest` | `201 OAuthStartResponse` | 400, 401, 403 `PASSWORD_INCORRECT`/`REAUTHENTICATION_REQUIRED`, 404 (con `reauthenticate`, si no hay identidad de ese proveedor) | 5 por sesión cada 15 min + cubo de sesión |
+| `POST /users/me/oauth/:provider/authorization` | S (con `connect`: contraseña o, sin ella en la cuenta, reautenticación encadenada; con `create_password`: reautenticación, §9.5) | `OAuthSessionStartRequest` | `201 OAuthStartResponse` | 400, 401, 403 `PASSWORD_INCORRECT`, 404 (proveedor sin unir con `reauthenticate` o `create_password`; sin otro proveedor unido con `connect`), 409 `PASSWORD_ALREADY_SET` | 5 por sesión cada 15 min + cubo de sesión |
 | `POST /users/me/reauthentication` | S | `{ password }` | `204` | 400, 401, 403 `PASSWORD_INCORRECT`, 404 (cuenta sin contraseña), 429 | cubo de sesión |
-| `POST /users/me/password` | S, R | `{ password }` | `204` | 400, 401, 403 `REAUTHENTICATION_REQUIRED`, 409 `PASSWORD_ALREADY_SET`, 429 | cubo de sesión |
 | `POST /users/me/identities/:provider/removal` | S (contraseña si la cuenta la tiene) | `{ password? }` | `204` | 400, 401, 403 `PASSWORD_INCORRECT`, 404, 409 `LAST_SIGN_IN_METHOD` | 10 por sesión cada 15 min + cubo de sesión |
 | `POST /users/me/deletion` (cambia) | S | `{ password? }` | `204` | 400, 401, 403 `PASSWORD_INCORRECT`, 429 | cubo de sesión |
 
-`:provider` se valida con `z.enum(OAUTH_PROVIDERS)`. `POST /users/me/password` y `/users/me/deletion` usan `@HttpCode(204)`, y la web les pasa `expectStatus: 204` (como en H0).
+`:provider` se valida con `z.enum(OAUTH_PROVIDERS)`. `POST /users/me/deletion` usa `@HttpCode(204)`, y la web les pasa `expectStatus: 204` (como en H0).
 
 ### 10.4 Configuración (`envSchema`)
 
@@ -609,16 +640,16 @@ La web no necesita variables nuevas en tiempo de ejecución.
 
 | Ruta | Archivo | Qué hace |
 |---|---|---|
-| `POST /auth/{provider}` | `src/routes/auth/[provider=provider]/+server.ts` | Campos `from` (`login`, `register`, `account`), `intent` (`reauthenticate`, `connect`; solo con `account`) y `next`. Con `login`/`register`: si hay sesión, 303 `/account`; si no, `POST /auth/oauth/:provider/authorization`. Con `account`: si no hay sesión, 303 `/login?next=…`; si la hay, `POST /users/me/oauth/:provider/authorization`. Pone `cupidilla_oauth` y responde 303 a `authorizationUrl`. Si la API falla: 303 a la página de origen con `?error=provider-failed` (o `rate-limited` con 429, o `reauth-required` con 403 `REAUTHENTICATION_REQUIRED`) |
+| `POST /auth/{provider}` | `src/routes/auth/[provider=provider]/+server.ts` | Campos `from` (`login`, `register`, `account`), `intent` (`reauthenticate`, `connect`; solo con `account`) y `next`. Con `login`/`register`: si hay sesión, 303 `/account`; si no, `POST /auth/oauth/:provider/authorization`. Con `account`: si no hay sesión, 303 `/login?next=…`; si la hay, `POST /users/me/oauth/:provider/authorization`. Pone `cupidilla_oauth` y responde 303 a `authorizationUrl`. Si la API falla: 303 a la página de origen con `?error=provider-failed` (o `rate-limited` con 429) |
 | `GET /auth/{provider}/callback` | `src/routes/auth/[provider=provider]/callback/+server.ts` | Sin cookie → 303 `/login?error=provider-expired`, sin llamar a la API. Con cookie → `api.oauthCallback(event, { flowToken, callbackQuery: url.search.slice(1) }, sessionToken)` y redirige según §11.3. Siempre `Cache-Control: no-store`. Nunca pinta HTML |
 | `/register/complete` | `src/routes/(guest)/register/complete/+page.svelte \| +page.server.ts` | `load`: `GET /auth/oauth/pending`; si `kind = 'link'`, 303 `/login/link`. Acciones: `default` (alta) y `cancel` |
 | `/login/link` | `src/routes/(guest)/login/link/+page.svelte \| +page.server.ts` | Igual con `kind = 'link'`. Acciones `default` (unión) y `cancel` |
-| `/account` | existente | Sección «Formas de entrar». Acción `removeIdentity` (campo `provider`) → 303 `/account?notice=unlinked&provider=…`. El botón «Añadir {proveedor}» es un formulario `POST /auth/{provider}` con `intent=connect`. Con contraseña en la cuenta, se dibuja siempre, y ese formulario y el de quitar llevan el campo `password` (decisión 20). Sin contraseña, solo con sesión reciente; con sesión antigua, el bloque «Confirma que eres tú» de UX §3.5.2 |
-| `/account/password` | `src/routes/(private)/account/password/+page.svelte \| +page.server.ts` | Solo si la cuenta no tiene contraseña; si la tiene, 303 `/account`. Sesión reciente: campo `password` (`autocomplete="new-password"`), acción `default` → `POST /users/me/password` y 303 `/account?notice=password-created`; con 409, 303 `/account`. Sesión antigua: bloque «Confirma que eres tú» con botones de proveedor (`intent=reauthenticate`, `next=/account/password`) |
+| `/account` | existente | Sección «Formas de entrar». Acción `removeIdentity` (campo `provider`) → 303 `/account?notice=unlinked&provider=…`. El botón «Añadir {proveedor}» es un formulario `POST /auth/{provider}` con `intent=connect`. Con contraseña en la cuenta, se dibuja siempre, y ese formulario y el de quitar llevan el campo `password` (decisión 20). Sin contraseña, también siempre (decisión 21): con JavaScript, el botón abre el panel «Confirma que eres tú» (`ConfirmConnect.svelte`) con «Confirmar con {proveedor}», que envía el mismo formulario; sin JavaScript, el botón lo envía directamente. El proveedor que confirma es el unido con `lastUsedAt` más reciente |
+| `/account/password` | `src/routes/(private)/account/password/+page.svelte \| +page.server.ts` | Solo si la cuenta no tiene contraseña; si la tiene, 303 `/account`. Campo `password` (`autocomplete="new-password"`) y `provider` oculto (el unido usado más recientemente). Formulario nativo, sin `use:enhance` (decisión 21): acción `create` → `POST /users/me/oauth/:provider/authorization` `{ purpose: 'create_password' }`, cookie `cupidilla_oauth` y 303 al proveedor; a la vuelta, `/account?notice=password-created`. Con 409, 303 `/account` |
 | `/account/delete` | existente | Con contraseña, H0 (acción `password`). Sin ella: campo `confirmation` («ELIMINAR», UX §3.6, acción `confirm`), sin sesión reciente (decisión 20) |
 
 **Bloque «Confirma que eres tú» (UX §3.5.2)**, solo para cuentas sin contraseña (decisión 20), en `/account` y `/account/password`: un formulario `POST /auth/{provider}` por cada proveedor unido, con `from=account`, `intent=reauthenticate` y `next` igual a la página actual.
-- Si cualquier acción protegida recibe 403 `REAUTHENTICATION_REQUIRED` (la sesión envejeció entre cargar y enviar): 303 a la misma página con `?error=reauth-required`, sin haber hecho nada.
+- Desde la decisión 21 ninguna acción depende de la edad de la sesión: `REAUTHENTICATION_REQUIRED` y `?error=reauth-required` ya no existen.
 
 - `src/params/provider.ts`: `match = (p) => p === 'google' || p === 'facebook'`.
 - `/auth/...` va fuera de los grupos: sirve a invitados y a personas con sesión, y cada manejador decide.
@@ -643,6 +674,7 @@ Los formularios de proveedor **no** usan `use:enhance`. Son POST nativos que aca
 |---|---|
 | Tras `POST /auth/{provider}` | `flowToken`, 10 min |
 | Vuelta con `signup_required` o `link_required` | `pendingToken`, hasta su `expiresAt` |
+| Vuelta con `connect_confirmed` (decisión 21) | `next.flowToken`, 5 min |
 | Cualquier otro resultado o error de la vuelta | Se borra |
 | Alta o unión correctas, cancelación, menor, `OAUTH_FLOW_INVALID`, `LINK_ATTEMPTS_EXCEEDED` | Se borra |
 
@@ -655,9 +687,11 @@ Los formularios de proveedor **no** usan `use:enhance`. Son POST nativos que aca
 | `use_other_provider` | `/login?error=other-provider&provider=<primero>` |
 | `reauthenticated` | `safeReturnPath(returnPath)?notice=reauthenticated`: vuelve a la pantalla que la pidió (`/account`, `/account/password` o `/account/delete`) |
 | `connected` | `/account?notice=linked&provider=…` |
+| `connect_confirmed` (decisión 21) | `next.authorizationUrl`, que construye la API con su configuración (§12.2), con `no-store` |
+| `password_created` (decisión 21) | `/account?notice=password-created` |
 | `failed` con `login` o `register` | `/{login\|register}` con `?notice=provider-cancelled` si `cancelled` y `?error=<reason en kebab-case>` en otro caso, más `&provider=` |
-| `failed` con `account` | `safeReturnPath(returnPath)` con el mismo `notice` o `error` y `&provider=` |
-| 400 `OAUTH_FLOW_INVALID` | `/login?error=provider-expired` |
+| `failed` con `account` | `safeReturnPath(returnPath)` con el mismo `notice` o `error` y `&provider=`. `connect_refused` → `error=connect-refused`; `password_already_set` → sin aviso (`/account/password` lleva a `/account`) |
+| 400 `OAUTH_FLOW_INVALID` | Con sesión, `/account?error=confirm-expired&provider=…` (decisión 21: `/login` no se ve con sesión); sin ella, `/login?error=provider-expired` |
 | `API_UNAVAILABLE` u otro | `/login?error=provider-failed` |
 
 Tras la unión por contraseña (`/login/link`, §8), la acción redirige a `safeReturnPath(returnPath)?notice=linked&provider=…`. Por eso `linked` está en las listas de las tres páginas privadas a las que puede llevar `next`.
@@ -669,11 +703,13 @@ Un valor fuera de lista no muestra nada (como el acuerdo A7). UX relaciona cada 
 | Página | `notice` | `error` |
 |---|---|---|
 | `/login`, `/register` | `provider-cancelled`, `signup-cancelled`, `link-cancelled` | `provider-failed`, `provider-expired`, `email-missing`, `email-unverified`, `other-provider`, `link-limit`, `rate-limited` |
-| `/account` | `linked`\*, `unlinked`\*, `password-created`, `reauthenticated`, `provider-cancelled` | `provider-failed`, `identity-in-use`, `already-linked`, `identity-mismatch`, `last-method`, `reauth-required`, `rate-limited` |
-| `/account/password` | `reauthenticated`, `provider-cancelled`, `linked`\* | `provider-failed`, `identity-mismatch`, `reauth-required`, `rate-limited` |
-| `/account/delete` | `reauthenticated`, `provider-cancelled`, `linked`\* | `provider-failed`, `identity-mismatch`, `reauth-required`, `rate-limited` |
+| `/account` | `linked`\*, `unlinked`\*, `password-created`, `reauthenticated`, `provider-cancelled` | `provider-failed`, `identity-in-use`, `already-linked`, `identity-mismatch`, `email-missing`, `email-unverified`, `connect-refused`, `confirm-expired`, `last-method`, `password-required`, `password-incorrect`, `rate-limited` |
+| `/account/password` | `reauthenticated`, `provider-cancelled`, `linked`\* | `provider-failed`, `identity-mismatch`, `rate-limited` |
+| `/account/delete` | `reauthenticated`, `provider-cancelled`, `linked`\* | `provider-failed`, `identity-mismatch`, `rate-limited` |
 
 \* Llevan `&provider=` obligatorio, como `other-provider` en `/login`. Si falta o no es válido, no se muestra nada. En los demás valores, `provider` es opcional.
+
+En `/account`, en una cuenta sin contraseña (decisión 21), los valores que vienen del flujo de añadir (`provider-cancelled`, `provider-failed`, `identity-mismatch`, `identity-in-use`, `already-linked`, `email-missing`, `email-unverified`, `connect-refused`, `confirm-expired`) se muestran dentro del panel «Confirma que eres tú» del proveedor que se añade, no arriba. `confirm-expired` nombra al proveedor que confirma, no al de la URL; y `linked` usa `cuenta.confirmar.exito`.
 
 `provider` ∈ `google`, `facebook`.
 
@@ -718,7 +754,7 @@ En la tabla de §10.3. Lo nuevo:
 
 - **Cubos compartidos.** `AppThrottlerGuard.generateKey` deja de incluir clase y método en el conjunto `account`: el cubo depende solo del *tracker*.
   - Correo (`email:`): `/auth/login` y `/auth/oauth/link`.
-  - Sesión (`session:`): `/users/me/deletion`, `/users/me/reauthentication`, `/users/me/password` y, desde la decisión 20, `/users/me/oauth/:provider/authorization` y `/users/me/identities/:provider/removal`, que también comprueban la contraseña.
+  - Sesión (`session:`): `/users/me/deletion`, `/users/me/reauthentication` y, desde la decisión 20, `/users/me/oauth/:provider/authorization` y `/users/me/identities/:provider/removal`, que también comprueban la contraseña.
   - Todas esas rutas declaran el mismo límite: 5 cada 15 minutos con bloqueo de 15. El borrado gana así el bloqueo que no tenía en H0.
   - Efecto: con una sesión robada no se pueden probar más de 5 contraseñas cada 15 minutos sumando todas las rutas.
 - El tope de 5 fallos por unión está en PostgreSQL, así que sobrevive a un reinicio de la API, a diferencia del *throttler* en memoria (R5 de H0).
@@ -779,7 +815,7 @@ Paquete privado `@cupidilla/fake-oauth-provider`, solo fuente TypeScript y sin c
 
 ### 14.2 Casos
 
-**Contratos**: C-O1, `oauthCallbackResponseSchema` acepta cada variante y rechaza un `result` desconocido; `returnPath` rechaza `//x`, `/X` y más de 64 caracteres; `oauthLinkRequestSchema` normaliza el correo; `createPasswordRequestSchema` aplica los límites de `newPasswordSchema` (9 → `too_short`, 129 → `too_long`).
+**Contratos**: C-O1, `oauthCallbackResponseSchema` acepta cada variante y rechaza un `result` desconocido; `returnPath` rechaza `//x`, `/X` y más de 64 caracteres; `oauthLinkRequestSchema` normaliza el correo; `oauthSessionStartRequestSchema` con `create_password` aplica los límites de `newPasswordSchema` (9 → `too_short`, 129 → `too_long`); `ERROR_CODES` ya no tiene `REAUTHENTICATION_REQUIRED`.
 
 **API (integración)**:
 
@@ -809,19 +845,22 @@ Paquete privado `@cupidilla/fake-oauth-provider`, solo fuente TypeScript y sin c
 - O-20. **Logs**: en todos los casos anteriores no aparecen `code`, `state`, `verifier`, `nonce`, `id_token`, *access token*, `appsecret_proof`, `flowToken`, `pendingToken`, `subject`, el correo del proveedor, el `client_secret`, la `callbackQuery` ni la contraseña creada.
 - O-21. Configuración: la API no arranca con `OAUTH_FAKE_PROVIDER_URL` y `NODE_ENV=production`, con media pareja de credenciales, sin `OAUTH_REDIRECT_BASE_URL` o con una base `http:` que no sea *loopback*. Un proveedor sin configurar falta en `providers` y da 404 al empezar.
 - O-22. Límites: el 21.º inicio en 15 min desde una IP → 429. Cubo de sesión: 3 reautenticaciones fallidas y 2 borrados fallidos → el siguiente da 429.
-- O-23. **Añadir proveedor**:
-  - Sesión no reciente → 403 `REAUTHENTICATION_REQUIRED`.
-  - Reciente → `connected`, con un correo distinto y sin verificar.
-  - Identidad de otra cuenta → `identity_in_use`.
-  - Segundo Google con otro `subject` → `already_linked`.
+- O-23. **Añadir proveedor** (decisión 21, `account-oauth.int.spec.ts`):
+  - C1 y C2: cuenta sin contraseña con Facebook, sesión de 1 minuto o de 1 hora → 201 con la URL de Facebook; una fila `reauthenticate` de Facebook con `connect_provider = google` y ninguna `connect`.
+  - C3: la confirmación con el `subject` unido → `connect_confirmed` con la URL de Google, fila `connect` de 5 min ligada a la sesión y `authenticated_at` renovado; Google → `connected`.
+  - C4: reutilizar el `flowToken` de `next` → `OAUTH_FLOW_INVALID`. C5: con el `Bearer` de otra sesión, o tras cerrar la sesión → `OAUTH_FLOW_INVALID`. C6: a los 5 min justos caduca; a 4 min 59 s, `connected`.
+  - C7: confirmación con otro `subject` → `identity_mismatch`, sin fila `connect` y sin renovar nada. C8: cancelar en Facebook → `cancelled`. C9: solo Google unido y añadir Google → 404. C10: con contraseña, fila `connect` directa sin pasar por otro proveedor.
+  - Correo: Google sin verificar → `email_unverified`; Facebook sin correo → `email_missing`; el `users.email` de otra cuenta o el `provider_email` verificado de una identidad de otra cuenta → `connect_refused`; el propio correo o uno libre → `connected`. Una identidad de otra cuenta sin verificar no bloquea.
+  - Identidad de otra cuenta → `identity_in_use`. Segundo Facebook con otro `subject` → `already_linked`.
+  - Concurrencia (`email-lock-concurrency.int.spec.ts`): la unión espera al alta en curso de su correo y se rechaza; si la unión llega primero, el alta espera y da `EMAIL_TAKEN`.
   - La reautenticación por contraseña renueva `authenticated_at`; con una contraseña errónea, 403 y no se renueva.
-- O-24. **Crear contraseña**:
-  - Sesión no reciente → 403.
-  - 9 caracteres → 400 `too_short`.
-  - Correcta → 204, con hash `$argon2id$`.
-  - Después, `POST /auth/login` con `users.email` y esa contraseña → 200; el borrado pasa a pedir la contraseña.
-  - Segunda creación → 409 `PASSWORD_ALREADY_SET`; dos simultáneas → una 204 y otra 409.
-  - Con contraseña, quitar el último proveedor → 204.
+- O-24. **Crear contraseña** (decisión 21, `account-password.int.spec.ts`):
+  - Sesión de 1 minuto o de 1 hora → 201 con la URL del proveedor unido y `new_password_hash` argon2id en la fila; `users` sin cambios.
+  - Confirmada → `password_created`, el hash de la fila en `users` y `authenticated_at` renovado. Después, `POST /auth/login` → 200, el borrado pide la contraseña y se puede quitar el último proveedor.
+  - Reutilizar el `flowToken`, otra sesión, sesión cerrada o 10 min → `OAUTH_FLOW_INVALID`; otro `subject` → `identity_mismatch`; cancelar → `cancelled`. En ningún caso se crea nada.
+  - 9 caracteres → 400 `too_short`; con contraseña ya → 409; proveedor sin unir → 404.
+  - Dos confirmaciones a la vez → una `password_created` y otra `password_already_set`. `POST /users/me/password` → 404.
+- **R7b y decisión 21** (`email-taken-identities.int.spec.ts`): una identidad antigua sin verificar no bloquea el alta con contraseña ni da `use_other_provider`; una verificada da el mismo 409 `EMAIL_TAKEN`.
 - O-25. **Condiciones**: una cuenta con `'2026-11-borrador'` entra y `GET /users/me` devuelve esa versión; el alta (con correo o con proveedor) con la versión antigua → 409.
 
 **Web (unitarios)**:
@@ -830,7 +869,8 @@ Paquete privado `@cupidilla/fake-oauth-provider`, solo fuente TypeScript y sin c
 - W-O2. `oauth-notices` ignora valores fuera de lista.
 - W-O3. La vuelta sin cookie no llama a la API, reenvía `url.search` sin tocarlo y responde con `no-store`.
 - W-O4. `safeReturnPath` se aplica al `returnPath` de la API, y `/account/password` está en la lista.
-- W-O5. `oauthSignup`, `oauthLink` y `createPassword` dan `OUTCOME_UNKNOWN` con un corte tras enviar.
+- W-O5. `oauthSignup` y `oauthLink` dan `OUTCOME_UNKNOWN` con un corte tras enviar.
+- W-O6 (decisión 21). `connect_confirmed` → 303 a la URL externa con el `flowToken` nuevo en la cookie; `connect_refused` → `/account?error=connect-refused&provider=…`; flujo caducado con sesión → `/account?error=confirm-expired`; `/account` resuelve `email-missing`, `email-unverified` y `connect-refused`; el resultado de añadir va al panel en una cuenta sin contraseña.
 
 **E2E** (`oauth-*.e2e.ts` y `account-security.e2e.ts`, proyectos `chromium` y `chromium-no-js`):
 
@@ -844,8 +884,9 @@ Paquete privado `@cupidilla/fake-oauth-provider`, solo fuente TypeScript y sin c
 - E-O8. Facebook sin correo → `/login?error=email-missing`. Alta con Facebook → `/account`.
 - E-O9. Sin violaciones de CSP en `/login`, `/register/complete`, `/login/link`, `/account` y `/account/password`, ni al enviar el formulario hacia el proveedor (`form-action`).
 - E-O10. CSRF: `POST /auth/google` con `Origin: https://evil.example` → 403.
-- E-O11. Cuenta de Google recién creada: añadir Facebook en `/account` → «Facebook, unido». Quitar Google → aviso. Quitar Facebook → no aparece el botón (última forma).
-- E-O12. Cuenta de Google recién creada: crear una contraseña en `/account/password`, salir y entrar con correo y contraseña → `/account`.
+- E-O11. Cuenta de Google recién creada: añadir Facebook en `/account`, confirmando con Google → «Facebook, unido». Quitar Google → aviso. Quitar Facebook → no aparece el botón (última forma).
+- E-O12. Cuenta de Google recién creada: crear una contraseña en `/account/password`, confirmando con Google; salir y entrar con correo y contraseña → `/account`.
+- E-O13 (decisión 21). Cuenta creada con Facebook: «Añadir Google», Facebook falso, Google falso y `/account?notice=linked`, sin parar en `/account` entre los dos. Con el correo de Google sin verificar, vuelve a `/account` con el error dentro del panel. Con JavaScript, Escape cierra el panel y devuelve el foco al botón.
 
 **Comprobación manual con los proveedores reales** (fase 7; no se automatiza): entrar, darse de alta, unir, añadir, crear contraseña y borrar, con una cuenta de prueba de Google y otra de Facebook en `npm run dev`. Comprobar que Facebook acepta PKCE y el canje por POST (R2), qué redirecciones hace Facebook en móvil (para `form-action`) y que `auth_type=reauthenticate` y `prompt=select_account` se comportan como se espera.
 
@@ -912,6 +953,7 @@ Decisión del CEO: las apps las crea él y, por ahora, solo para desarrollo. El 
 | R5 | La reautenticación de Google puede ser un solo clic si la sesión de Google está abierta en el mismo navegador | Aceptado: protege frente a sesiones robadas o antiguas, no frente a un dispositivo desbloqueado con todo abierto |
 | R6 | Filas caducadas (con correo y `subject`) que esperan a la siguiente limpieza | Volumen pequeño. Antes de la beta, una limpieza periódica junto con la de sesiones |
 | R7 | Cuenta previa con un correo ajeno: la víctima no puede unirse ni darse de alta | El mismo riesgo de H0. La verificación de correo lo resuelve |
+| R7b | Un correo que solo está en `identities.provider_email` de una cuenta (p. ej., el de Facebook unido a una cuenta creada con Google) se podía usar para crear otra cuenta con contraseña | **Decisión del cliente**: no se crea una cuenta si su correo ya está registrado en cualquier sitio, es decir, en `users.email` o en el `provider_email` de cualquier identidad, comparando en minúsculas y sin espacios. Solo cuentan las identidades con `email_verified = true` (decisión 21): una fila antigua sin verificar no bloquea a nadie, ni en el alta con contraseña ni en el caso 7b. El alta con contraseña responde el mismo 409 `EMAIL_TAKEN` (no revela si el correo viene de un proveedor). Sin UNIQUE común entre tablas, el alta y cada escritura de `provider_email` toman `pg_advisory_xact_lock` sobre un hash del correo normalizado dentro de su transacción (`database/email-lock.ts`). Afecta también a R1: el correo de Facebook ocupa su correo aunque no sea el de la cuenta. **Alta con un proveedor** (§6, caso 7b, entre el 7 y el 8): si no hay `users` con ese correo pero sí una identidad con ese `provider_email`, siempre `use_other_provider` con los proveedores de la cuenta dueña, tenga o no contraseña; no hay unión pendiente, que mostraría el correo de la cuenta. Si coincide en varios sitios, gana `users.email` (casos 6 y 7); si no, la identidad con `last_used_at` más reciente. En la carrera de `POST /auth/oauth/signup` (§7, punto 5) se borra la fila pendiente y se responde 409 `ACCOUNT_USES_OTHER_PROVIDER` |
 | R8 | Las versiones de la Graph API caducan (unos 2 años) | Constante `FACEBOOK_GRAPH_VERSION = 'v27.0'` en un solo sitio; revisarla cada año |
 | R9 | `openid-client` es de un solo mantenedor, aunque certificado y muy usado | Va fijado. El *override* de `jose` se quita al subir. Si hubiera que cambiar de biblioteca, la interfaz `ProviderClient` aísla el cambio |
 | R10 | El *throttler* en memoria (R5 de H0) | El tope de la unión está en PostgreSQL; el resto, igual que en H0 |

@@ -2,7 +2,7 @@
   import { resolve } from '$app/paths';
   import { enhance } from '$app/forms';
   import type { OAuthProvider } from '@cupidilla/contracts';
-  import ConfirmIdentity from '#lib/components/ConfirmIdentity.svelte';
+  import ConfirmConnect from '#lib/components/ConfirmConnect.svelte';
   import ErrorSummary from '#lib/components/ErrorSummary.svelte';
   import FieldError from '#lib/components/FieldError.svelte';
   import ProviderButtons from '#lib/components/ProviderButtons.svelte';
@@ -30,7 +30,10 @@
     form && 'removeError' in form && form.removeError ? form.removeError : undefined,
   );
   const hasErrors = $derived(
-    general !== undefined || removeError !== undefined || data.message?.kind === 'error',
+    general !== undefined ||
+      removeError !== undefined ||
+      data.message?.kind === 'error' ||
+      data.connect?.message.kind === 'error',
   );
   const signIn = $derived(data.signIn);
   /** Proveedor en curso de quitar (solo con JavaScript). */
@@ -64,6 +67,20 @@
     <dl class="data-list">
       <dt>{t('cuenta.datos.correo')}</dt>
       <dd>{data.account.email}</dd>
+      {#if data.account.birthDate}
+        <dt>{t('cuenta.datos.nacimiento')}</dt>
+        <dd><time datetime={data.account.birthDate.iso}>{data.account.birthDate.text}</time></dd>
+      {/if}
+      {#if data.account.createdOn}
+        <dt>{t('cuenta.datos.alta')}</dt>
+        <dd><time datetime={data.account.createdOn.iso}>{data.account.createdOn.text}</time></dd>
+      {/if}
+      {#if data.account.sessionSince}
+        <dt>{t('cuenta.datos.sesion')}</dt>
+        <dd>
+          <time datetime={data.account.sessionSince.iso}>{data.account.sessionSince.text}</time>
+        </dd>
+      {/if}
       {#if data.account.terms}
         <dt>{t('cuenta.datos.condiciones')}</dt>
         <dd>
@@ -101,9 +118,16 @@
         <li class="access-row">
           <div class="access-info">
             <span class="access-name">{NAMES[item.provider]}</span>
-            <span class="access-state"
-              >{fill('cuenta.acceso.estado_unido', { fecha: item.linkedOn })}</span
-            >
+            {#if item.linkedOn}
+              <span class="access-state"
+                >{fill('cuenta.acceso.estado_unido', { fecha: item.linkedOn })}</span
+              >
+            {/if}
+            {#if item.lastUsedOn}
+              <span class="access-state"
+                >{fill('cuenta.acceso.ultimo_uso', { fecha: item.lastUsedOn })}</span
+              >
+            {/if}
           </div>
           {#if signIn.methods > 1}
             <form
@@ -168,8 +192,8 @@
             <span class="access-name">{NAMES[provider]}</span>
             <span class="access-state">{t('cuenta.acceso.estado_no_unido')}</span>
           </div>
-          <!-- Con contraseña, siempre y escribiéndola; sin ella, solo con sesión reciente
-               (decisión 20, UX §3.5.1). -->
+          <!-- Con contraseña, escribiéndola (decisión 20); sin ella, confirmando antes con un
+               proveedor unido (decisión 21). -->
           {#if signIn.hasPassword}
             <ProviderButtons
               providers={[provider]}
@@ -178,26 +202,56 @@
               next="/account"
               withPassword
             />
-          {:else if signIn.recent}
-            <ProviderButtons
-              providers={[provider]}
-              from="account"
-              intent="connect"
-              next="/account"
+          {:else if signIn.confirmWith}
+            <ConfirmConnect
+              {provider}
+              confirmWith={signIn.confirmWith}
+              message={data.connect?.provider === provider ? data.connect.message : null}
             />
           {/if}
         </li>
       {/each}
     </ul>
     <p class="help">{t('cuenta.acceso.nota')}</p>
+  </section>
+{/if}
 
-    {#if !signIn.hasPassword && !signIn.recent && signIn.addable.length > 0}
-      <ConfirmIdentity
-        action="verificar.accion.anadir"
-        providers={signIn.linked.map((item) => item.provider)}
-        next="/account"
-      />
+{#if data.sessions && data.sessions.length > 0}
+  <section class="section" aria-labelledby="account-sessions">
+    <h2 id="account-sessions">{t('cuenta.sesiones.titulo')}</h2>
+    <p>{t('cuenta.sesiones.intro')}</p>
+    <ul class="session-list">
+      {#each data.sessions as item (item.n)}
+        <li class="session-row">
+          <p class="session-name">
+            {fill('cuenta.sesiones.nombre', { n: String(item.n) })}
+            {#if item.current}
+              <span class="session-tag">{t('cuenta.sesiones.actual')}</span><span
+                class="visually-hidden">{t('cuenta.sesiones.item_actual_oculto')}</span
+              >
+            {/if}
+          </p>
+          <dl class="session-dates">
+            {#if item.createdAt}
+              <dt>{t('cuenta.sesiones.creada')}</dt>
+              <dd><time datetime={item.createdAt.iso}>{item.createdAt.text}</time></dd>
+            {/if}
+            {#if item.authenticatedAt}
+              <dt>{t('cuenta.sesiones.ultimo_inicio')}</dt>
+              <dd><time datetime={item.authenticatedAt.iso}>{item.authenticatedAt.text}</time></dd>
+            {/if}
+            {#if item.expiresAt}
+              <dt>{t('cuenta.sesiones.caduca')}</dt>
+              <dd><time datetime={item.expiresAt.iso}>{item.expiresAt.text}</time></dd>
+            {/if}
+          </dl>
+        </li>
+      {/each}
+    </ul>
+    {#if data.sessions.length === 1}
+      <p class="help">{t('cuenta.sesiones.unica')}</p>
     {/if}
+    <p class="help">{t('cuenta.sesiones.nota')}</p>
   </section>
 {/if}
 

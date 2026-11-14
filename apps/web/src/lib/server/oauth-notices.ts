@@ -1,9 +1,6 @@
-import {
-  OAUTH_PROVIDERS,
-  RECENT_AUTH_MAX_AGE_MINUTES,
-  type OAuthProvider,
-} from '@cupidilla/contracts';
+import { OAUTH_PROVIDERS, type OAuthProvider } from '@cupidilla/contracts';
 import { fill, texts, type TextKey } from '#lib/texts.ts';
+import type { SignInMethodsView } from './account-view.ts';
 
 /** Nombre del proveedor tal como aparece en los textos. */
 export const PROVIDER_NAMES: Record<OAuthProvider, string> = {
@@ -69,8 +66,13 @@ const LISTS: Record<MessagePage, { notice: Record<string, Entry>; error: Record<
         'identity-in-use': { key: 'cuenta.error.proveedor_en_uso' },
         'already-linked': { key: 'cuenta.error.ya_unido' },
         'identity-mismatch': { key: 'verificar.error.otra_cuenta' },
+        'email-missing': { key: 'cuenta.error.sin_correo' },
+        'email-unverified': { key: 'cuenta.error.correo_sin_verificar' },
+        'connect-refused': { key: 'cuenta.error.union_rechazada' },
+        // Con sesión, cualquier flujo caducado vuelve aquí (decisión 21). El proveedor del texto
+        // es el que confirma: lo pone la página.
+        'confirm-expired': { key: 'cuenta.confirmar.error.caducada' },
         'last-method': { key: 'cuenta.error.ultima_forma' },
-        'reauth-required': { key: 'verificar.error.necesaria' },
         'password-required': { key: 'cuenta.error.contrasena_vacia' },
         'password-incorrect': { key: 'cuenta.error.contrasena' },
         'rate-limited': { key: 'comun.error.limite' },
@@ -86,7 +88,6 @@ const LISTS: Record<MessagePage, { notice: Record<string, Entry>; error: Record<
       error: {
         'provider-failed': { key: 'cuenta.error.proveedor_fallo' },
         'identity-mismatch': { key: 'verificar.error.otra_cuenta' },
-        'reauth-required': { key: 'verificar.error.necesaria' },
         'rate-limited': { key: 'comun.error.limite' },
       },
     },
@@ -106,10 +107,7 @@ function resolve(entry: Entry | undefined, provider: string | null): string | nu
   const usesProvider = text.includes('{proveedor}');
   // Sin un proveedor válido no se muestra nada: ni el aviso que lo exige ni un «{proveedor}» suelto.
   if ((entry.needsProvider || usesProvider) && !isProvider(provider)) return null;
-  return fill(entry.key, {
-    proveedor: isProvider(provider) ? PROVIDER_NAMES[provider] : '',
-    minutos: String(RECENT_AUTH_MAX_AGE_MINUTES),
-  });
+  return fill(entry.key, { proveedor: isProvider(provider) ? PROVIDER_NAMES[provider] : '' });
 }
 
 /**
@@ -127,4 +125,61 @@ export function urlMessage(page: MessagePage, params: URLSearchParams): UrlMessa
   const noticeText = resolve(notice, provider);
   if (!noticeText) return null;
   return { kind: notice?.success ? 'success' : 'notice', text: noticeText };
+}
+
+/** Valores de la URL que vienen del flujo de añadir un proveedor (decisión 21). */
+const CONNECT_FLOW_VALUES = {
+  notice: ['provider-cancelled'],
+  error: [
+    'provider-failed',
+    'identity-mismatch',
+    'identity-in-use',
+    'already-linked',
+    'email-missing',
+    'email-unverified',
+    'connect-refused',
+    'confirm-expired',
+  ],
+};
+
+/**
+ * Avisos de /account. En una cuenta sin contraseña, el resultado del flujo de añadir un proveedor
+ * va dentro del panel de confirmación de ese proveedor (`connect`), no arriba (UX decisión 21):
+ * - «caducada» nombra al proveedor que confirma, no al de la vuelta;
+ * - el éxito lleva su propio texto, con el proveedor añadido.
+ */
+export function connectMessages(
+  signIn: SignInMethodsView,
+  params: URLSearchParams,
+): {
+  message: UrlMessage | null;
+  connect: { provider: OAuthProvider; message: UrlMessage } | null;
+} {
+  const confirmWith = signIn.hasPassword ? null : signIn.confirmWith;
+  const provider = params.get('provider');
+  const errorValue = params.get('error');
+  const noticeValue = params.get('notice');
+  if (!confirmWith) return { message: urlMessage('account', params), connect: null };
+
+  if (errorValue === null && noticeValue === 'linked' && isProvider(provider)) {
+    return {
+      message: {
+        kind: 'success',
+        text: fill('cuenta.confirmar.exito', { proveedorNuevo: PROVIDER_NAMES[provider] }),
+      },
+      connect: null,
+    };
+  }
+
+  const resolved = new URLSearchParams(params);
+  if (errorValue === 'confirm-expired') resolved.set('provider', confirmWith);
+  const message = urlMessage('account', resolved);
+  const fromConnect =
+    errorValue !== null
+      ? CONNECT_FLOW_VALUES.error.includes(errorValue)
+      : noticeValue !== null && CONNECT_FLOW_VALUES.notice.includes(noticeValue);
+  const [first] = signIn.addable;
+  if (!message || !fromConnect || !first) return { message, connect: null };
+  const target = isProvider(provider) && signIn.addable.includes(provider) ? provider : first;
+  return { message: null, connect: { provider: target, message } };
 }

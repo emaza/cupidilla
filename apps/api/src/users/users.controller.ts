@@ -1,11 +1,9 @@
 import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
-  createPasswordRequestSchema,
   deleteAccountRequestSchema,
   reauthenticateRequestSchema,
   type AccountResponse,
-  type CreatePasswordRequest,
   type DeleteAccountRequest,
   type ReauthenticateRequest,
 } from '@cupidilla/contracts';
@@ -22,17 +20,7 @@ export class UsersController {
 
   @Get('me')
   getAccount(@CurrentSession() session: ActiveSession): Promise<AccountResponse> {
-    return this.users.getAccount(session.userId, session);
-  }
-
-  @Post('me/password')
-  @HttpCode(204)
-  @Throttle(SESSION_PASSWORD_LIMIT)
-  async createPassword(
-    @CurrentSession() session: ActiveSession,
-    @Body({ schema: createPasswordRequestSchema }) body: CreatePasswordRequest,
-  ): Promise<void> {
-    await this.users.createPassword(session, body.password);
+    return this.users.getAccount(session);
   }
 
   @Post('me/reauthentication')

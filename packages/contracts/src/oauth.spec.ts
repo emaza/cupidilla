@@ -10,8 +10,8 @@ import {
   oauthStartRequestSchema,
 } from './oauth.js';
 import {
+  ACCOUNT_SESSIONS_LIMIT,
   accountResponseSchema,
-  createPasswordRequestSchema,
   deleteAccountRequestSchema,
   reauthenticateRequestSchema,
 } from './users.js';
@@ -43,7 +43,23 @@ describe('oauthCallbackResponseSchema (C-O1)', () => {
     { result: 'use_other_provider', providers: ['google'] },
     { result: 'reauthenticated', returnPath: '/account/password' },
     { result: 'connected' },
+    {
+      result: 'connect_confirmed',
+      next: {
+        authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth?state=x',
+        flowToken: TOKEN,
+        expiresAt: EXPIRES,
+      },
+    },
+    { result: 'password_created' },
     { result: 'failed', reason: 'cancelled', entryPoint: 'login', returnPath: null },
+    { result: 'failed', reason: 'connect_refused', entryPoint: 'account', returnPath: '/account' },
+    {
+      result: 'failed',
+      reason: 'password_already_set',
+      entryPoint: 'account',
+      returnPath: '/account/password',
+    },
     {
       result: 'failed',
       reason: 'identity_mismatch',
@@ -74,6 +90,15 @@ describe('oauthCallbackResponseSchema (C-O1)', () => {
       oauthCallbackResponseSchema.safeParse({
         result: 'signup_required',
         pending: { token: 'corto', expiresAt: EXPIRES },
+      }).success,
+    ).toBe(false);
+    expect(oauthCallbackResponseSchema.safeParse({ result: 'connect_confirmed' }).success).toBe(
+      false,
+    );
+    expect(
+      oauthCallbackResponseSchema.safeParse({
+        result: 'connect_confirmed',
+        next: { authorizationUrl: 'no es una url', flowToken: TOKEN, expiresAt: EXPIRES },
       }).success,
     ).toBe(false);
   });
@@ -121,6 +146,10 @@ describe('peticiones de OAuth (C-O1)', () => {
     ]);
     expect(issues(oauthSessionStartRequestSchema, { purpose: 'connect' })).toEqual([]);
     expect(issues(oauthSessionStartRequestSchema, { purpose: 'sign_in' })).toEqual(['invalid']);
+    expect(issues(oauthSessionStartRequestSchema, {})).toEqual(['invalid']);
+    expect(
+      issues(oauthSessionStartRequestSchema, { purpose: 'connect', password: 'x', extra: 1 }),
+    ).toEqual(['unrecognized']);
   });
 
   it('oauthLinkRequestSchema normaliza el correo', () => {
@@ -153,13 +182,15 @@ describe('peticiones de OAuth (C-O1)', () => {
 });
 
 describe('cuentas sin contraseña (C-O1)', () => {
-  it('createPasswordRequestSchema aplica los límites de newPasswordSchema', () => {
-    expect(issues(createPasswordRequestSchema, { password: 'a'.repeat(9) })).toEqual(['too_short']);
-    expect(issues(createPasswordRequestSchema, { password: 'a'.repeat(10) })).toEqual([]);
-    expect(issues(createPasswordRequestSchema, { password: 'a'.repeat(129) })).toEqual([
-      'too_long',
-    ]);
-    expect(issues(createPasswordRequestSchema, {})).toEqual(['required']);
+  it('create_password aplica los límites de newPasswordSchema (decisión 21)', () => {
+    const create = (input: object) =>
+      issues(oauthSessionStartRequestSchema, { purpose: 'create_password', ...input });
+    expect(create({ password: 'a'.repeat(9) })).toEqual(['too_short']);
+    expect(create({ password: 'a'.repeat(10) })).toEqual([]);
+    expect(create({ password: 'a'.repeat(10), returnPath: '/account/password' })).toEqual([]);
+    expect(create({ password: 'a'.repeat(129) })).toEqual(['too_long']);
+    expect(create({})).toEqual(['required']);
+    expect(create({ password: 'a'.repeat(10), extra: 1 })).toEqual(['unrecognized']);
   });
 
   it('reauthenticateRequestSchema exige la contraseña', () => {
@@ -176,33 +207,75 @@ describe('cuentas sin contraseña (C-O1)', () => {
     ]);
   });
 
-  it('accountResponseSchema lleva las formas de entrar y la fecha de autenticación', () => {
+  it('accountResponseSchema lleva las formas de entrar, la fecha de autenticación y las sesiones', () => {
+    const openSession = {
+      createdAt: '2026-11-13T10:00:00.000Z',
+      authenticatedAt: '2026-11-13T10:00:00.000Z',
+      expiresAt: '2026-12-13T10:00:00.000Z',
+      current: true,
+    };
     const account = {
       user: { ...user, birthDate: '1990-05-05' },
       consents: [],
       signInMethods: {
         password: false,
-        identities: [{ provider: 'google', linkedAt: '2026-11-13T10:00:00.000Z' }],
+        identities: [
+          {
+            provider: 'google',
+            linkedAt: '2026-11-13T10:00:00.000Z',
+            lastUsedAt: '2026-11-13T10:00:00.000Z',
+          },
+        ],
       },
       session: { authenticatedAt: '2026-11-13T10:00:00.000Z' },
+      sessions: [openSession],
     };
     expect(accountResponseSchema.safeParse(account).success).toBe(true);
+    expect(accountResponseSchema.safeParse({ ...account, sessions: [] }).success).toBe(true);
     expect(
       accountResponseSchema.safeParse({
         ...account,
-        signInMethods: { password: false, identities: [{ provider: 'github', linkedAt: EXPIRES }] },
+        signInMethods: {
+          password: false,
+          identities: [{ provider: 'github', linkedAt: EXPIRES, lastUsedAt: EXPIRES }],
+        },
       }).success,
     ).toBe(false);
     expect(accountResponseSchema.safeParse({ ...account, session: {} }).success).toBe(false);
+    // Sin `sessions`, con más del límite o con una identidad sin `lastUsedAt`.
+    expect(accountResponseSchema.safeParse({ ...account, sessions: undefined }).success).toBe(
+      false,
+    );
+    expect(
+      accountResponseSchema.safeParse({
+        ...account,
+        sessions: Array.from({ length: ACCOUNT_SESSIONS_LIMIT + 1 }, () => ({
+          ...openSession,
+          current: false,
+        })),
+      }).success,
+    ).toBe(false);
+    expect(
+      accountResponseSchema.safeParse({
+        ...account,
+        signInMethods: {
+          password: false,
+          identities: [{ provider: 'google', linkedAt: EXPIRES }],
+        },
+      }).success,
+    ).toBe(false);
   });
 });
 
 describe('códigos de error nuevos (C-O1)', () => {
+  it('REAUTHENTICATION_REQUIRED ya no existe (decisión 21)', () => {
+    expect(ERROR_CODES).not.toContain('REAUTHENTICATION_REQUIRED');
+  });
+
   it('están en ERROR_CODES', () => {
     for (const code of [
       'OAUTH_FLOW_INVALID',
       'LINK_ATTEMPTS_EXCEEDED',
-      'REAUTHENTICATION_REQUIRED',
       'ACCOUNT_USES_OTHER_PROVIDER',
       'LAST_SIGN_IN_METHOD',
       'PASSWORD_ALREADY_SET',

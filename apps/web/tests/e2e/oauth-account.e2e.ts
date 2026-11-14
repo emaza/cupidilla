@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { closeDb, oauthRowsForEmail } from './helpers/db.ts';
 import { login, logout, PASSWORD, registerAdult, uniqueEmail } from './helpers/forms.ts';
-import { completeSignup, continueWith } from './helpers/oauth.ts';
+import { authorizeOnFakeProvider, completeSignup, continueWith } from './helpers/oauth.ts';
 
 test.afterAll(closeDb);
 
@@ -18,10 +18,27 @@ async function googleAccount(page: Page): Promise<{ email: string; subject: stri
 const accessRow = (page: Page, name: string) =>
   page.locator('.access-row').filter({ has: page.locator('.access-name', { hasText: name }) });
 
+/**
+ * «Añadir» en una cuenta sin contraseña (decisión 21). Con JavaScript, el botón abre el panel
+ * «Confirma que eres tú» y se confirma desde él; sin JavaScript, el botón va directo al proveedor
+ * que confirma.
+ */
+async function startAdd(page: Page, provider: string, confirmer: string, javaScript: boolean) {
+  const row = accessRow(page, provider);
+  await row.getByRole('button', { name: `Continuar con ${provider}` }).click();
+  if (!javaScript) return;
+  const panel = row.getByRole('region', { name: 'Confirma que eres tú' });
+  await expect(panel).toContainText(
+    `para añadir ${provider} primero entrarás con ${confirmer} para confirmar que eres tú`,
+  );
+  await panel.getByRole('button', { name: `Confirmar con ${confirmer}` }).click();
+}
+
 test('E-O11: «Formas de entrar»; añadir Facebook, quitar Google y la última no se puede quitar', async ({
   page,
+  javaScriptEnabled,
 }) => {
-  const { email } = await googleAccount(page);
+  const { email, subject } = await googleAccount(page);
   await expect(page.getByRole('heading', { name: 'Formas de entrar' })).toBeVisible();
   await expect(accessRow(page, 'Correo y contraseña')).toContainText('No tienes contraseña');
   await expect(accessRow(page, 'Google')).toContainText('Unido el');
@@ -32,14 +49,13 @@ test('E-O11: «Formas de entrar»; añadir Facebook, quitar Google y la última 
   );
   await expect(accessRow(page, 'Facebook')).toContainText('No unido');
 
-  // Añadir Facebook (sesión recién creada: reciente), con otro correo.
-  await accessRow(page, 'Facebook').getByRole('button', { name: 'Continuar con Facebook' }).click();
-  await page.getByLabel('Identificador').fill(`fb-${Date.now()}`);
-  await page.getByLabel('Correo', { exact: true }).fill(uniqueEmail());
-  await page.getByRole('button', { name: 'Autorizar' }).click();
+  // Añadir Facebook, con otro correo: antes se confirma con Google (decisión 21).
+  await startAdd(page, 'Facebook', 'Google', javaScriptEnabled);
+  await authorizeOnFakeProvider(page, { subject, email }, 'google');
+  await authorizeOnFakeProvider(page, { email: uniqueEmail() }, 'facebook');
   await expect(page).toHaveURL('/account?notice=linked&provider=facebook');
   await expect(
-    page.getByRole('status').filter({ hasText: 'Hemos unido Facebook a tu cuenta' }),
+    page.getByRole('status').filter({ hasText: 'Hemos añadido Facebook.' }),
   ).toBeVisible();
   await expect(accessRow(page, 'Facebook')).toContainText('Unido el');
 
@@ -57,7 +73,7 @@ test('E-O11: «Formas de entrar»; añadir Facebook, quitar Google y la última 
 test('E-O12: crear una contraseña en /account/password y entrar después con ella', async ({
   page,
 }) => {
-  const { email } = await googleAccount(page);
+  const { email, subject } = await googleAccount(page);
   await page.getByRole('link', { name: 'Crear contraseña' }).click();
   await expect(page).toHaveURL('/account/password');
   await expect(page).toHaveTitle('Crear contraseña — Cupidilla');
@@ -72,8 +88,11 @@ test('E-O12: crear una contraseña en /account/password y entrar después con el
     page.getByText('La contraseña necesita al menos 10 caracteres.').first(),
   ).toBeVisible();
 
+  // Se confirma con Google y, al volver, la contraseña ya está creada (decisión 21).
+  await expect(page.getByText('iremos a Google para que confirmes que eres tú')).toBeVisible();
   await page.getByLabel('Contraseña', { exact: true }).fill('mi frase larga y nueva');
   await page.getByRole('button', { name: 'Crear contraseña' }).click();
+  await authorizeOnFakeProvider(page, { subject, email }, 'google');
   await expect(page).toHaveURL('/account?notice=password-created');
   await expect(accessRow(page, 'Correo y contraseña')).toContainText('Activa');
   // Ahora Google ya se puede quitar.
@@ -170,4 +189,61 @@ test('decisión 20: con contraseña, añadir y quitar un proveedor la piden en e
   await accessRow(page, 'Facebook').getByRole('button', { name: 'Quitar Facebook' }).click();
   await expect(page).toHaveURL('/account?notice=unlinked&provider=facebook');
   expect(await oauthRowsForEmail(email)).toMatchObject({ identities: 0 });
+});
+
+test('decisión 21: sin contraseña, añadir Google pasa por Facebook y después por Google, sin parar', async ({
+  page,
+  javaScriptEnabled,
+}) => {
+  const email = uniqueEmail();
+  await page.goto('/register');
+  const subject = await continueWith(page, 'Facebook', { email });
+  await completeSignup(page);
+  await expect(page).toHaveURL('/account');
+
+  await startAdd(page, 'Google', 'Facebook', javaScriptEnabled);
+  await authorizeOnFakeProvider(page, { subject, email }, 'facebook');
+  // Sin volver a /account: directamente al Google falso.
+  await authorizeOnFakeProvider(page, { email }, 'google');
+  await expect(page).toHaveURL('/account?notice=linked&provider=google');
+  await expect(page.getByRole('status').filter({ hasText: 'Hemos añadido Google.' })).toBeVisible();
+  await expect(accessRow(page, 'Google')).toContainText('Unido el');
+  expect(await oauthRowsForEmail(email)).toMatchObject({ users: 1, identities: 2 });
+});
+
+test('decisión 21: con el correo de Google sin verificar, vuelve al panel con el error', async ({
+  page,
+  javaScriptEnabled,
+}) => {
+  const email = uniqueEmail();
+  await page.goto('/register');
+  const subject = await continueWith(page, 'Facebook', { email });
+  await completeSignup(page);
+  await expect(page).toHaveURL('/account');
+
+  await startAdd(page, 'Google', 'Facebook', javaScriptEnabled);
+  await authorizeOnFakeProvider(page, { subject, email }, 'facebook');
+  await authorizeOnFakeProvider(page, { email, emailVerified: false }, 'google');
+  await expect(page).toHaveURL('/account?error=email-unverified&provider=google');
+  const panel = accessRow(page, 'Google').getByRole('region', { name: 'Confirma que eres tú' });
+  await expect(panel.getByRole('alert')).toContainText(
+    'El correo de tu cuenta de Google todavía no está verificado',
+  );
+  await expect(panel.getByRole('button', { name: 'Confirmar con Facebook' })).toBeVisible();
+  await expect(accessRow(page, 'Google')).toContainText('No unido');
+  expect(await oauthRowsForEmail(email)).toMatchObject({ users: 1, identities: 1 });
+});
+
+test('decisión 21: el panel se cierra con Escape y devuelve el foco al botón', async ({
+  page,
+  javaScriptEnabled,
+}) => {
+  test.skip(!javaScriptEnabled, 'El panel solo existe con JavaScript');
+  await googleAccount(page);
+  const facebook = accessRow(page, 'Facebook');
+  await facebook.getByRole('button', { name: 'Continuar con Facebook' }).click();
+  await expect(facebook.getByRole('heading', { name: 'Confirma que eres tú' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(facebook.getByRole('region')).toHaveCount(0);
+  await expect(facebook.getByRole('button', { name: 'Continuar con Facebook' })).toBeFocused();
 });

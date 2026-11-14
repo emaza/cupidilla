@@ -162,6 +162,9 @@ export class PendingIdentitiesService {
           )
           .returning();
         if (!pending) throw flowInvalid();
+        // R7b: un correo que ya es el de un proveedor de otra cuenta da EMAIL_TAKEN, que se
+        // resuelve abajo como ACCOUNT_USES_OTHER_PROVIDER si no está también en `users`.
+        await this.users.assertEmailNotInIdentities(tx, pending.providerEmail);
         const user = await this.users.create(tx, {
           email: pending.providerEmail,
           passwordHash: null,
@@ -293,6 +296,8 @@ export class PendingIdentitiesService {
    * sigue ahí:
    * - otra persona creó la cuenta con ese correo: si tiene contraseña, la fila pasa a unión y
    *   409 `EMAIL_TAKEN`; si no, se borra y 409 `ACCOUNT_USES_OTHER_PROVIDER`;
+   * - el correo es el `provider_email` de una identidad de otra cuenta (R7b) y no está en
+   *   `users`: se borra y 409 `ACCOUNT_USES_OTHER_PROVIDER`, tenga o no contraseña esa cuenta;
    * - la identidad ya se unió desde otra pestaña (o con dos altas simultáneas del mismo
    *   `subject`, choca antes el correo): se borra y `OAUTH_FLOW_INVALID`.
    */

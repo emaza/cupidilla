@@ -11,7 +11,7 @@ import {
   type TestApp,
 } from './helpers/test-app.js';
 
-/** Esquema de la migración 0001_oauth_identities (§5 del diseño de entrada con terceros). */
+/** Esquema de OAuth (§5 del diseño de entrada con terceros). */
 describe('Esquema de identidades y estado temporal de OAuth (§5)', () => {
   let t: TestApp;
 
@@ -47,14 +47,17 @@ describe('Esquema de identidades y estado temporal de OAuth (§5)', () => {
     sessionTokenHash?: string | null;
     returnPath?: string | null;
     provider?: string;
+    connectProvider?: string | null;
+    newPasswordHash?: string | null;
   }) => sql`
     insert into oauth_states (token_hash, provider, purpose, entry_point, session_token_hash,
-      state, code_verifier, nonce, return_path, created_at, expires_at)
+      state, code_verifier, nonce, return_path, connect_provider, new_password_hash, created_at,
+      expires_at)
     values (${fields.tokenHash ?? HASH_A}, ${fields.provider ?? 'google'},
       ${fields.purpose ?? 'sign_in'},
       ${fields.entryPoint === undefined ? 'login' : fields.entryPoint},
       ${fields.sessionTokenHash ?? null}, 's', 'v', 'n', ${fields.returnPath ?? null},
-      ${TEST_NOW}, ${LATER})`;
+      ${fields.connectProvider ?? null}, ${fields.newPasswordHash ?? null}, ${TEST_NOW}, ${LATER})`;
 
   const insertPending = (fields: {
     tokenHash?: string;
@@ -106,7 +109,10 @@ describe('Esquema de identidades y estado temporal de OAuth (§5)', () => {
     expect(checks).toEqual([
       'identities_provider_known',
       'identities_subject_length',
+      'oauth_states_connect_provider_known',
+      'oauth_states_connect_provider_shape',
       'oauth_states_entry_point_known',
+      'oauth_states_new_password_hash_shape',
       'oauth_states_provider_known',
       'oauth_states_purpose_known',
       'oauth_states_purpose_shape',
@@ -255,6 +261,84 @@ describe('Esquema de identidades y estado temporal de OAuth (§5)', () => {
       'oauth_states_session_token_hash_sessions_token_hash_fk',
     );
     expect(await countRows(t.db, 'oauth_states')).toBe(2);
+  });
+
+  it('C11: connect_provider y new_password_hash solo en una reautenticación (decisión 21)', async () => {
+    const user = await registerUser(t.app);
+    const sessionHash = hashOpaqueToken(user.token);
+    const reauth = { purpose: 'reauthenticate', entryPoint: null, sessionTokenHash: sessionHash };
+
+    await t.db.execute(
+      insertOAuthState({
+        ...reauth,
+        tokenHash: HASH_A,
+        provider: 'facebook',
+        connectProvider: 'google',
+      }),
+    );
+    await t.db.execute(insertOAuthState({ ...reauth, tokenHash: HASH_B, newPasswordHash: 'h' }));
+
+    const other = 'c'.repeat(64);
+    await check(
+      insertOAuthState({ ...reauth, tokenHash: other, connectProvider: 'github' }),
+      'oauth_states_connect_provider_known',
+    );
+    // Con purpose connect, o igual al proveedor que confirma.
+    await check(
+      insertOAuthState({
+        tokenHash: other,
+        purpose: 'connect',
+        entryPoint: null,
+        sessionTokenHash: sessionHash,
+        provider: 'google',
+        connectProvider: 'facebook',
+      }),
+      'oauth_states_connect_provider_shape',
+    );
+    await check(
+      insertOAuthState({
+        ...reauth,
+        tokenHash: other,
+        provider: 'google',
+        connectProvider: 'google',
+      }),
+      'oauth_states_connect_provider_shape',
+    );
+    await check(
+      insertOAuthState({
+        tokenHash: other,
+        purpose: 'connect',
+        entryPoint: null,
+        sessionTokenHash: sessionHash,
+        newPasswordHash: 'h',
+      }),
+      'oauth_states_new_password_hash_shape',
+    );
+    await check(
+      insertOAuthState({ tokenHash: other, newPasswordHash: 'h' }),
+      'oauth_states_new_password_hash_shape',
+    );
+    await check(
+      insertOAuthState({
+        ...reauth,
+        tokenHash: other,
+        provider: 'facebook',
+        connectProvider: 'google',
+        newPasswordHash: 'h',
+      }),
+      'oauth_states_new_password_hash_shape',
+    );
+    expect(await countRows(t.db, 'oauth_states')).toBe(2);
+  });
+
+  it('cambio 3: índice de expresión lower(btrim(provider_email)) en identities', async () => {
+    const result = await t.db.execute<{ indexdef: string }>(sql`
+      select indexdef from pg_indexes
+      where schemaname = 'public' and indexname = 'identities_provider_email_normalized_idx'`);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]?.indexdef).toBe(
+      'CREATE INDEX identities_provider_email_normalized_idx ON public.identities USING btree (lower(btrim(provider_email)))',
+    );
   });
 
   it('pending_identities: link lleva cuenta y signup no; tope de 5 fallos', async () => {

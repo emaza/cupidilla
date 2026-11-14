@@ -58,6 +58,7 @@ export class AuthService {
     // El hash va fuera de la transacción: no la alarga y el tiempo no depende del correo.
     const passwordHash = await this.passwords.hash(request.password);
     return this.transactions.run(async (tx) => {
+      await this.users.assertEmailNotInIdentities(tx, request.email);
       const user = await this.users.create(tx, {
         email: request.email,
         passwordHash,

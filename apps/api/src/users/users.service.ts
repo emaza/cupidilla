@@ -1,15 +1,17 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { AccountResponse, PublicUser } from '@cupidilla/contracts';
 import { and, eq, isNull } from 'drizzle-orm';
-import { assertRecent, markSessionAuthenticated } from '../auth/recent-auth.js';
+import { listOpenSessions } from '../auth/open-sessions.js';
+import { markSessionAuthenticated } from '../auth/recent-auth.js';
 import { ApiException } from '../common/errors/api.exception.js';
 import { Clock } from '../common/clock.js';
 import type { ActiveSession } from '../common/decorators/current-session.decorator.js';
 import { ConsentsService } from '../consents/consents.service.js';
-import { DB, type Database, type Executor } from '../database/database.types.js';
+import { DB, type Database, type Executor, type Tx } from '../database/database.types.js';
+import { lockEmail } from '../database/email-lock.js';
 import { isUniqueViolation } from '../database/pg-errors.js';
-import { users } from '../database/schema/index.js';
-import { IdentitiesService } from '../oauth/identities.service.js';
+import { identities, users } from '../database/schema/index.js';
+import { IdentitiesService, providerEmailIs } from '../oauth/identities.service.js';
 import { PasswordService } from './password.service.js';
 
 export interface NewUser {
@@ -45,11 +47,15 @@ export class UsersService {
     private readonly clock: Clock,
   ) {}
 
-  /** Inserta sin consulta previa: la restricción UNIQUE decide si el correo está en uso. */
-  async create(db: Executor, data: NewUser): Promise<PublicUser> {
+  /**
+   * Inserta sin consulta previa: la restricción UNIQUE decide si el correo está en uso en
+   * `users`. Antes toma el bloqueo del correo (`lockEmail`), así que va dentro de una transacción.
+   */
+  async create(tx: Tx, data: NewUser): Promise<PublicUser> {
+    await lockEmail(tx, data.email);
     const now = this.clock.now();
     try {
-      const [row] = await db
+      const [row] = await tx
         .insert(users)
         .values({ ...data, createdAt: now, updatedAt: now })
         .returning();
@@ -61,6 +67,22 @@ export class UsersService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Alta con contraseña (R7): el correo tampoco puede ser el `provider_email` verificado de
+   * ninguna identidad (una fila antigua sin verificar no bloquea a nadie, decisión 21). Da el
+   * mismo `EMAIL_TAKEN` que `users_email_unique`, para no revelar de dónde viene el correo. Toma
+   * el bloqueo del correo: una identidad creada a la vez espera o ya se ve aquí.
+   */
+  async assertEmailNotInIdentities(tx: Tx, email: string): Promise<void> {
+    await lockEmail(tx, email);
+    const [row] = await tx
+      .select({ id: identities.id })
+      .from(identities)
+      .where(and(providerEmailIs(email), eq(identities.emailVerified, true)))
+      .limit(1);
+    if (row) throw new ApiException('EMAIL_TAKEN', 409, undefined, 'Email already registered');
   }
 
   async findCredentialsByEmail(email: string): Promise<UserCredentials | undefined> {
@@ -81,23 +103,32 @@ export class UsersService {
   }
 
   async getAccount(
-    userId: string,
-    session: Pick<ActiveSession, 'authenticatedAt'>,
+    session: Pick<ActiveSession, 'userId' | 'tokenHash' | 'authenticatedAt'>,
   ): Promise<AccountResponse> {
+    const userId = session.userId;
     const [row] = await this.db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (!row) throw new ApiException('UNAUTHENTICATED', 401);
     const linked = await this.identities.listForUser(userId);
+    const open = await listOpenSessions(this.db, userId, session.tokenHash, this.clock.now());
     return {
       user: { ...toPublicUser(row), birthDate: row.birthDate },
       consents: await this.consents.listForUser(userId),
       signInMethods: {
         password: row.passwordHash !== null,
-        identities: linked.map(({ provider, linkedAt }) => ({
+        identities: linked.map(({ provider, linkedAt, lastUsedAt }) => ({
           provider,
           linkedAt: linkedAt.toISOString(),
+          lastUsedAt: lastUsedAt.toISOString(),
         })),
       },
       session: { authenticatedAt: session.authenticatedAt.toISOString() },
+      // Campo a campo, sin spread: lo que no se nombra aquí no sale en la respuesta.
+      sessions: open.map((item) => ({
+        createdAt: item.createdAt.toISOString(),
+        authenticatedAt: item.authenticatedAt.toISOString(),
+        expiresAt: item.expiresAt.toISOString(),
+        current: item.current,
+      })),
     };
   }
 
@@ -129,23 +160,38 @@ export class UsersService {
   }
 
   /**
-   * POST /users/me/password (§9.5): crea la contraseña de una cuenta que no tiene. Una sola
-   * sentencia atómica: si ya había contraseña (otra pestaña), 409. No cierra otras sesiones ni
-   * cambia `authenticated_at` (T17).
+   * Crea la contraseña de una cuenta que no tiene (§9.5, decisión 21), al volver de la
+   * reautenticación con un proveedor unido. Una sola sentencia atómica: devuelve `false` si ya
+   * había contraseña (otra pestaña). No cierra otras sesiones ni cambia `authenticated_at` (T17).
+   * `db`: la transacción de quien llama, que tiene bloqueada la sesión que lo pidió.
    */
-  async createPassword(session: ActiveSession, password: string): Promise<void> {
-    assertRecent(session, this.clock.now());
-    // El hash va fuera de cualquier transacción.
-    const passwordHash = await this.passwords.hash(password);
-    const updated = await this.db
+  async setPasswordHashIfMissing(
+    userId: string,
+    passwordHash: string,
+    db: Executor = this.db,
+  ): Promise<boolean> {
+    const updated = await db
       .update(users)
       .set({ passwordHash, updatedAt: this.clock.now() })
-      .where(and(eq(users.id, session.userId), isNull(users.passwordHash)))
+      .where(and(eq(users.id, userId), isNull(users.passwordHash)))
       .returning({ id: users.id });
-    if (updated.length === 0) {
+    return updated.length > 0;
+  }
+
+  /**
+   * Sin contraseña en la cuenta (decisión 21): las acciones que dan acceso permanente se confirman
+   * con un proveedor unido. 409 si ya tiene una.
+   */
+  async assertHasNoPassword(userId: string): Promise<void> {
+    const [row] = await this.db
+      .select({ passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!row) throw new ApiException('UNAUTHENTICATED', 401);
+    if (row.passwordHash !== null) {
       throw new ApiException('PASSWORD_ALREADY_SET', 409, undefined, 'Password already set');
     }
-    this.logger.log({ event: 'password_created' });
   }
 
   /**

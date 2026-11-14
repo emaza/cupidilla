@@ -16,6 +16,7 @@
     "test:unit": "vitest run --project unit",
     "test:int": "vitest run --project integration",
     "db:generate": "drizzle-kit generate",
+    "db:studio": "node --env-file=../../.env ../../node_modules/drizzle-kit/bin.cjs studio",
     "db:migrate": "node --env-file-if-exists=../../.env scripts/migrate.ts"
   },
   "dependencies": {

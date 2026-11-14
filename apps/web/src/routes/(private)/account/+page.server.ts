@@ -1,40 +1,30 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { errorMessages } from '#lib/errors/messages.ts';
 import { textField } from '#lib/forms/form-data.ts';
-import { signInMethodsView } from '#lib/server/account-view.ts';
+import {
+  accountDetailsView,
+  openSessionsView,
+  signInMethodsView,
+} from '#lib/server/account-view.ts';
 import { api, configuredProviders } from '#lib/server/api-client.ts';
-import { isProvider, urlMessage } from '#lib/server/oauth-notices.ts';
+import { connectMessages, isProvider } from '#lib/server/oauth-notices.ts';
 import { clearSessionCookie } from '#lib/server/session-cookie.ts';
 import type { TextKey } from '#lib/texts.ts';
 import type { Actions, PageServerLoad } from './$types';
-
-const acceptedOn = new Intl.DateTimeFormat('es-ES', {
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'Europe/Madrid',
-});
 
 export const load: PageServerLoad = async (event) => {
   const token = event.locals.sessionToken;
   const result = token ? await api.account(event, token) : null;
 
   if (result?.ok) {
-    const consent = result.data.consents.find(
-      (item) => item.purpose === 'service_use' && item.revokedAt === null,
-    );
+    const signIn = signInMethodsView(result.data, await configuredProviders(event));
+    const { message, connect } = connectMessages(signIn, event.url.searchParams);
     return {
-      message: urlMessage('account', event.url.searchParams),
-      account: {
-        email: result.data.user.email,
-        terms: consent
-          ? {
-              version: consent.policyVersion,
-              acceptedOn: acceptedOn.format(new Date(consent.grantedAt)),
-            }
-          : null,
-      },
-      signIn: signInMethodsView(result.data, await configuredProviders(event)),
+      message,
+      connect,
+      account: accountDetailsView(result.data),
+      signIn,
+      sessions: openSessionsView(result.data),
     };
   }
   if (!result || result.status === 401) {
@@ -43,7 +33,9 @@ export const load: PageServerLoad = async (event) => {
   }
   // Sin JavaScript, tras un fallo al salir la página se vuelve a pintar: se muestra el aviso
   // de error aunque no se puedan cargar los datos. En una visita normal, página de error.
-  if (event.request.method === 'POST') return { account: null, message: null, signIn: null };
+  if (event.request.method === 'POST') {
+    return { account: null, message: null, connect: null, signIn: null, sessions: null };
+  }
   error(503, 'API unavailable');
 };
 

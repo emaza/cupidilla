@@ -25,9 +25,23 @@ export async function continueWith(
   provider: 'Google' | 'Facebook',
   login: FakeLogin = {},
 ): Promise<string> {
-  const subject = login.subject ?? uniqueSubject();
   await page.getByRole('button', { name: `Continuar con ${provider}` }).click();
-  await expect(page).toHaveURL(new RegExp(`^${FAKE_PROVIDER_URL}/`));
+  return authorizeOnFakeProvider(page, login);
+}
+
+/**
+ * Rellena el formulario del proveedor falso en el que ya está la página, como lo haría una
+ * persona. Devuelve el identificador usado.
+ */
+export async function authorizeOnFakeProvider(
+  page: Page,
+  login: FakeLogin = {},
+  provider?: 'google' | 'facebook',
+): Promise<string> {
+  const subject = login.subject ?? uniqueSubject();
+  await expect(page).toHaveURL(
+    new RegExp(`^${FAKE_PROVIDER_URL}/${provider ? `${provider}/` : ''}`),
+  );
   await page.getByLabel('Identificador').fill(subject);
   await page.getByLabel('Correo', { exact: true }).fill(login.email ?? '');
   if (login.emailVerified === false) await page.getByLabel('Correo verificado').uncheck();

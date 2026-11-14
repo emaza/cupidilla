@@ -1,26 +1,49 @@
 import { z } from 'zod';
-import {
-  newPasswordSchema,
-  passwordInputSchema,
-  publicUserSchema,
-  strictObjectError,
-} from './auth.js';
+import { passwordInputSchema, publicUserSchema, strictObjectError } from './auth.js';
 import { consentSchema } from './consents.js';
 import { OAUTH_PROVIDERS } from './oauth.js';
+
+/** Máximo de sesiones abiertas que devuelve GET /users/me. */
+export const ACCOUNT_SESSIONS_LIMIT = 20;
+
+/**
+ * Una sesión abierta de la cuenta. Solo fechas: ni el token, ni su hash, ni el dispositivo ni el
+ * lugar. `current` marca la sesión que hace la petición.
+ */
+export const accountSessionSchema = z.object({
+  createdAt: z.iso.datetime(),
+  authenticatedAt: z.iso.datetime(),
+  expiresAt: z.iso.datetime(),
+  current: z.boolean(),
+});
+
+export type AccountSession = z.infer<typeof accountSessionSchema>;
 
 /** Respuesta de GET /users/me. */
 export const accountResponseSchema = z.object({
   user: publicUserSchema.extend({ birthDate: z.iso.date() }),
   consents: z.array(consentSchema),
-  /** Formas de entrar. Del proveedor solo se muestra la fecha de unión, no su correo. */
+  /**
+   * Formas de entrar. Del proveedor solo se muestran fechas (unión y último uso), no su correo
+   * ni su identificador.
+   */
   signInMethods: z.object({
     password: z.boolean(),
     identities: z.array(
-      z.object({ provider: z.enum(OAUTH_PROVIDERS), linkedAt: z.iso.datetime() }),
+      z.object({
+        provider: z.enum(OAUTH_PROVIDERS),
+        linkedAt: z.iso.datetime(),
+        lastUsedAt: z.iso.datetime(),
+      }),
     ),
   }),
-  /** La web decide con esto si la sesión es reciente; la API lo vuelve a comprobar siempre. */
+  /** Última vez que esta sesión demostró la identidad (contraseña o proveedor). */
   session: z.object({ authenticatedAt: z.iso.datetime() }),
+  /**
+   * Sesiones sin caducar de la cuenta: primero la actual y después de la más nueva a la más
+   * antigua, como mucho `ACCOUNT_SESSIONS_LIMIT`.
+   */
+  sessions: z.array(accountSessionSchema).max(ACCOUNT_SESSIONS_LIMIT),
 });
 
 export type AccountResponse = z.infer<typeof accountResponseSchema>;
@@ -36,14 +59,6 @@ export const deleteAccountRequestSchema = z.strictObject(
 );
 
 export type DeleteAccountRequest = z.infer<typeof deleteAccountRequestSchema>;
-
-/** Cuerpo de POST /users/me/password: las mismas reglas que la contraseña del registro. */
-export const createPasswordRequestSchema = z.strictObject(
-  { password: newPasswordSchema },
-  { error: strictObjectError },
-);
-
-export type CreatePasswordRequest = z.infer<typeof createPasswordRequestSchema>;
 
 /** Cuerpo de POST /users/me/reauthentication. */
 export const reauthenticateRequestSchema = z.strictObject(
