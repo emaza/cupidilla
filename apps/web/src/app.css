@@ -179,6 +179,8 @@ main {
 
 .site-nav ul {
   display: flex;
+  /* Con texto ampliado y fuentes más anchas, los enlaces bajan de línea en vez de desbordar (C44). */
+  flex-wrap: wrap;
   gap: var(--espacio-2);
   list-style: none;
   margin: 0;
