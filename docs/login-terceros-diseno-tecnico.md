@@ -233,7 +233,7 @@ Los tokens se generan y se hashean con las funciones de `sessions.service.ts`, q
 
 Restricciones: `UNIQUE (provider, subject)` (`identities_provider_subject_unique`), porque una identidad pertenece a una sola cuenta; y `UNIQUE (user_id, provider)` (`identities_user_provider_unique`), con un Google y un Facebook como mucho por cuenta. Su columna inicial cubre el borrado en cascada, así que no hace falta otro índice en `user_id`.
 
-Índice de expresión `identities_provider_email_normalized_idx` sobre `lower(btrim(provider_email))` (decisión 21, migración `0002_decision_21`). No es parcial: lo usan todas las búsquedas por correo de proveedor (R7, R7b y `connect`), que comparan con esa misma expresión.
+Índice de expresión `identities_provider_email_normalized_idx` sobre `lower(btrim(provider_email))` (decisión 21). No es parcial: lo usan todas las búsquedas por correo de proveedor (R7, R7b y `connect`), que comparan con esa misma expresión.
 
 ### 5.3 `oauth_states` (flujo en curso)
 
@@ -279,6 +279,8 @@ Restricciones: `UNIQUE (provider, subject)` (`identities_provider_subject_unique
 - `npm run db:generate -- --name oauth_identities`. **Hay que editar el SQL a mano** antes de aplicarlo: `ADD COLUMN authenticated_at timestamptz;`, después `UPDATE sessions SET authenticated_at = created_at;` y por último `ALTER … SET NOT NULL`. Con un `DEFAULT now()` las sesiones antiguas parecerían recién autenticadas.
 - **Despliegue: parar la API antigua antes de migrar.** Tras la migración, `sessions.authenticated_at` es `NOT NULL` y sin `DEFAULT`. La API de H0 no escribe esa columna, así que fallaría al crear sesiones (registro y login). El orden es: parar la API, `npm run db:migrate` y arrancar la versión nueva. No se pone un `DEFAULT`: la aplicación escribe siempre la columna con el `Clock`, y un `DEFAULT now()` taparía que algún `INSERT` la olvide. Como todavía no hay producción ni varias instancias, parar unos segundos no cuesta nada.
 - El test I-16 de H0 recorre las tablas con FK a `users`, así que cubre solo `identities` y `pending_identities`. `oauth_states` cuelga de `sessions`, y su comprobación se añade explícitamente (O-17).
+
+> **Nota (14 de noviembre de 2026): migración única.** Las migraciones `0000_init`, `0001_oauth_identities` y `0002_decision_21` se han juntado en una sola `0000_init`, generada con `drizzle-kit generate --name init`. El texto de arriba describe cómo se llegó al esquema, no migraciones que existan hoy. Mientras no haya usuarios reales, cualquier cambio de esquema regenera `0000_init` (se borra `apps/api/drizzle/`, `npm run db:generate -- --name init`) y se hace `npm run db:reset`. Antes del lanzamiento se vuelve a migraciones incrementales.
 
 ---
 

@@ -11,7 +11,7 @@ import {
   type TestApp,
 } from './helpers/test-app.js';
 
-/** Esquema de la migración 0001_oauth_identities (§5 del diseño de entrada con terceros). */
+/** Esquema de OAuth (§5 del diseño de entrada con terceros). */
 describe('Esquema de identidades y estado temporal de OAuth (§5)', () => {
   let t: TestApp;
 
