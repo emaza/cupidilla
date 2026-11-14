@@ -63,22 +63,27 @@ export function hasErrors(errors: FormErrors<string>): boolean {
   return errors.general !== undefined || Object.keys(errors.fields).length > 0;
 }
 
-/**
- * Convierte el formulario de /register al contrato (acuerdos A1 a A3).
- * Si los tres campos de la fecha componen una fecha real de un menor, el resultado es `underage`
- * aunque haya otros errores: así no vuelve ningún dato.
- */
-export function parseRegisterForm(data: FormData, today: string): RegisterParse {
-  const values: RegisterValues = {
+/** Valores que se devuelven a la página (nunca la contraseña). */
+export function registerValues(data: FormData): RegisterValues {
+  return {
     email: textField(data, 'email'),
     day: textField(data, 'day'),
     month: textField(data, 'month'),
     year: textField(data, 'year'),
     acceptTerms: textField(data, 'acceptTerms') === 'on',
   };
+}
+
+/**
+ * Convierte el formulario de /register al contrato (acuerdos A1 a A3).
+ * Si los tres campos de la fecha componen una fecha real de un menor, el resultado es `underage`
+ * aunque haya otros errores: así no vuelve ningún dato.
+ */
+export function parseRegisterForm(data: FormData, today: string, minAge: number): RegisterParse {
+  const values = registerValues(data);
 
   const date = parseBirthDateParts(values.day, values.month, values.year);
-  const dateCheck = date.ok ? checkBirthDate(date.date, today) : null;
+  const dateCheck = date.ok ? checkBirthDate(date.date, today, minAge) : null;
   if (dateCheck && !dateCheck.ok && dateCheck.reason === 'UNDERAGE') return { kind: 'underage' };
 
   const candidate = {

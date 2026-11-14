@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   checkBirthDate,
   OAUTH_LINK_MAX_FAILURES,
@@ -22,6 +23,7 @@ import {
   OPAQUE_TOKEN_PATTERN,
 } from '../common/crypto/opaque-token.js';
 import { ApiException } from '../common/errors/api.exception.js';
+import type { Env } from '../config/env.schema.js';
 import { ConsentsService } from '../consents/consents.service.js';
 import { DB, type Database } from '../database/database.types.js';
 import { isUniqueViolation } from '../database/pg-errors.js';
@@ -70,6 +72,7 @@ export class PendingIdentitiesService {
     private readonly consents: ConsentsService,
     private readonly sessions: SessionsService,
     private readonly passwords: PasswordService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   /** Borra las filas caducadas (limpieza sin tareas programadas, §4). */
@@ -132,7 +135,11 @@ export class PendingIdentitiesService {
     const tokenHash = hashOpaqueToken(request.pendingToken);
 
     // La fecha va antes de leer nada. Con un menor se borra en el acto lo recibido del proveedor.
-    const check = checkBirthDate(request.birthDate, referenceToday(this.clock.now()));
+    const check = checkBirthDate(
+      request.birthDate,
+      referenceToday(this.clock.now()),
+      this.config.get('MIN_AGE', { infer: true }),
+    );
     if (!check.ok && check.reason === 'IN_FUTURE') {
       throw new ApiException(
         'VALIDATION_FAILED',

@@ -16,6 +16,7 @@ import {
   THROTTLE_TTL,
 } from './common/guards/app-throttler.guard.js';
 import { InternalKeyGuard } from './common/guards/internal-key.guard.js';
+import { AppConfigModule } from './config/app-config.module.js';
 import { envSchema } from './config/env.schema.js';
 import { ConsentsModule } from './consents/consents.module.js';
 import { DatabaseModule } from './database/database.module.js';
@@ -55,6 +56,7 @@ import { UsersModule } from './users/users.module.js';
     AuthModule,
     OAuthModule,
     HealthModule,
+    AppConfigModule,
   ],
   providers: [
     // Orden de los guards globales: clave interna → límite de intentos → sesión.

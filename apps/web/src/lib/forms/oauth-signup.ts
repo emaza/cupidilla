@@ -53,6 +53,16 @@ export function oauthSignupErrorsFromIssues(issues: Map<string, FieldIssue>): OA
   return errors;
 }
 
+/** Valores que se devuelven a la página. */
+export function oauthSignupValues(data: FormData): OAuthSignupValues {
+  return {
+    day: textField(data, 'day'),
+    month: textField(data, 'month'),
+    year: textField(data, 'year'),
+    acceptTerms: textField(data, 'acceptTerms') === 'on',
+  };
+}
+
 /**
  * Formulario de /register/complete → contrato, en el orden de UX §1.3: forma de los campos →
  * menor (pantalla inmediata aunque haya otros errores) → casilla de condiciones.
@@ -61,16 +71,12 @@ export function parseOAuthSignupForm(
   data: FormData,
   pendingToken: string,
   today: string,
+  minAge: number,
 ): OAuthSignupParse {
-  const values: OAuthSignupValues = {
-    day: textField(data, 'day'),
-    month: textField(data, 'month'),
-    year: textField(data, 'year'),
-    acceptTerms: textField(data, 'acceptTerms') === 'on',
-  };
+  const values = oauthSignupValues(data);
 
   const date = parseBirthDateParts(values.day, values.month, values.year);
-  const dateCheck = date.ok ? checkBirthDate(date.date, today) : null;
+  const dateCheck = date.ok ? checkBirthDate(date.date, today, minAge) : null;
   if (dateCheck && !dateCheck.ok && dateCheck.reason === 'UNDERAGE') return { kind: 'underage' };
 
   const parsed = oauthSignupRequestSchema.safeParse({

@@ -14,6 +14,8 @@ const api = vi.hoisted(() => ({
   account: vi.fn(),
 }));
 vi.mock('#lib/server/api-client.ts', () => ({ api }));
+const minAge = vi.hoisted(() => ({ current: 18 as number | null }));
+vi.mock('#lib/server/min-age.ts', () => ({ currentMinAge: () => Promise.resolve(minAge.current) }));
 
 const start = await import('./[provider=provider]/+server.ts');
 const back = await import('./[provider=provider]/callback/+server.ts');
@@ -101,6 +103,7 @@ const failure = (status: number, code: string, fields?: unknown) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  minAge.current = 18;
 });
 
 const pendingData = {
@@ -419,6 +422,36 @@ describe('/register/complete', () => {
       status: 422,
       data: { underage: true, provider: 'google' },
     });
+  });
+
+  it('edad mínima no disponible y menor de 18: cancela el pendiente, borra la cookie y no devuelve valores', async () => {
+    minAge.current = null;
+    api.oauthPending.mockResolvedValue(pendingLookup);
+    const cookies = jar({ cupidilla_oauth: PENDING });
+    const result = await run(() =>
+      complete.actions.signup(event({ cookies, form: { ...adult, year: '2015' } })),
+    );
+    expect(api.oauthSignup).not.toHaveBeenCalled();
+    expect(api.oauthCancelPending).toHaveBeenCalledWith(expect.anything(), PENDING);
+    expect(cookies.values.has('cupidilla_oauth')).toBe(false);
+    expect(result.response).toMatchObject({
+      status: 422,
+      data: { underage: true, provider: 'google' },
+    });
+    expect(JSON.stringify(result.response)).not.toContain('2015');
+  });
+
+  it('edad mínima no disponible y adulto: 503 como con la API caída, sin tocar el pendiente', async () => {
+    minAge.current = null;
+    const cookies = jar({ cupidilla_oauth: PENDING });
+    const result = await run(() => complete.actions.signup(event({ cookies, form: adult })));
+    expect(result.response).toMatchObject({
+      status: 503,
+      data: { values: { day: '5' }, errors: { general: 'alta.error.servidor' } },
+    });
+    expect(api.oauthSignup).not.toHaveBeenCalled();
+    expect(api.oauthCancelPending).not.toHaveBeenCalled();
+    expect(cookies.values.has('cupidilla_oauth')).toBe(true);
   });
 
   it.each([

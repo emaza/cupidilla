@@ -1,4 +1,5 @@
 import {
+  MIN_AGE_RANGE,
   OAUTH_PENDING_TTL_MINUTES,
   referenceToday,
   type OAuthProvider,
@@ -8,10 +9,12 @@ import { errorMessages } from '#lib/errors/messages.ts';
 import { firstApiIssueByField } from '#lib/forms/form-data.ts';
 import {
   oauthSignupErrorsFromIssues,
+  oauthSignupValues,
   parseOAuthSignupForm,
   type OAuthSignupErrors,
 } from '#lib/forms/oauth-signup.ts';
 import { api } from '#lib/server/api-client.ts';
+import { currentMinAge } from '#lib/server/min-age.ts';
 import { clearOAuthToken, getOAuthToken } from '#lib/server/oauth-cookie.ts';
 import { safeReturnPath } from '#lib/server/return-path.ts';
 import { setSessionCookie } from '#lib/server/session-cookie.ts';
@@ -75,12 +78,28 @@ export const actions = {
     const token = getOAuthToken(event.cookies);
     if (!token) redirect(303, EXPIRED);
     const data = await event.request.formData();
-    const parsed = parseOAuthSignupForm(data, token, referenceToday(new Date()));
+    const knownMinAge = await currentMinAge(event);
+    // Sin la edad mínima se valida con el suelo del rango (nunca baja de él): un menor de ese
+    // suelo lo es con cualquier configuración. El resto, como con la API caída (la API decide).
+    const parsed = parseOAuthSignupForm(
+      data,
+      token,
+      referenceToday(new Date()),
+      knownMinAge ?? MIN_AGE_RANGE.min,
+    );
 
     if (parsed.kind === 'underage') {
       // El proveedor solo hace falta para la frase «No hemos guardado nada de tu cuenta de …».
       const lookup = await api.oauthPending(event, token);
       return underage(event, token, lookup.ok ? lookup.data.provider : null);
+    }
+    if (knownMinAge === null) {
+      const errors: OAuthSignupErrors = {
+        fields: {},
+        dateParts: [],
+        general: errorMessages.signup.API_UNAVAILABLE,
+      };
+      return fail(503, { values: oauthSignupValues(data), errors });
     }
     if (parsed.kind === 'invalid')
       return fail(400, { values: parsed.values, errors: parsed.errors });

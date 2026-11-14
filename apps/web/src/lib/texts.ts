@@ -15,7 +15,7 @@ export const texts = {
   'comun.nav.registro': 'Crear cuenta',
   'comun.nav.cuenta': 'Mi cuenta',
   'comun.pie.condiciones': 'Condiciones de uso',
-  'comun.pie.edad': 'Solo para mayores de 18 años',
+  'comun.pie.edad': 'Solo para mayores de {edad} años',
   'comun.error.prefijo_oculto': 'Error:',
   'comun.error.resumen_titulo': 'Revisa esto antes de seguir',
   'comun.error.limite': 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.',
@@ -48,7 +48,7 @@ export const texts = {
     'Mínimo 10 caracteres, sin más reglas: una frase larga vale. De momento no podemos recuperarla, así que guárdala en un gestor de contraseñas o donde no se te pierda.',
   'registro.campo.nacimiento': 'Fecha de nacimiento',
   'registro.ayuda.nacimiento':
-    'La necesitamos para comprobar que tienes 18 años o más. Por ejemplo: 14 3 1990',
+    'La necesitamos para comprobar que tienes {edad} años o más. Por ejemplo: 14 3 1990',
   'registro.campo.dia': 'Día',
   'registro.campo.mes': 'Mes',
   'registro.campo.anio': 'Año',
@@ -86,7 +86,7 @@ export const texts = {
   'registro.menor.meta.titulo': 'No podemos crear tu cuenta',
   'registro.menor.titulo': 'No podemos crear tu cuenta',
   'registro.menor.texto1':
-    'Cupidilla es solo para personas de 18 años o más, así que no hemos creado tu cuenta ni hemos guardado ningún dato.',
+    'Cupidilla es solo para personas de {edad} años o más, así que no hemos creado tu cuenta ni hemos guardado ningún dato.',
   'registro.menor.texto2': 'No es nada personal: es una condición del servicio.',
 
   // 5.4 Entrar

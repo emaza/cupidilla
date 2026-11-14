@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   checkBirthDate,
   referenceToday,
@@ -10,6 +11,7 @@ import {
 } from '@cupidilla/contracts';
 import { Clock } from '../common/clock.js';
 import { ApiException } from '../common/errors/api.exception.js';
+import type { Env } from '../config/env.schema.js';
 import { ConsentsService } from '../consents/consents.service.js';
 import { DB, type Database } from '../database/database.types.js';
 import { Transactions } from '../database/transactions.js';
@@ -35,11 +37,16 @@ export class AuthService {
     private readonly consents: ConsentsService,
     private readonly sessions: SessionsService,
     private readonly transactions: Transactions,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   async register(request: RegisterRequest): Promise<AuthResponse> {
     // La fecha se comprueba antes de cualquier consulta: con un menor no se escribe nada.
-    const check = checkBirthDate(request.birthDate, referenceToday(this.clock.now()));
+    const check = checkBirthDate(
+      request.birthDate,
+      referenceToday(this.clock.now()),
+      this.config.get('MIN_AGE', { infer: true }),
+    );
     if (!check.ok && check.reason === 'IN_FUTURE') {
       throw new ApiException(
         'VALIDATION_FAILED',

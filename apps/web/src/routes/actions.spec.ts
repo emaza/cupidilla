@@ -1,4 +1,9 @@
-import { latestAdultBirthDate, referenceToday, SERVICE_TERMS_VERSION } from '@cupidilla/contracts';
+import {
+  DEFAULT_MIN_AGE,
+  latestAdultBirthDate,
+  referenceToday,
+  SERVICE_TERMS_VERSION,
+} from '@cupidilla/contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // La puerta a la API y la cookie se sustituyen: aquí se prueba qué hace cada acción con cada respuesta.
@@ -13,6 +18,8 @@ const api = vi.hoisted(() => ({
 const cookie = vi.hoisted(() => ({ set: vi.fn(), clear: vi.fn() }));
 
 vi.mock('#lib/server/api-client.ts', () => ({ api }));
+const minAge = vi.hoisted(() => ({ current: 18 as number | null }));
+vi.mock('#lib/server/min-age.ts', () => ({ currentMinAge: () => Promise.resolve(minAge.current) }));
 vi.mock('#lib/server/session-cookie.ts', () => ({
   setSessionCookie: cookie.set,
   clearSessionCookie: cookie.clear,
@@ -72,6 +79,33 @@ const adultForm = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  minAge.current = 18;
+});
+
+describe('registro: edad mínima no disponible', () => {
+  const submit = (fields: Record<string, string>) =>
+    run(() => registerPage.actions.default(formEvent(fields)) as Promise<unknown>);
+
+  it('menor de 18: camino de menor, sin valores y sin llamar a la API', async () => {
+    minAge.current = null;
+    const { result } = await submit({ ...adultForm, year: '2015' });
+    expect(result).toMatchObject({ status: 422, data: { underage: true } });
+    expect(Object.keys((result as { data: object }).data)).toEqual(['underage']);
+    expect(api.register).not.toHaveBeenCalled();
+  });
+
+  it('adulto: 503 con los valores conservados, sin llamar a la API', async () => {
+    minAge.current = null;
+    const { result } = await submit(adultForm);
+    expect(result).toMatchObject({
+      status: 503,
+      data: {
+        errors: { general: 'registro.error.servidor' },
+        values: { email: 'ana@example.com', year: '1990' },
+      },
+    });
+    expect(api.register).not.toHaveBeenCalled();
+  });
 });
 
 describe('registro: respuestas de la API (criterios 31 y 32)', () => {
@@ -142,7 +176,7 @@ describe('registro: respuestas de la API (criterios 31 y 32)', () => {
   });
 
   it('un menor: pantalla de cierre sin ningún valor y sin llamar a la API', async () => {
-    const latest = latestAdultBirthDate(referenceToday(new Date()));
+    const latest = latestAdultBirthDate(referenceToday(new Date()), DEFAULT_MIN_AGE);
     const [year, month, day] = latest.split('-').map(Number) as [number, number, number];
     const tomorrow = new Date(Date.UTC(year, month - 1, day + 1));
     const { result } = await submit({

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import '../app.css';
-  import { t } from '#lib/texts.ts';
+  import { fill, t } from '#lib/texts.ts';
   import type { LayoutProps } from './$types';
 
   let { data, children }: LayoutProps = $props();
@@ -29,5 +29,5 @@
 
 <footer class="site-footer">
   <a href={resolve('legal/terms')}>{t('comun.pie.condiciones')}</a>
-  <span>{t('comun.pie.edad')}</span>
+  <span>{fill('comun.pie.edad', { edad: String(data.minAge) })}</span>
 </footer>

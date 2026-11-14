@@ -20,7 +20,7 @@ function form(fields: Record<string, string>): FormData {
 
 describe('parseRegisterForm (acuerdos A2 a A5)', () => {
   it('un formulario válido compone la petición del contrato con el correo normalizado', () => {
-    const parsed = parseRegisterForm(form({ email: '  Ana@Example.COM ' }), TODAY);
+    const parsed = parseRegisterForm(form({ email: '  Ana@Example.COM ' }), TODAY, 18);
     expect(parsed).toMatchObject({
       kind: 'valid',
       request: {
@@ -34,17 +34,17 @@ describe('parseRegisterForm (acuerdos A2 a A5)', () => {
 
   it('mide la contraseña como la API, tras NFKC: «e» + acento ×128 cabe', () => {
     const decomposed = 'e\u0301'.repeat(128); // 256 puntos de código sin normalizar
-    expect(parseRegisterForm(form({ password: decomposed }), TODAY)).toMatchObject({
+    expect(parseRegisterForm(form({ password: decomposed }), TODAY, 18)).toMatchObject({
       kind: 'valid',
       request: { password: decomposed },
     });
   });
 
   it('quien cumple 18 hoy es válido y quien los cumple mañana es un menor', () => {
-    expect(parseRegisterForm(form({ day: '11', month: '11', year: '2008' }), TODAY).kind).toBe(
+    expect(parseRegisterForm(form({ day: '11', month: '11', year: '2008' }), TODAY, 18).kind).toBe(
       'valid',
     );
-    expect(parseRegisterForm(form({ day: '12', month: '11', year: '2008' }), TODAY)).toEqual({
+    expect(parseRegisterForm(form({ day: '12', month: '11', year: '2008' }), TODAY, 18)).toEqual({
       kind: 'underage',
     });
   });
@@ -53,21 +53,26 @@ describe('parseRegisterForm (acuerdos A2 a A5)', () => {
     const parsed = parseRegisterForm(
       form({ day: '12', month: '11', year: '2008', email: 'xx', password: '1', acceptTerms: '' }),
       TODAY,
+      18,
     );
     expect(parsed).toEqual({ kind: 'underage' });
   });
 
   it('un menor con una fecha escrita con ceros y espacios también lo es', () => {
-    expect(parseRegisterForm(form({ day: ' 012 ', month: '11', year: '2008' }), TODAY).kind).toBe(
+    expect(
+      parseRegisterForm(form({ day: ' 012 ', month: '11', year: '2008' }), TODAY, 18).kind,
+    ).toBe(
       'invalid', // «012» no es un día de una o dos cifras: error de día, no un menor
     );
-    expect(parseRegisterForm(form({ day: ' 12 ', month: ' 11 ', year: ' 2008 ' }), TODAY)).toEqual({
+    expect(
+      parseRegisterForm(form({ day: ' 12 ', month: ' 11 ', year: ' 2008 ' }), TODAY, 18),
+    ).toEqual({
       kind: 'underage',
     });
   });
 
   it('una fecha futura es un error de fecha, no un menor, aunque haya otros errores', () => {
-    const parsed = parseRegisterForm(form({ year: '2027', email: 'xx' }), TODAY);
+    const parsed = parseRegisterForm(form({ year: '2027', email: 'xx' }), TODAY, 18);
     expect(parsed).toMatchObject({
       kind: 'invalid',
       errors: {
@@ -84,6 +89,7 @@ describe('parseRegisterForm (acuerdos A2 a A5)', () => {
     const parsed = parseRegisterForm(
       form({ email: 'xx', password: 'secreto-que-no-vuelve' }),
       TODAY,
+      18,
     );
     expect(parsed.kind).toBe('invalid');
     expect(JSON.stringify(parsed)).not.toContain('secreto-que-no-vuelve');
@@ -94,7 +100,7 @@ describe('parseRegisterForm (acuerdos A2 a A5)', () => {
 
   it('la casilla solo vale con «on»; cualquier otro valor cuenta como desmarcada', () => {
     for (const value of ['', 'yes', 'true', '1', 'ON']) {
-      const parsed = parseRegisterForm(form({ acceptTerms: value }), TODAY);
+      const parsed = parseRegisterForm(form({ acceptTerms: value }), TODAY, 18);
       expect(parsed, value).toMatchObject({
         kind: 'invalid',
         errors: { fields: { acceptTerms: 'registro.error.condiciones' } },
@@ -106,7 +112,7 @@ describe('parseRegisterForm (acuerdos A2 a A5)', () => {
     const data = form({});
     data.set('day', '5');
     data.append('day', '12'); // si se usara este, sería la fecha del menor 12/05/…
-    expect(parseRegisterForm(data, TODAY)).toMatchObject({
+    expect(parseRegisterForm(data, TODAY, 18)).toMatchObject({
       kind: 'valid',
       request: { birthDate: '1990-05-05' },
     });
@@ -115,14 +121,14 @@ describe('parseRegisterForm (acuerdos A2 a A5)', () => {
   it('un valor que no es texto (archivo) cuenta como vacío', () => {
     const data = form({});
     data.set('email', new File(['x'], 'correo.txt'));
-    const parsed = parseRegisterForm(data, TODAY);
+    const parsed = parseRegisterForm(data, TODAY, 18);
     expect(parsed).toMatchObject({ kind: 'invalid', values: { email: '' } });
   });
 
   it('[BUG-QA-2] correo y contraseña vacíos dan registro.error.correo_vacio y registro.error.contrasena_vacia', () => {
     // UX §5.3 define estos dos textos para el campo vacío. Hoy se muestran «correo_formato» y
     // «contrasena_corta», porque el esquema solo da `required` cuando el campo falta del todo.
-    const parsed = parseRegisterForm(form({ email: '', password: '' }), TODAY);
+    const parsed = parseRegisterForm(form({ email: '', password: '' }), TODAY, 18);
     expect(parsed).toMatchObject({
       kind: 'invalid',
       errors: {
@@ -136,22 +142,22 @@ describe('parseRegisterForm (acuerdos A2 a A5)', () => {
 
   it('segunda revisión: correo en blanco (espacios, tabuladores) da correo_vacio; contraseña de espacios no es «vacía»', () => {
     for (const email of ['', ' ', '   ', '\t', ' \t ']) {
-      expect(parseRegisterForm(form({ email }), TODAY), JSON.stringify(email)).toMatchObject({
+      expect(parseRegisterForm(form({ email }), TODAY, 18), JSON.stringify(email)).toMatchObject({
         kind: 'invalid',
         errors: { fields: { email: 'registro.error.correo_vacio' } },
       });
     }
     // Una contraseña de espacios no se recorta: tiene longitud, pero es corta.
-    expect(parseRegisterForm(form({ password: '   ' }), TODAY)).toMatchObject({
+    expect(parseRegisterForm(form({ password: '   ' }), TODAY, 18)).toMatchObject({
       kind: 'invalid',
       errors: { fields: { password: 'registro.error.contrasena_corta' } },
     });
     // Lo que no está vacío conserva su motivo.
-    expect(parseRegisterForm(form({ email: 'ana@' }), TODAY)).toMatchObject({
+    expect(parseRegisterForm(form({ email: 'ana@' }), TODAY, 18)).toMatchObject({
       kind: 'invalid',
       errors: { fields: { email: 'registro.error.correo_formato' } },
     });
-    expect(parseRegisterForm(form({ password: 'abc' }), TODAY)).toMatchObject({
+    expect(parseRegisterForm(form({ password: 'abc' }), TODAY, 18)).toMatchObject({
       kind: 'invalid',
       errors: { fields: { password: 'registro.error.contrasena_corta' } },
     });
@@ -159,10 +165,27 @@ describe('parseRegisterForm (acuerdos A2 a A5)', () => {
 
   it('los dígitos que no son ASCII no valen como día, mes ni año', () => {
     for (const day of ['５', '٥', '0x5', '1e1', '+5']) {
-      expect(parseRegisterForm(form({ day: day }), TODAY), day).toMatchObject({
+      expect(parseRegisterForm(form({ day: day }), TODAY, 18), day).toMatchObject({
         kind: 'invalid',
         errors: { fields: { birthDate: 'registro.error.dia' } },
       });
     }
+  });
+});
+
+describe('parseRegisterForm con otra edad mínima', () => {
+  it('con 21: quien cumple 21 hoy es válido y quien los cumple mañana es un menor', () => {
+    expect(parseRegisterForm(form({ day: '11', month: '11', year: '2005' }), TODAY, 21).kind).toBe(
+      'valid',
+    );
+    expect(parseRegisterForm(form({ day: '12', month: '11', year: '2005' }), TODAY, 21)).toEqual({
+      kind: 'underage',
+    });
+  });
+
+  it('con 21, un adulto de 18 años (válido con 18) es un menor', () => {
+    expect(parseRegisterForm(form({ day: '11', month: '11', year: '2008' }), TODAY, 21)).toEqual({
+      kind: 'underage',
+    });
   });
 });

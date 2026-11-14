@@ -1,4 +1,6 @@
-export const MIN_AGE = 18;
+/** Edad mínima por defecto. La instalación puede cambiarla (MIN_AGE de la API) dentro de `MIN_AGE_RANGE`. */
+export const DEFAULT_MIN_AGE = 18;
+export const MIN_AGE_RANGE = { min: 18, max: 25 } as const;
 export const REFERENCE_TIME_ZONE = 'Europe/Madrid';
 export const MIN_BIRTH_DATE = '1900-01-01';
 
@@ -54,23 +56,24 @@ export function ageOn(birthDate: string, today: string): number {
   return now.year - birth.year - (beforeBirthday ? 1 : 0);
 }
 
-export function isAdultOn(birthDate: string, today: string): boolean {
-  return ageOn(birthDate, today) >= MIN_AGE;
+/** ¿Tiene `minAge` años cumplidos en `today`? La edad mínima la pasa quien llama. */
+export function isAdultOn(birthDate: string, today: string, minAge: number): boolean {
+  return ageOn(birthDate, today) >= minAge;
 }
 
 export type BirthDateCheck = { ok: true } | { ok: false; reason: 'IN_FUTURE' | 'UNDERAGE' };
 
 /** Comprueba una fecha ya validada con `birthDateSchema`. La fecha futura se detecta antes que la edad. */
-export function checkBirthDate(birthDate: string, today: string): BirthDateCheck {
+export function checkBirthDate(birthDate: string, today: string, minAge: number): BirthDateCheck {
   if (birthDate > today) return { ok: false, reason: 'IN_FUTURE' };
-  if (!isAdultOn(birthDate, today)) return { ok: false, reason: 'UNDERAGE' };
+  if (!isAdultOn(birthDate, today, minAge)) return { ok: false, reason: 'UNDERAGE' };
   return { ok: true };
 }
 
 /** Fecha de nacimiento más reciente que es mayor de edad en `today` (útil para la interfaz y los tests). */
-export function latestAdultBirthDate(today: string): string {
+export function latestAdultBirthDate(today: string, minAge: number): string {
   const now = parseCivilDate(today);
-  const year = now.year - MIN_AGE;
+  const year = now.year - minAge;
   if (now.month === 2 && now.day === 29 && !isLeapYear(year)) {
     return formatCivilDate({ year, month: 2, day: 28 });
   }

@@ -38,7 +38,6 @@ export const errorMessages: Record<FormName, Record<WebErrorCode, TextKey>> = {
   register: byCode('registro.error.servidor', {
     EMAIL_TAKEN: 'registro.error.correo_existente',
     TERMS_VERSION_OUTDATED: 'registro.error.condiciones_version',
-    UNDERAGE: 'registro.menor.texto1',
     RATE_LIMITED: 'comun.error.limite',
     OUTCOME_UNKNOWN: 'registro.error.resultado_incierto',
   }),
@@ -58,7 +57,6 @@ export const errorMessages: Record<FormName, Record<WebErrorCode, TextKey>> = {
   // /register/complete (UX §3.2). Los textos con {proveedor} los completa la página.
   signup: byCode('alta.error.servidor', {
     TERMS_VERSION_OUTDATED: 'registro.error.condiciones_version',
-    UNDERAGE: 'registro.menor.texto1',
     RATE_LIMITED: 'comun.error.limite',
     OUTCOME_UNKNOWN: 'alta.error.resultado_incierto',
   }),

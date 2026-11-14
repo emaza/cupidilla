@@ -1,4 +1,9 @@
-import { latestAdultBirthDate, referenceToday, SERVICE_TERMS_VERSION } from '@cupidilla/contracts';
+import {
+  DEFAULT_MIN_AGE,
+  latestAdultBirthDate,
+  referenceToday,
+  SERVICE_TERMS_VERSION,
+} from '@cupidilla/contracts';
 import { expect, test } from '@playwright/test';
 import { closeDb, rowsForEmail } from './helpers/db.ts';
 import { fillRegister, login, logout, registerAdult, uniqueEmail } from './helpers/forms.ts';
@@ -84,7 +89,7 @@ test('[BUG-QA-1] C18: un ?notice= desconocido no muestra ningún aviso (tampoco 
 test('C3: quien cumple 18 hoy puede registrarse (y el de mañana, no: ver E-5)', async ({
   page,
 }) => {
-  const [year, month, day] = latestAdultBirthDate(referenceToday(new Date()))
+  const [year, month, day] = latestAdultBirthDate(referenceToday(new Date()), DEFAULT_MIN_AGE)
     .split('-')
     .map(Number) as [number, number, number];
   const email = uniqueEmail();
