@@ -70,12 +70,9 @@ describe('QA: ciclo de vida del worker con un SMTP', () => {
     const t = await createTestApp({
       override: (builder) => builder.overrideProvider(Mailer).useValue(mailer),
     });
-    let closed = false;
-    const closeApp = async () => {
-      if (closed) return;
-      closed = true;
-      await t.app.close();
-    };
+    // Un único cierre: quien llame después espera a ese mismo, no vuelve antes de que acabe.
+    let closePromise: Promise<void> | undefined;
+    const closeApp = () => (closePromise ??= t.app.close());
     try {
       await truncateAll(t.db);
       await seedAna(t.db);
@@ -102,6 +99,8 @@ describe('QA: ciclo de vida del worker con un SMTP', () => {
       expect(mailer.entered).toBeLessThanOrEqual(2);
       expect(sentAtClose).toBeGreaterThanOrEqual(1);
     } finally {
+      // Si algo falló antes de liberar el envío bloqueado, el cierre no puede esperarlo para siempre.
+      mailer.release();
       await closeApp();
     }
   });
@@ -111,12 +110,9 @@ describe('QA: ciclo de vida del worker con un SMTP', () => {
     const t = await createTestApp({
       override: (builder) => builder.overrideProvider(Mailer).useValue(mailer),
     });
-    let closed = false;
-    const closeApp = async () => {
-      if (closed) return;
-      closed = true;
-      await t.app.close();
-    };
+    // Un único cierre: quien llame después espera a ese mismo, no vuelve antes de que acabe.
+    let closePromise: Promise<void> | undefined;
+    const closeApp = () => (closePromise ??= t.app.close());
     try {
       await truncateAll(t.db);
       const worker = t.app.get(OutboxWorker);
@@ -157,6 +153,8 @@ describe('QA: ciclo de vida del worker con un SMTP', () => {
       // anterior (la tabla se vacía después de crear la app).
       expect(mailer.enteredTo.filter((to) => to.startsWith('lote'))).toHaveLength(OUTBOX_BATCH);
     } finally {
+      // Si algo falló antes de liberar el envío bloqueado, el cierre no puede esperarlo para siempre.
+      mailer.release();
       await closeApp();
     }
   });
