@@ -19,7 +19,7 @@
     "db:up": "docker compose up -d --wait db",
     "mail:up": "docker compose up -d --wait mail",
     "db:down": "docker compose down",
-    "db:reset": "docker compose down -v && docker compose up -d --wait db && npm run db:migrate",
+    "db:reset": "docker compose down -v && docker compose up -d --wait db mail && npm run db:migrate",
     "db:generate": "npm run db:generate -w @cupidilla/api --",
     "db:migrate": "npm run db:migrate -w @cupidilla/api",
     "db:studio": "npm run db:up && npm run db:studio -w @cupidilla/api",

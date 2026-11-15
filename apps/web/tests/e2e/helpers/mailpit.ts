@@ -33,8 +33,8 @@ const searchUrl = (to: string) =>
   `${mailpitUrl()}/api/v1/search?query=${encodeURIComponent(`to:"${to}"`)}`;
 
 /** Mensajes a ese destinatario, del más reciente al más antiguo. */
-export async function mailTo(to: string): Promise<MailpitMessage[]> {
-  const response = await fetch(searchUrl(to));
+export async function mailTo(to: string, timeoutMs = 10_000): Promise<MailpitMessage[]> {
+  const response = await fetch(searchUrl(to), { signal: AbortSignal.timeout(timeoutMs) });
   if (!response.ok) throw new Error(`Mailpit respondió ${response.status} al buscar`);
   const body = (await response.json()) as { messages: MailpitMessage[] | null };
   return body.messages ?? [];
@@ -50,14 +50,22 @@ export async function waitForMail(
 ): Promise<MailpitMessage> {
   const { subject, timeoutMs = 10_000 } = options;
   const deadline = Date.now() + timeoutMs;
+  const notArrived = () =>
+    new Error(`No ha llegado ningún correo${subject ? ` «${subject}»` : ''} a ${to}`);
   for (;;) {
-    const found = (await mailTo(to)).find(
-      (message) => subject === undefined || message.Subject === subject,
-    );
-    if (found) return found;
-    if (Date.now() > deadline) {
-      throw new Error(`No ha llegado ningún correo${subject ? ` «${subject}»` : ''} a ${to}`);
+    // El plazo cuenta también para la petición: Mailpit colgado no puede alargarlo.
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw notArrived();
+    let messages: MailpitMessage[];
+    try {
+      messages = await mailTo(to, remaining);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'TimeoutError') throw notArrived();
+      throw error;
     }
+    const found = messages.find((message) => subject === undefined || message.Subject === subject);
+    if (found) return found;
+    if (Date.now() > deadline) throw notArrived();
     await new Promise((done) => setTimeout(done, 200));
   }
 }

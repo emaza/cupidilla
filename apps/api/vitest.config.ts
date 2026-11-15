@@ -61,12 +61,14 @@ export default defineConfig({
         },
       },
       {
-        // Tests de tiempos: corren cuando ya terminó la carga paralela. Usan la base del worker 1
-        // creada por el globalSetup del proyecto integration (hay que lanzarlos junto con él).
+        // Tests de tiempos: corren cuando ya terminó la carga paralela, con la base del worker 1.
+        // Comparten el archivo globalSetup del proyecto integration (que hace el trabajo una sola vez),
+        // así que también preparan las bases si se lanzan solos.
         test: {
           ...integrationOptions,
           name: 'integration-serial',
           include: SERIAL_FILES,
+          globalSetup: ['test/global-setup.ts'],
           maxWorkers: 1,
           sequence: { groupOrder: 2 },
         },

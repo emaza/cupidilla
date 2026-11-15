@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UNVERIFIED_ACCOUNT_TTL_DAYS, UNVERIFIED_REMINDER_AFTER_DAYS } from '@cupidilla/contracts';
-import { and, gt, isNull, lte, sql } from 'drizzle-orm';
+import { and, gt, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { Clock } from '../common/clock.js';
 import type { Env } from '../config/env.schema.js';
 import { DB, type Database } from '../database/database.types.js';
@@ -19,6 +19,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const UNVERIFIED_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 /** Cuentas por sentencia de borrado: se repite mientras borre el lote entero. */
 export const UNVERIFIED_DELETE_BATCH = 100;
+/** Recordatorios por transacción: acota los parámetros del `INSERT` en el *outbox*. */
+export const UNVERIFIED_REMINDER_BATCH = 1000;
 
 export interface SweepResult {
   deleted: number;
@@ -120,38 +122,49 @@ export class UnverifiedAccountsSweeper implements OnModuleInit, OnModuleDestroy 
   }
 
   /**
-   * Recordatorio el 5.º día, una sola vez por cuenta (`verification_reminded_at`), en la misma
-   * transacción que lo marca.
+   * Recordatorio el 5.º día, una sola vez por cuenta (`verification_reminded_at`), en lotes de 1000
+   * (cada uno en su transacción, la que lo marca y lo encola): un único `INSERT` con una fila por
+   * cuenta pasaría del máximo de parámetros de PostgreSQL (65 535) con muchas cuentas a la vez.
    */
-  private enqueueReminders(now: Date): Promise<number> {
+  private async enqueueReminders(now: Date): Promise<number> {
     const remindFrom = new Date(now.getTime() - UNVERIFIED_REMINDER_AFTER_DAYS * DAY_MS);
     const deleteFrom = new Date(now.getTime() - UNVERIFIED_ACCOUNT_TTL_DAYS * DAY_MS);
-    return this.transactions.run(async (tx) => {
-      const due = await tx
-        .update(users)
-        .set({ verificationRemindedAt: now })
-        .where(
-          and(
-            isNull(users.emailVerifiedAt),
-            isNull(users.verificationRemindedAt),
-            lte(users.createdAt, remindFrom),
-            gt(users.createdAt, deleteFrom),
-          ),
-        )
-        .returning({ email: users.email });
-      if (due.length === 0) return 0;
-      await tx
-        .insert(emailOutbox)
-        .values(
-          due.map(({ email }) => ({
-            kind: 'verify_reminder' as const,
-            toEmail: email,
-            nextAttemptAt: now,
-            createdAt: now,
-          })),
-        )
-        .onConflictDoNothing();
-      return due.length;
-    });
+    let total = 0;
+    for (;;) {
+      const count = await this.transactions.run(async (tx) => {
+        const due = and(
+          isNull(users.emailVerifiedAt),
+          isNull(users.verificationRemindedAt),
+          lte(users.createdAt, remindFrom),
+          gt(users.createdAt, deleteFrom),
+        );
+        // La condición va también fuera de la subconsulta: se vuelve a evaluar sobre la fila bloqueada.
+        const batch = tx
+          .select({ id: users.id })
+          .from(users)
+          .where(due)
+          .limit(UNVERIFIED_REMINDER_BATCH);
+        const marked = await tx
+          .update(users)
+          .set({ verificationRemindedAt: now })
+          .where(and(due, inArray(users.id, batch)))
+          .returning({ email: users.email });
+        if (marked.length === 0) return 0;
+        await tx
+          .insert(emailOutbox)
+          .values(
+            marked.map(({ email }) => ({
+              kind: 'verify_reminder' as const,
+              toEmail: email,
+              nextAttemptAt: now,
+              createdAt: now,
+            })),
+          )
+          .onConflictDoNothing();
+        return marked.length;
+      });
+      total += count;
+      if (count < UNVERIFIED_REMINDER_BATCH) return total;
+    }
   }
 }

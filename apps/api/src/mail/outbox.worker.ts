@@ -194,7 +194,8 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
     const result: DrainResult = { sent: 0, skipped: 0, retried: 0, failed: 0 };
     try {
       await this.cleanup();
-      for (;;) {
+      // Al parar no se reclaman más lotes: se termina el que está en curso y nada más.
+      while (!this.stopping) {
         const rows = await this.claim();
         for (const row of rows) result[await this.process(row)] += 1;
         if (rows.length < OUTBOX_BATCH) break;

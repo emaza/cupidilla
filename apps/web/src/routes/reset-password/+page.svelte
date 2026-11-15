@@ -37,10 +37,12 @@
   <div class="card">
     <h1>{t('restablecer.titulo')}</h1>
     <p>{t('restablecer.texto.intro')}</p>
-    <dl class="data-list">
-      <dt>{t('enlace.campo.cuenta')}</dt>
-      <dd translate="no">{data.emailHint}</dd>
-    </dl>
+    {#if data.emailHint}
+      <dl class="data-list">
+        <dt>{t('enlace.campo.cuenta')}</dt>
+        <dd translate="no">{data.emailHint}</dd>
+      </dl>
+    {/if}
 
     <!-- El token no va en el formulario: vive en una cookie de esta ruta (técnico §9.1). -->
     {#key form}

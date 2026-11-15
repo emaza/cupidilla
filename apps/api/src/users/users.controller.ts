@@ -1,11 +1,9 @@
 import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
-  dataReviewRequestSchema,
   deleteAccountRequestSchema,
   reauthenticateRequestSchema,
   type AccountResponse,
-  type DataReviewRequest,
   type DeleteAccountRequest,
   type ReauthenticateRequest,
 } from '@cupidilla/contracts';
@@ -52,8 +50,9 @@ export class UsersController {
   @Throttle({ [SESSION_THROTTLER]: { limit: 10, ttl: THROTTLE_TTL.quarterHour } })
   async completeDataReview(
     @CurrentSession() session: ActiveSession,
-    @Body({ schema: dataReviewRequestSchema }) body: DataReviewRequest,
+    @Body() body: unknown,
   ): Promise<void> {
+    // Sin esquema: la edad se comprueba antes que la forma del resto (correo §5.11).
     await this.dataReview.complete(session.userId, body);
   }
 

@@ -2,7 +2,9 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   checkBirthDate,
+  birthDateSchema,
   dataReviewAcceptanceSchema,
+  dataReviewRequestSchema,
   referenceToday,
   SERVICE_TERMS_VERSION,
   type DataReviewRequest,
@@ -11,6 +13,7 @@ import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { Clock } from '../common/clock.js';
 import { ApiException } from '../common/errors/api.exception.js';
 import type { Env } from '../config/env.schema.js';
+import { validationExceptionFactory } from '../common/errors/validation-exception.factory.js';
 import { ConsentsService } from '../consents/consents.service.js';
 import { DB, type Database } from '../database/database.types.js';
 import { emailOutbox, users } from '../database/schema/index.js';
@@ -34,33 +37,42 @@ export class DataReviewService {
   ) {}
 
   /**
-   * POST /users/me/data-review (correo §5.11): forma → edad (futura, 400; menor, se borra la cuenta
-   * y 422) → aceptación de las condiciones → versión → revisión pendiente. La edad va antes que la
-   * casilla: con un menor no se mira nada más, y nunca se registra una aceptación que no se marcó.
+   * POST /users/me/data-review (correo §5.11): la edad en cuanto la fecha tiene forma válida (menor,
+   * se borra la cuenta y 422, aunque falle la forma de otros campos) → forma del resto (400, fecha
+   * futura incluida) → aceptación de las condiciones → versión → revisión pendiente. La edad va
+   * antes que la casilla: con un menor no se mira nada más, y nunca se registra una aceptación que
+   * no se marcó. El cuerpo llega sin validar (`unknown`): lo valida este método.
    */
-  async complete(userId: string, request: DataReviewRequest): Promise<void> {
+  async complete(userId: string, body: unknown): Promise<void> {
     // Antes de leer nada, con la regla y el MIN_AGE vigentes del alta: es una declaración nueva.
-    const check = checkBirthDate(
-      request.birthDate,
-      referenceToday(this.clock.now()),
-      this.config.get('MIN_AGE', { infer: true }),
+    const birthDate = birthDateSchema.safeParse(
+      typeof body === 'object' && body !== null
+        ? (body as { birthDate?: unknown }).birthDate
+        : undefined,
     );
-    if (!check.ok && check.reason === 'IN_FUTURE') {
+    const minAge = this.config.get('MIN_AGE', { infer: true });
+    const today = referenceToday(this.clock.now());
+    const first = birthDate.success ? checkBirthDate(birthDate.data, today, minAge) : null;
+    if (first && !first.ok && first.reason === 'UNDERAGE') {
+      // Como en el alta, un menor no tiene cuenta: se borra en el acto y su fecha no se guarda ni
+      // se registra (decisión del CTO). Solo si la revisión sigue pendiente; si no, no borra nada
+      // y responde igual. Va antes de la forma de los demás campos: así un 400 siempre significa
+      // que la API no ha visto a un menor.
+      if (await this.deletePendingAccount(userId)) {
+        this.logger.log({ event: 'account_deleted', reason: 'underage_review' });
+      }
+      throw new ApiException('UNDERAGE', 422, undefined, 'Minimum age not reached');
+    }
+    const parsed = dataReviewRequestSchema.safeParse(body);
+    if (!parsed.success) throw validationExceptionFactory(parsed.error.issues);
+    const request: DataReviewRequest = parsed.data;
+    if (first && !first.ok) {
       throw new ApiException(
         'VALIDATION_FAILED',
         400,
         [{ path: 'birthDate', issue: 'in_future' }],
         'Request validation failed',
       );
-    }
-    if (!check.ok) {
-      // Como en el alta, un menor no tiene cuenta: se borra en el acto y su fecha no se guarda ni
-      // se registra (decisión del CTO). Solo si la revisión sigue pendiente; si no, no borra nada
-      // y responde igual.
-      if (await this.deletePendingAccount(userId)) {
-        this.logger.log({ event: 'account_deleted', reason: 'underage_review' });
-      }
-      throw new ApiException('UNDERAGE', 422, undefined, 'Minimum age not reached');
     }
     // Solo un adulto llega aquí: sin la casilla marcada no se cambia nada.
     if (!dataReviewAcceptanceSchema.safeParse(request).success) {

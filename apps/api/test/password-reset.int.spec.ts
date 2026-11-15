@@ -260,11 +260,18 @@ describe('C.2: recuperación de la contraseña', () => {
     });
 
     const resetting = reset(link).then((response) => response);
-    await inReset;
-    // El login verifica la contraseña vieja (fuera de la transacción) y espera al bloqueo.
-    const loggingIn = login(ANA, TEST_PASSWORD).then((response) => response);
-    await waitForLockWait();
-    release();
+    let loggingIn: Promise<Awaited<ReturnType<typeof login>>> | undefined;
+    try {
+      await inReset;
+      // El login verifica la contraseña vieja (fuera de la transacción) y espera al bloqueo.
+      loggingIn = login(ANA, TEST_PASSWORD).then((response) => response);
+      await waitForLockWait();
+    } finally {
+      // Aunque falle la detección del bloqueo, el restablecimiento no se queda esperando la
+      // compuerta con la fila bloqueada (bloquearía el `truncateAll` del siguiente test).
+      release();
+      await Promise.allSettled([resetting, loggingIn]);
+    }
 
     const [resetResponse, loginResponse] = await Promise.all([resetting, loggingIn]);
     expect(resetResponse.status).toBe(200);

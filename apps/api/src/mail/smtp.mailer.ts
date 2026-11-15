@@ -60,8 +60,19 @@ export function classifySmtpError(error: unknown): MailDeliveryError {
       : typeof fields.code === 'string' && /^[A-Z_]{1,32}$/.test(fields.code)
         ? fields.code
         : 'unknown';
-  const permanent = fields.permanent === true || fields.code === 'EENVELOPE';
-  return new MailDeliveryError(permanent, code);
+  return new MailDeliveryError(isPermanent(fields), code);
+}
+
+/**
+ * `EAUTH` y `ETLS` nunca son permanentes aunque nodemailer ponga `permanent: true` (un 535 por
+ * credenciales mal puestas): al corregir la configuración, los correos deben reanudarse. Un
+ * `permanent` explícito se respeta (p. ej. 450 de *greylisting* en `RCPT TO` llega como
+ * `EENVELOPE` con `permanent: false`); `EENVELOPE` sin clasificación SMTP es un sobre mal formado.
+ */
+function isPermanent(fields: { code?: unknown; permanent?: unknown }): boolean {
+  if (fields.code === 'EAUTH' || fields.code === 'ETLS') return false;
+  if (typeof fields.permanent === 'boolean') return fields.permanent;
+  return fields.code === 'EENVELOPE';
 }
 
 /**
