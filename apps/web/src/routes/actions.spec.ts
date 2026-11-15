@@ -452,6 +452,16 @@ describe('/verify-email (B7-2, B7-3)', () => {
     expect(cookies.jar.has('cupidilla_email_token')).toBe(false);
   });
 
+  it('sin JS, el load posterior a una acción con el token ya inservible conserva el formulario (no 410)', async () => {
+    cookies = fakeCookies({ cupidilla_email_token: TOKEN });
+    api.inspectEmailToken.mockResolvedValue(apiFailure(400, 'TOKEN_INVALID_OR_EXPIRED'));
+    const event = formEvent({}, {}, 'http://localhost/verify-email');
+    (event as unknown as { request: { method: string } }).request.method = 'POST';
+    const { result } = await run(() => verifyPage.load(event as never) as Promise<unknown>);
+    expect(result).toMatchObject({ state: 'form', emailHint: null });
+    expect(cookies.jar.has('cupidilla_email_token')).toBe(true);
+  });
+
   it('un enlace válido pide la contraseña si la sesión no es de esa cuenta (K3)', async () => {
     cookies = fakeCookies({ cupidilla_email_token: TOKEN });
     api.inspectEmailToken.mockResolvedValue({

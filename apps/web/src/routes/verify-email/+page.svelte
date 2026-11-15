@@ -50,10 +50,12 @@
           </div>
         {/if}
         <p>{t('confirmar.texto.contrasena')}</p>
-        <dl class="data-list">
-          <dt>{t('enlace.campo.cuenta')}</dt>
-          <dd translate="no">{data.emailHint}</dd>
-        </dl>
+        {#if data.emailHint}
+          <dl class="data-list">
+            <dt>{t('enlace.campo.cuenta')}</dt>
+            <dd translate="no">{data.emailHint}</dd>
+          </dl>
+        {/if}
         <PasswordField
           label={t('confirmar.campo.contrasena')}
           autocomplete="current-password"

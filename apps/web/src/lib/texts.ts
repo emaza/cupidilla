@@ -350,7 +350,7 @@ export const texts = {
   'confirmar.error.servidor':
     'Algo ha fallado por nuestra parte y no hemos podido confirmar tu correo. Puedes volver a intentarlo con este enlace mientras no caduque.',
   'confirmar.error.resultado_incierto':
-    'No sabemos si se ha confirmado tu correo: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta: si ya no ves el aviso de correo sin confirmar, está hecho. Si lo ves, vuelve a abrir el enlace del correo; si te dice que ya no sirve, es que la primera vez sí se confirmó.',
+    'No sabemos si se ha confirmado tu correo: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta: si ya no ves el aviso de correo sin confirmar, está hecho. Si lo ves, vuelve a abrir el enlace del correo. Si te dice que ya no sirve, no podemos saber si se confirmó: comprueba el estado en tu cuenta o pide un enlace nuevo.',
   'confirmar.enlace.comprobar': 'Ir a mi cuenta para comprobarlo',
   // 6.4 Enlaces que no sirven
   'enlace.meta.titulo': 'Este enlace ya no sirve',
