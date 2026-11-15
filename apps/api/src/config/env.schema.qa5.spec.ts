@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { envSchema } from './env.schema.js';
 
-const base = { INTERNAL_API_KEY: 'k'.repeat(32) };
+const base = {
+  INTERNAL_API_KEY: 'k'.repeat(32),
+  // Obligatorias desde el hito de correo (§8.1).
+  PUBLIC_WEB_URL: 'http://localhost:5173',
+  SMTP_URL: 'smtp://127.0.0.1:1025',
+};
 const db = 'postgres://u:secreto@127.0.0.1:5432/cupidilla';
 const rejected = (url: string) =>
   envSchema.safeParse({ ...base, DATABASE_URL: url }).success === false;

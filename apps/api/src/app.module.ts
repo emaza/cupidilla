@@ -3,13 +3,17 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module.js';
+import { DataReviewGuard } from './auth/data-review.guard.js';
 import { SessionGuard } from './auth/session.guard.js';
+import { VerifiedEmailGuard } from './auth/verified-email.guard.js';
 import { ClockModule } from './common/clock.js';
 import {
   accountKey,
   accountTracker,
   ACCOUNT_THROTTLER,
   AppThrottlerGuard,
+  EMAIL_THROTTLER,
+  emailTracker,
   IP_THROTTLER,
   ipTracker,
   SESSION_THROTTLER,
@@ -21,6 +25,7 @@ import { envSchema } from './config/env.schema.js';
 import { ConsentsModule } from './consents/consents.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
+import { MailModule } from './mail/mail.module.js';
 import { OAuthModule } from './oauth/oauth.module.js';
 import { UsersModule } from './users/users.module.js';
 
@@ -47,22 +52,33 @@ import { UsersModule } from './users/users.module.js';
           limit: 10,
           getTracker: accountTracker,
         },
+        // Por correo del cuerpo, un cubo por ruta (correo §7.3). Solo donde la ruta lo declara.
+        {
+          name: EMAIL_THROTTLER,
+          ttl: THROTTLE_TTL.day,
+          limit: 5,
+          getTracker: emailTracker,
+        },
       ],
     }),
     ClockModule,
     DatabaseModule,
     ConsentsModule,
     UsersModule,
+    MailModule,
     AuthModule,
     OAuthModule,
     HealthModule,
     AppConfigModule,
   ],
   providers: [
-    // Orden de los guards globales: clave interna → límite de intentos → sesión.
+    // Orden de los guards globales: clave interna → límite de intentos → sesión → correo
+    // verificado → revisión de datos.
     { provide: APP_GUARD, useClass: InternalKeyGuard },
     { provide: APP_GUARD, useClass: AppThrottlerGuard },
     { provide: APP_GUARD, useExisting: SessionGuard },
+    { provide: APP_GUARD, useClass: VerifiedEmailGuard },
+    { provide: APP_GUARD, useClass: DataReviewGuard },
   ],
 })
 export class AppModule {}

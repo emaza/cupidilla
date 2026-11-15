@@ -20,7 +20,7 @@ import { PROVIDER_CLIENTS } from '../src/oauth/providers/provider-clients.js';
 import {
   FAKE_PROVIDER_URL,
   OAUTH_HTTP_TIMEOUT_MS,
-  OAUTH_REDIRECT_BASE_URL,
+  PUBLIC_WEB_URL,
   OAUTH_TEST_ENV,
 } from './helpers/oauth-env.js';
 import {
@@ -90,9 +90,7 @@ describe('Entrada con Google: inicio, vuelta y alta pendiente (fase 2)', () => {
 
     const url = new URL(body.authorizationUrl);
     expect(url.origin + url.pathname).toBe(`${FAKE_PROVIDER_URL}/google/authorize`);
-    expect(url.searchParams.get('redirect_uri')).toBe(
-      `${OAUTH_REDIRECT_BASE_URL}/auth/google/callback`,
-    );
+    expect(url.searchParams.get('redirect_uri')).toBe(`${PUBLIC_WEB_URL}/auth/google/callback`);
     expect(url.searchParams.get('response_type')).toBe('code');
     expect(url.searchParams.get('scope')).toBe('openid email');
     expect(url.searchParams.get('code_challenge_method')).toBe('S256');

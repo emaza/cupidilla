@@ -32,10 +32,10 @@ describe('MIN_AGE=21', () => {
   it('GET /config devuelve { minAge: 21 }', async () => {
     const response = await api(t.app).get('/config');
     expect(response.status).toBe(200);
-    expect(configResponseSchema.parse(response.body)).toEqual({ minAge: 21 });
+    expect(configResponseSchema.parse(response.body)).toMatchObject({ minAge: 21 });
   });
 
-  it('registro con contraseña: 20 años → UNDERAGE sin guardar nada; 21 cumplidos hoy → 201', async () => {
+  it('registro con contraseña: 20 años → UNDERAGE sin guardar nada; 21 cumplidos hoy → 202', async () => {
     const underage = await api(t.app)
       .post('/auth/register')
       .send(registerBody({ birthDate: TURNS_21_TOMORROW }));
@@ -46,7 +46,7 @@ describe('MIN_AGE=21', () => {
     const adult = await api(t.app)
       .post('/auth/register')
       .send(registerBody({ birthDate: TURNS_21_TODAY }));
-    expect(adult.status).toBe(201);
+    expect(adult.status).toBe(202);
   });
 
   it('alta con proveedor: 20 años → UNDERAGE sin guardar nada; 21 cumplidos hoy → 201', async () => {

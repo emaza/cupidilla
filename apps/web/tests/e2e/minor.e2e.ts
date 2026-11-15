@@ -29,27 +29,32 @@ async function expectMinorScreen(page: Page, email: string): Promise<void> {
   expect(await rowsForEmail(email)).toEqual({ users: 0, sessions: 0, consents: 0 });
 }
 
-test('E-5: un menor ve la pantalla de cierre y no se guarda nada', async ({ page }) => {
-  const email = uniqueEmail();
-  await fillRegister(page, { email, ...minorBirthDate() });
-  await expectMinorScreen(page, email);
-});
+test(
+  'E-5: un menor ve la pantalla de cierre y no se guarda nada',
+  { tag: '@nojs' },
+  async ({ page }) => {
+    const email = uniqueEmail();
+    await fillRegister(page, { email, ...minorBirthDate() });
+    await expectMinorScreen(page, email);
+  },
+);
 
-test('E-5: también cuando además hay otros campos mal', async ({ page }) => {
+test('E-5: también cuando además hay otros campos mal', { tag: '@nojs' }, async ({ page }) => {
   const email = `MAL-${uniqueEmail()}`.replace('@', '');
   await fillRegister(page, { email, password: 'corta', acceptTerms: false, ...minorBirthDate() });
   await expectMinorScreen(page, email);
 });
 
-test('E-5: con un correo ya registrado, la pantalla de menor y nunca la de correo existente', async ({
-  page,
-  browser,
-}) => {
-  const adult = await browser.newPage();
-  const email = await registerAdult(adult);
-  await adult.close();
+test(
+  'E-5: con un correo ya registrado, la pantalla de menor y nunca la de correo existente',
+  { tag: '@nojs' },
+  async ({ page, browser }) => {
+    const adult = await browser.newPage();
+    const email = await registerAdult(adult);
+    await adult.close();
 
-  await fillRegister(page, { email, ...minorBirthDate() });
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('No podemos crear tu cuenta');
-  await expect(page.getByText('No hemos podido crear la cuenta con ese correo')).toHaveCount(0);
-});
+    await fillRegister(page, { email, ...minorBirthDate() });
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('No podemos crear tu cuenta');
+    await expect(page.getByText('No hemos podido crear la cuenta con ese correo')).toHaveCount(0);
+  },
+);

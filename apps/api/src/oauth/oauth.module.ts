@@ -20,7 +20,7 @@ import { createProviderClients, PROVIDER_CLIENTS } from './providers/provider-cl
       inject: [ConfigService],
       useFactory: (config: ConfigService<Env, true>) =>
         createProviderClients({
-          OAUTH_REDIRECT_BASE_URL: config.get('OAUTH_REDIRECT_BASE_URL', { infer: true }),
+          PUBLIC_WEB_URL: config.get('PUBLIC_WEB_URL', { infer: true }),
           GOOGLE_CLIENT_ID: config.get('GOOGLE_CLIENT_ID', { infer: true }),
           GOOGLE_CLIENT_SECRET: config.get('GOOGLE_CLIENT_SECRET', { infer: true }),
           FACEBOOK_APP_ID: config.get('FACEBOOK_APP_ID', { infer: true }),

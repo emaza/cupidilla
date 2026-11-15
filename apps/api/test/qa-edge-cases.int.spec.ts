@@ -61,7 +61,7 @@ describe('QA: casos límite de la API', () => {
       const after = await api(t.app)
         .post('/auth/register')
         .send(registerBody({ birthDate: '2008-07-02' }));
-      expect(after.status).toBe(201);
+      expect(after.status).toBe(202);
     });
 
     it('«hoy» es la fecha de Madrid: a las 23:30 UTC la fecha de Madrid ya es la de mañana en UTC', async () => {
@@ -86,7 +86,7 @@ describe('QA: casos límite de la API', () => {
       const adult = await api(t.app)
         .post('/auth/register')
         .send(registerBody({ birthDate: '2000-02-29' }));
-      expect(adult.status).toBe(201);
+      expect(adult.status).toBe(202);
 
       t.clock.set('2018-02-27T10:00:00Z');
       const minor = await api(t.app)
@@ -140,7 +140,7 @@ describe('QA: casos límite de la API', () => {
   });
 
   describe('registro concurrente', () => {
-    it('cuatro registros simultáneos con el mismo correo: uno gana y los demás reciben 409, nunca 5xx', async () => {
+    it('cuatro registros simultáneos con el mismo correo: uno crea la cuenta, nunca 5xx', async () => {
       const email = 'carrera@example.com';
       const responses = await Promise.all(
         [' Carrera@Example.com', 'CARRERA@example.com', email, 'carrera@example.com '].map(
@@ -151,10 +151,13 @@ describe('QA: casos límite de la API', () => {
         ),
       );
       const statuses = responses.map((response) => response.status).sort();
-      expect(statuses).toEqual([201, 409, 409, 409]);
+      // El 4.º choca con el límite por correo (3 registros cada 24 h, correo §7.3).
+      expect(statuses).toEqual([202, 202, 202, 429]);
       expect(await countRows(t.db, 'users')).toBe(1);
       expect(await countRows(t.db, 'consents')).toBe(1);
-      expect(await countRows(t.db, 'sessions')).toBe(1);
+      expect(await countRows(t.db, 'sessions')).toBe(0);
+      // Un «Confirma tu correo» y los avisos de los otros dos, deduplicados en una fila.
+      expect(await countRows(t.db, 'email_outbox')).toBe(2);
     });
   });
 
@@ -190,7 +193,7 @@ describe('QA: casos límite de la API', () => {
             .post('/auth/register')
             .send(registerBody({ email: ok }))
         ).status,
-      ).toBe(201);
+      ).toBe(202);
 
       const tooLong = await api(t.app)
         .post('/auth/register')

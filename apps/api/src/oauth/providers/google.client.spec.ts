@@ -28,7 +28,7 @@ beforeAll(async () => {
     slowResponseMs: TIMEOUT_MS + 400,
   });
   const settings = providerSettings({
-    OAUTH_REDIRECT_BASE_URL: BASE,
+    PUBLIC_WEB_URL: BASE,
     GOOGLE_CLIENT_ID: 'google-cliente',
     GOOGLE_CLIENT_SECRET: 'google-secreto',
     FACEBOOK_APP_ID: undefined,

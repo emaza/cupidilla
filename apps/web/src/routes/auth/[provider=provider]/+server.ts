@@ -67,6 +67,10 @@ export const POST: RequestHandler = async (event) => {
       if (result.error.code === 'VALIDATION_FAILED') {
         redirect(303, `${page}?error=password-required`);
       }
+      // Añadir un proveedor exige el correo confirmado (K7); por una carrera puede llegar aquí.
+      if (result.error.code === 'EMAIL_NOT_VERIFIED') {
+        redirect(303, `/account?error=email-not-verified&provider=${provider}`);
+      }
     }
     goToProvider(event, provider, page, result);
   }

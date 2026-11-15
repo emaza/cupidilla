@@ -5,10 +5,12 @@ import { envSchema } from './env.schema.js';
 const base = {
   DATABASE_URL: 'postgres://u:p@127.0.0.1:5432/cupidilla_test',
   INTERNAL_API_KEY: 'k'.repeat(32),
+  // Obligatorias desde el hito de correo (§8.1).
+  PUBLIC_WEB_URL: 'http://localhost:5173',
+  SMTP_URL: 'smtp://127.0.0.1:1025',
 };
 const google = { GOOGLE_CLIENT_ID: 'id-de-google', GOOGLE_CLIENT_SECRET: 'secreto-google-xyz' };
 const facebook = { FACEBOOK_APP_ID: '123456', FACEBOOK_APP_SECRET: 'secreto-facebook-xyz' };
-const redirect = { OAUTH_REDIRECT_BASE_URL: 'http://localhost:5173' };
 
 /** Mensajes de error; nunca deben contener los valores de las variables. */
 function problems(env: Record<string, string>): string[] {
@@ -28,7 +30,6 @@ describe('O-21: configuración de los proveedores (§10.4)', () => {
   it('las variables vacías del .env cuentan como ausentes', () => {
     const env = envSchema.parse({
       ...base,
-      OAUTH_REDIRECT_BASE_URL: '',
       GOOGLE_CLIENT_ID: '',
       GOOGLE_CLIENT_SECRET: '',
       FACEBOOK_APP_ID: '',
@@ -38,7 +39,7 @@ describe('O-21: configuración de los proveedores (§10.4)', () => {
   });
 
   it('con Google completo: solo Google, con los endpoints reales y la redirect URI exacta', () => {
-    const settings = providerSettings(envSchema.parse({ ...base, ...google, ...redirect }));
+    const settings = providerSettings(envSchema.parse({ ...base, ...google }));
     expect(Object.keys(settings)).toEqual(['google']);
     expect(settings.google).toMatchObject({
       redirectUri: 'http://localhost:5173/auth/google/callback',
@@ -55,7 +56,6 @@ describe('O-21: configuración de los proveedores (§10.4)', () => {
         ...base,
         ...google,
         ...facebook,
-        ...redirect,
         OAUTH_FAKE_PROVIDER_URL: 'http://127.0.0.1:4401',
       }),
     );
@@ -67,42 +67,37 @@ describe('O-21: configuración de los proveedores (§10.4)', () => {
   });
 
   it.each([
-    [
-      'media pareja de Google',
-      { GOOGLE_CLIENT_ID: 'id-de-google', ...redirect },
-      'GOOGLE_CLIENT_SECRET',
-    ],
+    ['media pareja de Google', { GOOGLE_CLIENT_ID: 'id-de-google' }, 'GOOGLE_CLIENT_SECRET'],
     [
       'media pareja de Facebook',
-      { FACEBOOK_APP_SECRET: 'secreto-facebook-xyz', ...redirect },
+      { FACEBOOK_APP_SECRET: 'secreto-facebook-xyz' },
       'FACEBOOK_APP_ID',
     ],
-    ['proveedor sin OAUTH_REDIRECT_BASE_URL', { ...google }, 'OAUTH_REDIRECT_BASE_URL'],
+    ['proveedor sin PUBLIC_WEB_URL', { ...google, PUBLIC_WEB_URL: '' }, 'PUBLIC_WEB_URL'],
     [
       'base http fuera de loopback',
-      { ...google, OAUTH_REDIRECT_BASE_URL: 'http://cupidilla.example' },
-      'OAUTH_REDIRECT_BASE_URL',
+      { ...google, PUBLIC_WEB_URL: 'http://cupidilla.example' },
+      'PUBLIC_WEB_URL',
     ],
     [
       'base con barra final',
-      { ...google, OAUTH_REDIRECT_BASE_URL: 'https://cupidilla.example/' },
-      'OAUTH_REDIRECT_BASE_URL',
+      { ...google, PUBLIC_WEB_URL: 'https://cupidilla.example/' },
+      'PUBLIC_WEB_URL',
     ],
     [
       'base con ruta',
-      { ...google, OAUTH_REDIRECT_BASE_URL: 'https://cupidilla.example/app' },
-      'OAUTH_REDIRECT_BASE_URL',
+      { ...google, PUBLIC_WEB_URL: 'https://cupidilla.example/app' },
+      'PUBLIC_WEB_URL',
     ],
     [
       'FACEBOOK_APP_ID no numérico',
-      { ...redirect, FACEBOOK_APP_ID: 'abc', FACEBOOK_APP_SECRET: 'secreto-facebook-xyz' },
+      { FACEBOOK_APP_ID: 'abc', FACEBOOK_APP_SECRET: 'secreto-facebook-xyz' },
       'FACEBOOK_APP_ID',
     ],
     [
       'proveedor falso en producción',
       {
         ...google,
-        ...redirect,
         NODE_ENV: 'production',
         OAUTH_FAKE_PROVIDER_URL: 'http://127.0.0.1:4400',
       },
@@ -139,7 +134,7 @@ describe('O-21: configuración de los proveedores (§10.4)', () => {
       'http://127.0.0.1:4173',
       'http://[::1]:5173',
     ]) {
-      expect(problems({ ...google, OAUTH_REDIRECT_BASE_URL: url })).toEqual([]);
+      expect(problems({ ...google, PUBLIC_WEB_URL: url })).toEqual([]);
     }
   });
 });

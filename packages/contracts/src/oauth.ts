@@ -4,6 +4,7 @@ import {
   birthDateSchema,
   emailSchema,
   newPasswordSchema,
+  opaqueTokenSchema,
   passwordInputSchema,
   publicUserSchema,
   registerRequestSchema,
@@ -31,11 +32,6 @@ export const OAUTH_PENDING_TTL_MINUTES = 30;
 export const OAUTH_LINK_MAX_FAILURES = 5;
 
 const entryPointSchema = z.enum(OAUTH_ENTRY_POINTS, { error: 'invalid' });
-
-/** Token opaco de 256 bits en base64url (43 caracteres), como el de sesión. */
-const opaqueTokenSchema = z
-  .string({ error: 'required' })
-  .regex(/^[A-Za-z0-9_-]{43}$/, { error: 'invalid_format' });
 
 /**
  * Ruta de vuelta tras el proveedor. Solo minúsculas, guiones y barras, y nunca `//` (que el
@@ -164,6 +160,8 @@ export const pendingIdentityResponseSchema = z.object({
   email: z.string(),
   entryPoint: z.enum(OAUTH_ENTRY_POINTS),
   expiresAt: expiresAtSchema,
+  /** Solo con `kind = 'link'`: si la cuenta tiene el correo verificado (correo §6.2). */
+  accountEmailVerified: z.boolean().optional(),
 });
 export type PendingIdentityResponse = z.infer<typeof pendingIdentityResponseSchema>;
 

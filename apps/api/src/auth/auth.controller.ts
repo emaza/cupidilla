@@ -1,10 +1,20 @@
-import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
+  emailRequestSchema,
+  emailTokenInspectionRequestSchema,
+  emailVerificationRequestSchema,
   loginRequestSchema,
+  passwordResetSchema,
   registerRequestSchema,
   type AuthResponse,
+  type EmailRequest,
+  type EmailTokenInspectionRequest,
+  type EmailTokenInspectionResponse,
+  type EmailVerificationRequest,
+  type EmailVerificationResponse,
   type LoginRequest,
+  type PasswordResetRequest,
   type RegisterRequest,
   type SessionResponse,
 } from '@cupidilla/contracts';
@@ -12,24 +22,105 @@ import {
   CurrentSession,
   type ActiveSession,
 } from '../common/decorators/current-session.decorator.js';
+import { AllowDuringDataReview } from '../common/decorators/allow-during-data-review.decorator.js';
 import { Public } from '../common/decorators/public.decorator.js';
 import {
   ACCOUNT_THROTTLER,
+  EMAIL_THROTTLER,
   IP_THROTTLER,
   THROTTLE_TTL,
 } from '../common/guards/app-throttler.guard.js';
 import { AuthService } from './auth.service.js';
+import { EmailVerificationService } from './email-verification.service.js';
+import { PasswordResetService } from './password-reset.service.js';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly verification: EmailVerificationService,
+    private readonly passwordReset: PasswordResetService,
+  ) {}
 
+  /** Registro uniforme (correo §5.1): siempre 202 sin cuerpo y sin sesión. */
   @Post('register')
   @Public()
-  @HttpCode(201)
-  @Throttle({ [IP_THROTTLER]: { limit: 5, ttl: THROTTLE_TTL.hour } })
-  register(@Body({ schema: registerRequestSchema }) body: RegisterRequest): Promise<AuthResponse> {
-    return this.auth.register(body);
+  @HttpCode(202)
+  @Throttle({
+    [IP_THROTTLER]: { limit: 5, ttl: THROTTLE_TTL.hour },
+    [EMAIL_THROTTLER]: { limit: 3, ttl: THROTTLE_TTL.day },
+  })
+  async register(@Body({ schema: registerRequestSchema }) body: RegisterRequest): Promise<void> {
+    await this.auth.register(body);
+  }
+
+  /** Pedir (otra vez) el correo de verificación: siempre 202, exista o no la cuenta (§5.3). */
+  @Post('email-verification/request')
+  @Public()
+  @HttpCode(202)
+  @Throttle({
+    [IP_THROTTLER]: { limit: 5, ttl: THROTTLE_TTL.quarterHour },
+    [EMAIL_THROTTLER]: { limit: 5, ttl: THROTTLE_TTL.day },
+  })
+  async requestVerification(
+    @Body({ schema: emailRequestSchema }) body: EmailRequest,
+  ): Promise<void> {
+    await this.verification.request(body.email);
+  }
+
+  /**
+   * Comprobar un enlace sin consumirlo (§5.4). Pública, pero lee el `Bearer` si viene. Sin el
+   * conjunto `account`: sin correo en el cuerpo, todas las personas sin sesión compartirían cubo.
+   */
+  @Post('email-tokens/inspection')
+  @Public()
+  @HttpCode(200)
+  @Throttle({ [IP_THROTTLER]: { limit: 30, ttl: THROTTLE_TTL.quarterHour } })
+  inspectToken(
+    @Body({ schema: emailTokenInspectionRequestSchema }) body: EmailTokenInspectionRequest,
+    @Headers('authorization') authorization: string | undefined,
+  ): Promise<EmailTokenInspectionResponse> {
+    return this.verification.inspect(body, authorization);
+  }
+
+  /** Confirmar el correo (§5.4). Pública, pero lee el `Bearer` si viene. */
+  @Post('email-verification')
+  @Public()
+  @HttpCode(200)
+  @Throttle({ [IP_THROTTLER]: { limit: 20, ttl: THROTTLE_TTL.quarterHour } })
+  confirmEmail(
+    @Body({ schema: emailVerificationRequestSchema }) body: EmailVerificationRequest,
+    @Headers('authorization') authorization: string | undefined,
+  ): Promise<EmailVerificationResponse> {
+    return this.verification.confirm(body, authorization);
+  }
+
+  /** Pedir el enlace de recuperación: siempre 202, exista o no la cuenta (§5.5). */
+  @Post('password-reset/request')
+  @Public()
+  @HttpCode(202)
+  @Throttle({
+    [IP_THROTTLER]: { limit: 5, ttl: THROTTLE_TTL.quarterHour },
+    [EMAIL_THROTTLER]: { limit: 5, ttl: THROTTLE_TTL.day },
+  })
+  async requestPasswordReset(
+    @Body({ schema: emailRequestSchema }) body: EmailRequest,
+  ): Promise<void> {
+    await this.passwordReset.request(body.email);
+  }
+
+  /**
+   * Fijar la contraseña con el enlace (§5.6): cierra todas las sesiones de la cuenta y abre una.
+   * Sin el conjunto `account`, por lo mismo que la confirmación del correo.
+   */
+  @Post('password-reset')
+  @Public()
+  @HttpCode(200)
+  @Throttle({ [IP_THROTTLER]: { limit: 10, ttl: THROTTLE_TTL.quarterHour } })
+  resetPassword(
+    @Body({ schema: passwordResetSchema }) body: PasswordResetRequest,
+  ): Promise<AuthResponse> {
+    return this.passwordReset.reset(body);
   }
 
   @Post('login')
@@ -48,12 +139,14 @@ export class AuthController {
   }
 
   @Post('logout')
+  @AllowDuringDataReview()
   @HttpCode(204)
   logout(@CurrentSession() session: ActiveSession): Promise<void> {
     return this.auth.logout(session.tokenHash);
   }
 
   @Get('session')
+  @AllowDuringDataReview()
   getSession(@CurrentSession() session: ActiveSession): SessionResponse {
     return {
       user: session.user,

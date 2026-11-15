@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { passwordInputSchema, publicUserSchema, strictObjectError } from './auth.js';
+import {
+  birthDateSchema,
+  passwordInputSchema,
+  publicUserSchema,
+  strictObjectError,
+  termsVersionSchema,
+} from './auth.js';
 import { consentSchema } from './consents.js';
 import { OAUTH_PROVIDERS } from './oauth.js';
 
@@ -21,7 +27,13 @@ export type AccountSession = z.infer<typeof accountSessionSchema>;
 
 /** Respuesta de GET /users/me. */
 export const accountResponseSchema = z.object({
-  user: publicUserSchema.extend({ birthDate: z.iso.date() }),
+  user: publicUserSchema.extend({
+    birthDate: z.iso.date(),
+    /** Cuándo se verificó el correo; `null` si no lo está (correo §5.8). */
+    emailVerifiedAt: z.iso.datetime().nullable(),
+    /** Sin verificar, cuándo se borra la cuenta (`created_at` + 7 días); verificada, `null`. */
+    unverifiedDeletionAt: z.iso.datetime().nullable(),
+  }),
   consents: z.array(consentSchema),
   /**
    * Formas de entrar. Del proveedor solo se muestran fechas (unión y último uso), no su correo
@@ -78,3 +90,27 @@ export const removeIdentityRequestSchema = z.strictObject(
 );
 
 export type RemoveIdentityRequest = z.infer<typeof removeIdentityRequestSchema>;
+
+/**
+ * Cuerpo de POST /users/me/data-review (correo §5.11): la persona escribe de nuevo su fecha de
+ * nacimiento y vuelve a aceptar las condiciones tras recuperar una cuenta sin verificar. `204`.
+ *
+ * `acceptTerms` llega tal cual está la casilla (booleano, o ausente si no se marcó): la API
+ * comprueba la edad **antes** que la aceptación, porque con una fecha de menor borra la cuenta
+ * aunque falte la casilla. Solo con un adulto exige `true` (`dataReviewAcceptanceSchema`).
+ */
+export const dataReviewRequestSchema = z.strictObject(
+  {
+    birthDate: birthDateSchema,
+    acceptTerms: z.boolean({ error: 'required' }).optional(),
+    termsVersion: termsVersionSchema,
+  },
+  { error: strictObjectError },
+);
+
+export type DataReviewRequest = z.infer<typeof dataReviewRequestSchema>;
+
+/** La revisión de un adulto, ya con la edad comprobada: sin aceptar, `acceptTerms: required`. */
+export const dataReviewAcceptanceSchema = dataReviewRequestSchema.extend({
+  acceptTerms: z.literal(true, { error: 'required' }),
+});

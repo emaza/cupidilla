@@ -6,6 +6,7 @@ import {
   api,
   createTestApp,
   registerBody,
+  registerUser,
   TEST_NOW,
   truncateAll,
   uniqueIp,
@@ -67,9 +68,8 @@ describe('Los logs no contienen datos personales ni secretos (I-21)', () => {
       birthDate: '2010-06-21',
     });
 
-    const registered = await api(t.app).post('/auth/register').send(adult);
-    expect(registered.status).toBe(201);
-    const token = registered.body.session.token as string;
+    const registered = await registerUser(t.app, adult);
+    const token = registered.token;
 
     expect((await api(t.app).post('/auth/register').send(minor)).status).toBe(422);
     expect(
@@ -79,7 +79,8 @@ describe('Los logs no contienen datos personales ni secretos (I-21)', () => {
           .send({ email: adult.email, password: 'contraseña-fallida-x' })
       ).status,
     ).toBe(401);
-    expect((await api(t.app).post('/auth/register').send(adult)).status).toBe(409);
+    // Registro uniforme (correo §5.1): el correo repetido también es 202.
+    expect((await api(t.app).post('/auth/register').send(adult)).status).toBe(202);
     const deleted = await api(t.app)
       .post('/users/me/deletion')
       .set('Authorization', `Bearer ${token}`)
@@ -103,7 +104,7 @@ describe('Los logs no contienen datos personales ni secretos (I-21)', () => {
       minor.birthDate,
       token,
       hashOpaqueToken(token),
-      registered.body.user.id as string,
+      registered.userId,
       process.env.INTERNAL_API_KEY ?? 'clave-interna',
       '$argon2id$',
     ];

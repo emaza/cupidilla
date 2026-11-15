@@ -18,5 +18,15 @@ services:
       timeout: 3s
       retries: 30
       start_period: 5s
+  # Correo en local y en los e2e (correo §8.2): SMTP en 1025 y bandeja en http://localhost:8025.
+  # Usa el HEALTHCHECK de la imagen. Sin volumen: los correos se pierden al recrear el contenedor.
+  mail:
+    image: axllent/mailpit:v1.32.0
+    environment:
+      MP_MAX_MESSAGES: 500
+      TZ: UTC
+    ports:
+      - '127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025'
+      - '127.0.0.1:${MAILPIT_HTTP_PORT:-8025}:8025'
 volumes:
   pgdata:

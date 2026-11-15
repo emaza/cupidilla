@@ -16,7 +16,10 @@ describe('GET /config (edad mínima por defecto)', () => {
   it('sin MIN_AGE devuelve { minAge: 18 }, sin sesión pero con la clave interna', async () => {
     const response = await api(t.app).get('/config');
     expect(response.status).toBe(200);
-    expect(configResponseSchema.parse(response.body)).toEqual({ minAge: 18 });
+    expect(configResponseSchema.parse(response.body)).toEqual({
+      minAge: 18,
+      mail: { unverifiedReminder: true, passwordChangedNotice: true },
+    });
   });
 
   it('sin clave interna → 403 FORBIDDEN', async () => {

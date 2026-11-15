@@ -22,7 +22,10 @@ type Mode =
   | 'api-outcome-unknown'
   | 'status-200'
   | 'status-204'
-  | 'bare-502';
+  | 'status-201'
+  | 'status-202'
+  | 'bare-502'
+  | 'data-review';
 
 /** Respuestas 201 que llegan pero no se pueden usar. */
 const BROKEN_201: Partial<Record<Mode, string>> = {
@@ -37,6 +40,12 @@ const BROKEN_201: Partial<Record<Mode, string>> = {
   // 2xx sin cuerpo: 204 es el del borrado; 200 podría ser de un intermediario.
   'status-200': 'HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n',
   'status-204': 'HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n',
+  // El registro uniforme confirma con 202 (correo §5.1); un 201 ya no es suyo.
+  'status-201': 'HTTP/1.1 201 Created\r\nContent-Length: 0\r\nConnection: close\r\n\r\n',
+  'status-202': 'HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\nConnection: close\r\n\r\n',
+  // Cuenta pendiente de revisar sus datos (correo §5.11).
+  'data-review':
+    'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: 41\r\nConnection: close\r\n\r\n{"error":{"code":"DATA_REVIEW_REQUIRED"}}',
   // Un proxy que no llega a la API, o que la pierde después de enviarle la petición.
   'bare-502':
     'HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/html\r\nContent-Length: 11\r\nConnection: close\r\n\r\nBad Gateway',
@@ -201,6 +210,37 @@ describe('api-client: resultado incierto (OUTCOME_UNKNOWN)', () => {
   );
 });
 
+describe('api-client: registro uniforme y verificación (B7-5)', () => {
+  const verifyEmail = () =>
+    api.verifyEmail(event, { token: 'A'.repeat(43), password: 'una frase larga de prueba' });
+
+  it.each<Mode>(['close', 'reset'])(
+    'un corte tras enviar (%s) → OUTCOME_UNKNOWN en register y verifyEmail',
+    async (cut) => {
+      target.url = serverUrl;
+      mode = cut;
+      expect(await register()).toMatchObject({ status: 503, error: { code: 'OUTCOME_UNKNOWN' } });
+      expect(await verifyEmail()).toMatchObject({
+        status: 503,
+        error: { code: 'OUTCOME_UNKNOWN' },
+      });
+      expect(received).toBe(2);
+    },
+  );
+
+  it('register: solo un 202 confirma; un 201 es OUTCOME_UNKNOWN', async () => {
+    target.url = serverUrl;
+    mode = 'status-202';
+    expect(await register()).toEqual({ ok: true, status: 202, data: undefined });
+    mode = 'status-201';
+    expect(await register()).toEqual({
+      ok: false,
+      status: 503,
+      error: { code: 'OUTCOME_UNKNOWN' },
+    });
+  });
+});
+
 describe('api-client: entrada con proveedor (W-O5)', () => {
   const signup = () =>
     api.oauthSignup(event, {
@@ -242,6 +282,60 @@ describe('api-client: entrada con proveedor (W-O5)', () => {
       ok: false,
       status: 503,
       error: { code: 'API_UNAVAILABLE' },
+    });
+  });
+});
+
+describe('api-client: recuperación y revisión de datos (correo, fase C)', () => {
+  const resetPassword = () =>
+    api.resetPassword(event, { token: 'T'.repeat(43), password: 'otra frase larga nueva' });
+  const review = () =>
+    api.completeDataReview(event, 'T'.repeat(43), {
+      birthDate: '1990-05-05',
+      acceptTerms: true,
+      termsVersion: '2026-11-borrador-2',
+    });
+
+  it.each<Mode>(['close', 'reset', 'truncated', 'bare-502'])(
+    'C4-6: restablecer es no idempotente: %s → OUTCOME_UNKNOWN, sin reintentar',
+    async (failure) => {
+      target.url = serverUrl;
+      mode = failure;
+      expect(await resetPassword()).toEqual({
+        ok: false,
+        status: 503,
+        error: { code: 'OUTCOME_UNKNOWN' },
+      });
+      expect(received).toBe(1);
+    },
+  );
+
+  it('la revisión de datos solo se confirma con un 204; un corte es OUTCOME_UNKNOWN', async () => {
+    target.url = serverUrl;
+    mode = 'status-204';
+    expect(await review()).toEqual({ ok: true, status: 204, data: undefined });
+    mode = 'reset';
+    expect(await review()).toMatchObject({ error: { code: 'OUTCOME_UNKNOWN' } });
+  });
+
+  it('pedir el enlace solo se confirma con un 202', async () => {
+    target.url = serverUrl;
+    mode = 'status-202';
+    expect(await api.requestPasswordReset(event, 'ana@example.com')).toEqual({
+      ok: true,
+      status: 202,
+      data: undefined,
+    });
+    mode = 'status-200';
+    expect(await api.requestPasswordReset(event, 'ana@example.com')).toMatchObject({ ok: false });
+  });
+
+  it('un 403 DATA_REVIEW_REQUIRED de cualquier ruta lleva a /account/review sin mensaje', async () => {
+    target.url = serverUrl;
+    mode = 'data-review';
+    await expect(deleteAccount()).rejects.toMatchObject({
+      status: 303,
+      location: '/account/review',
     });
   });
 });

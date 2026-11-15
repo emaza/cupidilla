@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer, type AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
 import { e2eDatabaseUrl } from './e2e-database.ts';
+import { mailpitSmtpUrl } from './mailpit.ts';
 
 /**
  * Pila propia de un test: una API y una web que el test arranca y para a su gusto, sobre la base
@@ -81,8 +82,13 @@ export async function startStack(options: StackOptions = {}): Promise<Stack> {
       cwd: resolve(ROOT, 'apps/api'),
       env: {
         ...process.env,
-        NODE_ENV: 'production',
+        // `test` y no `production`, como la API de Playwright: en producción la API no admite un
+        // SMTP en loopback ni las direcciones de ejemplo (correo §8.1).
+        NODE_ENV: 'test',
         DATABASE_URL: databaseUrl,
+        // Las mismas variables de correo que la API de Playwright (correo §11.2).
+        PUBLIC_WEB_URL: webUrl,
+        SMTP_URL: mailpitSmtpUrl(),
         API_HOST: '127.0.0.1',
         API_PORT: String(apiPort),
         RATE_LIMIT_FACTOR: String(rateLimitFactor),

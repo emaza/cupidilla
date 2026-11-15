@@ -201,3 +201,45 @@ describe('/account sin contraseña: el resultado de añadir va al panel (decisi�
     expect(at('')).toEqual({ message: null, connect: null });
   });
 });
+
+describe('avisos del correo (correo UX §6.10)', () => {
+  const params = (query: string) => new URLSearchParams(query);
+
+  it('B7-6: /account?notice=cualquier-cosa no muestra nada', () => {
+    expect(urlMessage('account', params('notice=cualquier-cosa'))).toBeNull();
+    expect(urlMessage('check-email-signup', params('notice=cualquier-cosa'))).toBeNull();
+  });
+
+  it('los avisos de confirmar son confirmaciones; el reenvío lleva el correo', () => {
+    expect(urlMessage('account', params('notice=email-verified-signin'))).toEqual({
+      kind: 'success',
+      text: 'Hemos confirmado tu correo y has entrado en tu cuenta.',
+    });
+    expect(
+      urlMessage('account', params('notice=verification-sent'), { correo: 'beto@example.com' }),
+    ).toEqual({
+      kind: 'success',
+      text: 'Te hemos enviado otro mensaje a beto@example.com. El enlace anterior ya no funciona.',
+    });
+    // Sin el correo no se pinta un «{correo}» suelto.
+    expect(urlMessage('account', params('notice=verification-sent'))).toBeNull();
+  });
+
+  it('email-not-verified exige provider', () => {
+    expect(urlMessage('account', params('error=email-not-verified'))).toBeNull();
+    expect(urlMessage('account', params('error=email-not-verified&provider=google'))).toEqual({
+      kind: 'error',
+      text: 'No hemos añadido Google porque tu correo aún no está confirmado. Confírmalo e inténtalo de nuevo. No hemos hecho ningún cambio.',
+    });
+  });
+
+  it('«Revisa tu correo»: reenviado, límite y fallo', () => {
+    expect(
+      urlMessage('check-email-signup', params('notice=resent'), { correo: 'a@example.com' })?.text,
+    ).toBe(
+      'Si hay una cuenta con a@example.com, te hemos enviado otro mensaje. El enlace anterior ya no funciona.',
+    );
+    expect(urlMessage('check-email-signup', params('error=rate-limited'))?.kind).toBe('error');
+    expect(urlMessage('check-email-signup', params('error=resend-failed'))?.kind).toBe('error');
+  });
+});

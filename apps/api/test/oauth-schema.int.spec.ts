@@ -137,6 +137,7 @@ describe('Esquema de identidades y estado temporal de OAuth (§5)', () => {
       order by 1`);
     expect(result.rows).toEqual([
       { table_name: 'consents', confdeltype: 'c' },
+      { table_name: 'email_tokens', confdeltype: 'c' },
       { table_name: 'identities', confdeltype: 'c' },
       { table_name: 'pending_identities', confdeltype: 'c' },
       { table_name: 'sessions', confdeltype: 'c' },

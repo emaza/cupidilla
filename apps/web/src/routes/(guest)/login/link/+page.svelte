@@ -4,6 +4,7 @@
   import ErrorSummary from '#lib/components/ErrorSummary.svelte';
   import PasswordField from '#lib/components/PasswordField.svelte';
   import SubmitButton from '#lib/components/SubmitButton.svelte';
+  import { resolve } from '$app/paths';
   import { createSubmission } from '#lib/forms/submission.svelte.ts';
   import { fill, pageTitle, t, type TextKey } from '#lib/texts.ts';
   import type { PageProps } from './$types';
@@ -49,13 +50,24 @@
         aria-hidden="true"
         tabindex="-1"
       />
+      {#if data.pending.accountUnverified}
+        <div class="notice notice-info">
+          <span class="icon" aria-hidden="true">ℹ</span>
+          <p id="account-unverified">{t('union.texto.sin_confirmar')}</p>
+        </div>
+      {/if}
       <PasswordField
         label={t('union.campo.contrasena')}
         autocomplete="current-password"
         help={t('union.ayuda.contrasena')}
         error={passwordError ? t(passwordError) : undefined}
+        describedBy={data.pending.accountUnverified ? 'account-unverified' : undefined}
       />
-      <p class="help">{t('union.ayuda.olvido')}</p>
+      <!-- Entre el campo y el botón, en el DOM y en pantalla (correo UX §3.9). -->
+      <p>
+        <a class="block-link" href={resolve('forgot-password')}>{t('union.enlace.olvido')}</a>
+      </p>
+      <p class="help">{text('union.ayuda.olvido_destino')}</p>
 
       <div class="actions">
         <SubmitButton

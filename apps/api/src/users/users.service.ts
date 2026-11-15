@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { AccountResponse, PublicUser } from '@cupidilla/contracts';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { listOpenSessions } from '../auth/open-sessions.js';
 import { markSessionAuthenticated } from '../auth/recent-auth.js';
 import { ApiException } from '../common/errors/api.exception.js';
@@ -10,15 +10,21 @@ import { ConsentsService } from '../consents/consents.service.js';
 import { DB, type Database, type Executor, type Tx } from '../database/database.types.js';
 import { lockEmail } from '../database/email-lock.js';
 import { isUniqueViolation } from '../database/pg-errors.js';
-import { identities, users } from '../database/schema/index.js';
+import { emailOutbox, emailTokens, identities, sessions, users } from '../database/schema/index.js';
 import { IdentitiesService, providerEmailIs } from '../oauth/identities.service.js';
 import { PasswordService } from './password.service.js';
+import { unverifiedDeletionAt } from './unverified-deletion.js';
 
 export interface NewUser {
   email: string;
   /** `null` en una cuenta creada con un proveedor (§5.1). */
   passwordHash: string | null;
   birthDate: string;
+  /**
+   * Las cuentas creadas con un proveedor nacen con el correo verificado (correo §5.10); las del
+   * registro con contraseña, sin verificar.
+   */
+  emailVerified?: boolean;
 }
 
 export interface UserCredentials {
@@ -29,10 +35,14 @@ export interface UserCredentials {
 
 type UserRow = typeof users.$inferSelect;
 
-export const toPublicUser = (row: Pick<UserRow, 'id' | 'email' | 'createdAt'>): PublicUser => ({
+export const toPublicUser = (
+  row: Pick<UserRow, 'id' | 'email' | 'createdAt' | 'emailVerifiedAt' | 'dataReviewRequiredAt'>,
+): PublicUser => ({
   id: row.id,
   email: row.email,
   createdAt: row.createdAt.toISOString(),
+  emailVerified: row.emailVerifiedAt !== null,
+  dataReviewRequired: row.dataReviewRequiredAt !== null,
 });
 
 @Injectable()
@@ -54,10 +64,16 @@ export class UsersService {
   async create(tx: Tx, data: NewUser): Promise<PublicUser> {
     await lockEmail(tx, data.email);
     const now = this.clock.now();
+    const { emailVerified = false, ...values } = data;
     try {
       const [row] = await tx
         .insert(users)
-        .values({ ...data, createdAt: now, updatedAt: now })
+        .values({
+          ...values,
+          emailVerifiedAt: emailVerified ? now : null,
+          createdAt: now,
+          updatedAt: now,
+        })
         .returning();
       if (!row) throw new Error('INSERT de users sin fila devuelta');
       return toPublicUser(row);
@@ -83,6 +99,94 @@ export class UsersService {
       .where(and(providerEmailIs(email), eq(identities.emailVerified, true)))
       .limit(1);
     if (row) throw new ApiException('EMAIL_TAKEN', 409, undefined, 'Email already registered');
+  }
+
+  /**
+   * Registro uniforme (correo §5.1): ¿el correo ya es de alguien, en `users` (verificado o no) o
+   * como `provider_email` verificado de una identidad? La misma consulta que
+   * `assertEmailNotInIdentities`, sin lanzar. Toma el bloqueo del correo.
+   */
+  async isEmailTaken(tx: Tx, email: string): Promise<boolean> {
+    await lockEmail(tx, email);
+    const [user] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+    const [identity] = await tx
+      .select({ id: identities.id })
+      .from(identities)
+      .where(and(providerEmailIs(email), eq(identities.emailVerified, true)))
+      .limit(1);
+    return user !== undefined || identity !== undefined;
+  }
+
+  /**
+   * Marca el correo como verificado (correo §5.4) y borra lo que ya no sirve: los enlaces de
+   * verificación del usuario y los correos `verify_email` y `verify_reminder` pendientes para esa
+   * dirección. Lo usan la verificación, la unión y (fase C) la recuperación. Devuelve si la cuenta
+   * pasó de no verificada a verificada.
+   */
+  async markEmailVerified(tx: Tx, userId: string, email: string): Promise<boolean> {
+    const updated = await tx
+      .update(users)
+      .set({ emailVerifiedAt: this.clock.now() })
+      .where(and(eq(users.id, userId), isNull(users.emailVerifiedAt)))
+      .returning({ id: users.id });
+    await tx
+      .delete(emailTokens)
+      .where(and(eq(emailTokens.userId, userId), eq(emailTokens.purpose, 'verify_email')));
+    await tx
+      .delete(emailOutbox)
+      .where(
+        and(
+          eq(emailOutbox.toEmail, email),
+          inArray(emailOutbox.kind, ['verify_email', 'verify_reminder']),
+          isNull(emailOutbox.failedAt),
+        ),
+      );
+    return updated.length > 0;
+  }
+
+  /**
+   * Bloquea la fila de la cuenta hasta el COMMIT, antes de tocar sus enlaces: así una confirmación
+   * y el borrado de §6.3 se ordenan sin interbloqueo. `false` si la cuenta ya no existe.
+   */
+  async lockUser(tx: Tx, userId: string): Promise<boolean> {
+    const locked = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId))
+      .for('update');
+    return locked.length > 0;
+  }
+
+  /**
+   * Correo §5.7 (K10): dentro de la transacción que crea la sesión, comprueba que el hash que se
+   * acaba de verificar sigue siendo el de la cuenta, y lo bloquea hasta el COMMIT. Si un
+   * restablecimiento lo cambió entre medias, `false`: la sesión no se crea. Con `rehash`, sustituye
+   * el hash en la misma sentencia.
+   */
+  async lockUnchangedPassword(
+    tx: Tx,
+    userId: string,
+    verifiedHash: string,
+    rehash?: string,
+  ): Promise<boolean> {
+    if (rehash !== undefined) {
+      const updated = await tx
+        .update(users)
+        .set({ passwordHash: rehash, updatedAt: this.clock.now() })
+        .where(and(eq(users.id, userId), eq(users.passwordHash, verifiedHash)))
+        .returning({ id: users.id });
+      return updated.length > 0;
+    }
+    const locked = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.id, userId), eq(users.passwordHash, verifiedHash)))
+      .for('update');
+    return locked.length > 0;
   }
 
   async findCredentialsByEmail(email: string): Promise<UserCredentials | undefined> {
@@ -111,7 +215,13 @@ export class UsersService {
     const linked = await this.identities.listForUser(userId);
     const open = await listOpenSessions(this.db, userId, session.tokenHash, this.clock.now());
     return {
-      user: { ...toPublicUser(row), birthDate: row.birthDate },
+      user: {
+        ...toPublicUser(row),
+        birthDate: row.birthDate,
+        emailVerifiedAt: row.emailVerifiedAt?.toISOString() ?? null,
+        unverifiedDeletionAt:
+          row.emailVerifiedAt === null ? unverifiedDeletionAt(row.createdAt).toISOString() : null,
+      },
       consents: await this.consents.listForUser(userId),
       signInMethods: {
         password: row.passwordHash !== null,
@@ -219,11 +329,13 @@ export class UsersService {
   }
 
   /**
-   * Borrado real (§10). Un único DELETE: ON DELETE CASCADE elimina en la misma sentencia
-   * todas las sesiones y todos los consentimientos del usuario.
+   * Borrado real (§10). ON DELETE CASCADE elimina con la fila de `users` todas sus sesiones,
+   * consentimientos, identidades y tokens de correo. En la misma transacción se borran las filas
+   * del *outbox* con su correo, pendientes o fallidas (correo §3.5): SQL directo sobre la tabla,
+   * sin `MailModule`, en la misma sentencia.
    */
   async deleteAccount(
-    session: Pick<ActiveSession, 'userId'>,
+    session: Pick<ActiveSession, 'userId' | 'tokenHash'>,
     password: string | undefined,
   ): Promise<void> {
     const userId = session.userId;
@@ -236,8 +348,7 @@ export class UsersService {
     if (row.passwordHash === null) {
       // Sin contraseña (§9.2, decisión 20): no hay nada que pedir. La palabra «ELIMINAR» la valida
       // la web: es una confirmación de intención, no de identidad.
-      await this.db.delete(users).where(eq(users.id, userId));
-      this.logger.log({ event: 'account_deleted' });
+      await this.deleteUserAndMail(session, null);
       return;
     }
     if (password === undefined) {
@@ -252,7 +363,46 @@ export class UsersService {
     if (!(await this.passwords.verify(row.passwordHash, password))) {
       throw new ApiException('PASSWORD_INCORRECT', 403, undefined, 'Password does not match');
     }
-    await this.db.delete(users).where(eq(users.id, userId));
-    this.logger.log({ event: 'account_deleted' });
+    await this.deleteUserAndMail(session, row.passwordHash);
+  }
+
+  /**
+   * Una sola sentencia, atómica y sin transacción explícita: si se pierde su respuesta, el
+   * resultado es incierto como en H0 (OUTCOME_UNKNOWN), nunca a medias. Solo borra si el estado
+   * que se verificó sigue vigente: el hash leído (también `null`, sin contraseña) y la sesión de
+   * la petición. Un restablecimiento que haya hecho COMMIT durante el argon2 cambia el hash y
+   * revoca las sesiones, y entonces no se borra la cuenta recuperada. Los correos pendientes solo
+   * se borran si la fila del usuario se ha borrado de verdad (el correo sale del `RETURNING`).
+   * Sin borrado: 401 si la sesión ya no existe, 403 si cambió la contraseña; nunca 204.
+   */
+  private async deleteUserAndMail(
+    session: Pick<ActiveSession, 'userId' | 'tokenHash'>,
+    verifiedHash: string | null,
+  ): Promise<void> {
+    const result = await this.db.execute<{ id: string }>(sql`
+      with deleted as (
+        delete from ${users}
+        where ${users.id} = ${session.userId}
+          and ${users.passwordHash} is not distinct from ${verifiedHash}
+          and exists (
+            select 1 from ${sessions}
+            where ${sessions.tokenHash} = ${session.tokenHash} and ${sessions.userId} = ${session.userId}
+          )
+        returning ${users.id}, ${users.email}
+      ), deleted_mail as (
+        delete from ${emailOutbox} where ${emailOutbox.toEmail} in (select email from deleted)
+      )
+      select id from deleted`);
+    if (result.rows.length > 0) {
+      this.logger.log({ event: 'account_deleted' });
+      return;
+    }
+    const [stillThere] = await this.db
+      .select({ id: sessions.tokenHash })
+      .from(sessions)
+      .where(and(eq(sessions.tokenHash, session.tokenHash), eq(sessions.userId, session.userId)))
+      .limit(1);
+    if (!stillThere) throw new ApiException('UNAUTHENTICATED', 401);
+    throw new ApiException('PASSWORD_INCORRECT', 403, undefined, 'Password does not match');
   }
 }

@@ -34,7 +34,14 @@ export const load: PageServerLoad = async (event) => {
   if (state.status === 'missing') expired(event);
   if (state.status === 'unavailable') error(503, 'API unavailable');
   if (state.pending.kind === 'signup') redirect(303, '/register/complete');
-  return { pending: { provider: state.pending.provider, email: state.pending.email } };
+  return {
+    pending: {
+      provider: state.pending.provider,
+      email: state.pending.email,
+      // Con la cuenta sin confirmar se explica cómo quedarse con ella (correo UX §3.9).
+      accountUnverified: state.pending.accountEmailVerified === false,
+    },
+  };
 };
 
 export const actions = {

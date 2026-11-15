@@ -27,7 +27,7 @@ export const redirectUriFor = (baseUrl: string, provider: OAuthProvider): string
 
 type OAuthEnv = Pick<
   Env,
-  | 'OAUTH_REDIRECT_BASE_URL'
+  | 'PUBLIC_WEB_URL'
   | 'GOOGLE_CLIENT_ID'
   | 'GOOGLE_CLIENT_SECRET'
   | 'FACEBOOK_APP_ID'
@@ -38,12 +38,11 @@ type OAuthEnv = Pick<
 
 /**
  * Proveedores configurados, con sus endpoints reales o los del proveedor falso. Un proveedor
- * solo aparece si su pareja de credenciales está completa (el `envSchema` ya exige entonces
- * `OAUTH_REDIRECT_BASE_URL`).
+ * solo aparece si su pareja de credenciales está completa. La redirect URI se construye con
+ * `PUBLIC_WEB_URL` (obligatoria en el `envSchema`).
  */
 export function providerSettings(env: OAuthEnv): Partial<Record<OAuthProvider, ProviderSettings>> {
-  const base = env.OAUTH_REDIRECT_BASE_URL;
-  if (!base) return {};
+  const base = env.PUBLIC_WEB_URL;
   const fake = env.OAUTH_FAKE_PROVIDER_URL?.replace(/\/$/, '');
   const common = {
     allowInsecureRequests: fake !== undefined,

@@ -2,7 +2,7 @@ import { SERVICE_TERMS_VERSION } from '@cupidilla/contracts';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { hashOpaqueToken } from '../src/common/crypto/opaque-token.js';
-import { consents, sessions, users } from '../src/database/schema/index.js';
+import { consents, emailOutbox, sessions, users } from '../src/database/schema/index.js';
 import {
   api,
   countRows,
@@ -36,38 +36,37 @@ describe('POST /auth/register y /auth/login', () => {
     expect(await countRows(t.db, 'consents')).toBe(0);
   }
 
-  it('I-1: registra a una persona adulta con consentimiento y sesión', async () => {
+  it('I-1: registra a una persona adulta con consentimiento, sin sesión ni correo verificado (correo §5.1)', async () => {
     const body = registerBody({ email: '  Ana.Lopez@Example.COM ', birthDate: '1990-05-05' });
     const response = await api(t.app).post('/auth/register').send(body);
 
-    expect(response.status).toBe(201);
-    const { user, session } = response.body as {
-      user: { id: string; email: string };
-      session: { token: string; expiresAt: string };
-    };
-    expect(user.email).toBe('ana.lopez@example.com');
-    expect(session.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(response.status).toBe(202);
+    expect(response.text).toBe('');
 
     const [row] = await t.db.select().from(users);
     expect(row?.email).toBe('ana.lopez@example.com');
     expect(row?.passwordHash?.startsWith('$argon2id$')).toBe(true);
     expect(row?.birthDate).toBe('1990-05-05');
+    expect(row?.emailVerifiedAt).toBeNull();
 
     const consentRows = await t.db.select().from(consents);
     expect(consentRows).toHaveLength(1);
     expect(consentRows[0]).toMatchObject({
-      userId: user.id,
+      userId: row?.id,
       purpose: 'service_use',
       policyVersion: SERVICE_TERMS_VERSION,
       revokedAt: null,
     });
     expect(consentRows[0]?.grantedAt.toISOString()).toBe(TEST_NOW);
+    expect(await countRows(t.db, 'sessions')).toBe(0);
+  });
 
+  it('I-1b: confirmar el correo abre una sesión de la duración configurada', async () => {
+    const user = await registerUser(t.app);
     const sessionRows = await t.db.select().from(sessions);
     expect(sessionRows).toHaveLength(1);
-    expect(sessionRows[0]?.tokenHash).toBe(hashOpaqueToken(session.token));
+    expect(sessionRows[0]?.tokenHash).toBe(hashOpaqueToken(user.token));
     expect(sessionRows[0]?.expiresAt.getTime()).toBe(new Date(TEST_NOW).getTime() + 30 * DAY_MS);
-    expect(session.expiresAt).toBe(sessionRows[0]?.expiresAt.toISOString());
   });
 
   it('I-2: quien cumple 18 hoy en Madrid (23:30 UTC del día anterior) puede registrarse', async () => {
@@ -75,7 +74,7 @@ describe('POST /auth/register y /auth/login', () => {
     const response = await api(t.app)
       .post('/auth/register')
       .send(registerBody({ birthDate: '2008-11-11' }));
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(202);
   });
 
   it('I-3: un menor (cumple 18 mañana) recibe 422 UNDERAGE y no se escribe nada', async () => {
@@ -94,7 +93,7 @@ describe('POST /auth/register y /auth/login', () => {
     const adult = await api(t.app)
       .post('/auth/register')
       .send(registerBody({ birthDate: '2008-02-29' }));
-    expect(adult.status).toBe(201);
+    expect(adult.status).toBe(202);
 
     t.clock.set('2026-02-27T12:00:00Z');
     const minor = await api(t.app)
@@ -122,14 +121,16 @@ describe('POST /auth/register y /auth/login', () => {
     await expectEmptyTables();
   });
 
-  it('I-6: correo repetido con otras mayúsculas y espacios → 409 EMAIL_TAKEN', async () => {
+  it('I-6: correo repetido con otras mayúsculas y espacios → el mismo 202 y un aviso (correo §5.1)', async () => {
     await registerUser(t.app, { email: 'ana@example.com' });
     const response = await api(t.app)
       .post('/auth/register')
       .send(registerBody({ email: '  ANA@Example.com ' }));
-    expect(response.status).toBe(409);
-    expect(response.body.error.code).toBe('EMAIL_TAKEN');
+    expect(response.status).toBe(202);
+    expect(response.text).toBe('');
     expect(await countRows(t.db, 'users')).toBe(1);
+    const [mail] = await t.db.select().from(emailOutbox);
+    expect(mail).toMatchObject({ kind: 'signup_notice', toEmail: 'ana@example.com' });
   });
 
   it('I-7: sin aceptar las condiciones o con una versión antigua no se registra', async () => {
@@ -163,7 +164,7 @@ describe('POST /auth/register y /auth/login', () => {
       const ok = await api(t.app)
         .post('/auth/register')
         .send(registerBody({ password: 'a'.repeat(length) }));
-      expect(ok.status).toBe(201);
+      expect(ok.status).toBe(202);
     }
 
     const long = await api(t.app)

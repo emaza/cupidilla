@@ -14,7 +14,7 @@ const env = (name: string, fallback?: string): string => {
   return value;
 };
 
-const redirectBase = env('OAUTH_REDIRECT_BASE_URL');
+const redirectBase = env('PUBLIC_WEB_URL');
 // En `npm run oauth:fake`, el puerto y el host salen de OAUTH_FAKE_PROVIDER_URL del .env.
 const fakeUrl = process.env.OAUTH_FAKE_PROVIDER_URL;
 const fromUrl = fakeUrl && URL.canParse(fakeUrl) ? new URL(fakeUrl) : undefined;

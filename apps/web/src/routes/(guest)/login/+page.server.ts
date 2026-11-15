@@ -4,6 +4,7 @@ import { textField } from '#lib/forms/form-data.ts';
 import type { FormErrors } from '#lib/forms/form-data.ts';
 import { parseLoginForm, type LoginField } from '#lib/forms/login.ts';
 import { api, configuredProviders } from '#lib/server/api-client.ts';
+import { clearPendingEmail } from '#lib/server/email-cookies.ts';
 import { urlMessage } from '#lib/server/oauth-notices.ts';
 import { isReturnPath, safeReturnPath } from '#lib/server/return-path.ts';
 import { setSessionCookie } from '#lib/server/session-cookie.ts';
@@ -35,6 +36,8 @@ export const actions = {
     const result = await api.login(event, parsed.request);
     if (result.ok) {
       setSessionCookie(event.cookies, result.data.session.token, result.data.session.expiresAt);
+      // «Revisa tu correo» ya no hace falta (correo UX §2.3).
+      clearPendingEmail(event.cookies);
       redirect(303, safeReturnPath(next));
     }
     const errors: FormErrors<LoginField> = {

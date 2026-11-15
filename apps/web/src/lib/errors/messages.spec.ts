@@ -44,4 +44,16 @@ describe('W-1: messages.ts', () => {
     expect(fieldMessages.register.birthDate.in_future).toBe('registro.error.fecha_futura');
     expect(fieldMessages.register.password.too_short).toBe('registro.error.contrasena_corta');
   });
+
+  it('B7-1: hay texto para los códigos nuevos y el registro ya no usa correo_existente', () => {
+    expect(errorMessages.register.EMAIL_TAKEN).toBe('registro.error.servidor');
+    expect(Object.values(errorMessages.register)).not.toContain('registro.error.correo_existente');
+    expect(errorMessages.verify.PASSWORD_INCORRECT).toBe('confirmar.error.contrasena');
+    expect(errorMessages.verify.VALIDATION_FAILED).toBe('confirmar.error.contrasena');
+    expect(errorMessages.verify.TOKEN_INVALID_OR_EXPIRED).toBe('enlace.titulo');
+    expect(errorMessages.verify.TOKEN_ATTEMPTS_EXCEEDED).toBe('enlace.intentos.titulo');
+    expect(errorMessages.verify.OUTCOME_UNKNOWN).toBe('confirmar.error.resultado_incierto');
+    expect(errorMessages.verify.RATE_LIMITED).toBe('comun.error.limite');
+    expect(errorMessages.verify.API_UNAVAILABLE).toBe('confirmar.error.servidor');
+  });
 });

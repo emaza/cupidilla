@@ -3,6 +3,8 @@ import {
   apiErrorSchema,
   authResponseSchema,
   configResponseSchema,
+  emailTokenInspectionResponseSchema,
+  emailVerificationResponseSchema,
   oauthAuthResponseSchema,
   oauthCallbackResponseSchema,
   oauthProvidersResponseSchema,
@@ -12,7 +14,12 @@ import {
   type AccountResponse,
   type AuthResponse,
   type ConfigResponse,
+  type DataReviewRequest,
   type DeleteAccountRequest,
+  type EmailTokenInspectionRequest,
+  type EmailTokenInspectionResponse,
+  type EmailVerificationRequest,
+  type EmailVerificationResponse,
   type FieldError,
   type LoginRequest,
   type OAuthAuthResponse,
@@ -25,16 +32,18 @@ import {
   type OAuthSignupRequest,
   type OAuthStartRequest,
   type OAuthStartResponse,
+  type PasswordResetRequest,
   type PendingIdentityResponse,
   type ReauthenticateRequest,
   type RegisterRequest,
   type RemoveIdentityRequest,
   type SessionResponse,
 } from '@cupidilla/contracts';
-import type { RequestEvent } from '@sveltejs/kit';
+import { redirect, type RequestEvent } from '@sveltejs/kit';
 import type { z } from 'zod';
 import { API_URL, INTERNAL_API_KEY } from '$app/env/private';
 import type { WebErrorCode } from '#lib/errors/messages.ts';
+import { DATA_REVIEW_PATH } from './data-review.ts';
 
 const TIMEOUT_MS = 5000;
 
@@ -168,6 +177,9 @@ async function request<T>(
       if (response.status >= 500 && nonIdempotent) return outcomeUnknown();
       return unavailable(response.status >= 500 ? response.status : 502);
     }
+    // Cuenta pendiente de revisar sus datos (correo §5.11): cualquier petición en vuelo lleva a
+    // /account/review, sin mensaje de error (UX §3.10).
+    if (parsed.data.error.code === 'DATA_REVIEW_REQUIRED') redirect(303, DATA_REVIEW_PATH);
     return {
       ok: false,
       status: response.status,
@@ -198,13 +210,92 @@ export const api = {
       timeoutMs: CONFIG_TIMEOUT_MS,
     }),
 
-  register: (event: RequestEvent, body: RegisterRequest): Promise<ApiResult<AuthResponse>> =>
+  /** Registro uniforme (correo §5.1): `202` sin cuerpo y sin sesión, exista o no el correo. */
+  register: (event: RequestEvent, body: RegisterRequest): Promise<ApiResult<void>> =>
     request(event, {
       method: 'POST',
       path: '/auth/register',
       body,
+      nonIdempotent: true,
+      expectStatus: 202, // auth.controller.ts: @HttpCode(202)
+    }),
+
+  // Verificación del correo (correo §9.1).
+
+  requestEmailVerification: (event: RequestEvent, email: string): Promise<ApiResult<void>> =>
+    request(event, {
+      method: 'POST',
+      path: '/auth/email-verification/request',
+      body: { email },
+      expectStatus: 202,
+    }),
+
+  /** Comprueba un enlace sin consumirlo; con la sesión, si la hay (`sessionMatches`). */
+  inspectEmailToken: (
+    event: RequestEvent,
+    body: EmailTokenInspectionRequest,
+    sessionToken?: string,
+  ): Promise<ApiResult<EmailTokenInspectionResponse>> =>
+    request(event, {
+      method: 'POST',
+      path: '/auth/email-tokens/inspection',
+      token: sessionToken,
+      body,
+      schema: emailTokenInspectionResponseSchema,
+    }),
+
+  /** No idempotente: tras un corte, el enlace ya puede estar consumido. */
+  verifyEmail: (
+    event: RequestEvent,
+    body: EmailVerificationRequest,
+    sessionToken?: string,
+  ): Promise<ApiResult<EmailVerificationResponse>> =>
+    request(event, {
+      method: 'POST',
+      path: '/auth/email-verification',
+      token: sessionToken,
+      body,
+      schema: emailVerificationResponseSchema,
+      nonIdempotent: true,
+    }),
+
+  // Recuperación de la contraseña (correo §9.1).
+
+  /** Siempre `202`, exista o no la cuenta (correo §5.5). Pedir otro enlace es pedirlo otra vez. */
+  requestPasswordReset: (event: RequestEvent, email: string): Promise<ApiResult<void>> =>
+    request(event, {
+      method: 'POST',
+      path: '/auth/password-reset/request',
+      body: { email },
+      expectStatus: 202,
+    }),
+
+  /** No idempotente: tras un corte, el enlace ya puede estar consumido y la contraseña cambiada. */
+  resetPassword: (
+    event: RequestEvent,
+    body: PasswordResetRequest,
+  ): Promise<ApiResult<AuthResponse>> =>
+    request(event, {
+      method: 'POST',
+      path: '/auth/password-reset',
+      body,
       schema: authResponseSchema,
       nonIdempotent: true,
+    }),
+
+  /** Revisión de datos (correo §5.11). Con un menor, la API borra la cuenta: no idempotente. */
+  completeDataReview: (
+    event: RequestEvent,
+    token: string,
+    body: DataReviewRequest,
+  ): Promise<ApiResult<void>> =>
+    request(event, {
+      method: 'POST',
+      path: '/users/me/data-review',
+      token,
+      body,
+      nonIdempotent: true,
+      expectStatus: 204, // users.controller.ts: @HttpCode(204)
     }),
 
   login: (event: RequestEvent, body: LoginRequest): Promise<ApiResult<AuthResponse>> =>

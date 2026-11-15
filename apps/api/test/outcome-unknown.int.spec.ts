@@ -77,7 +77,7 @@ describe('OUTCOME_UNKNOWN cuando se pierde la respuesta de la base de datos', ()
     relay.arm('commit', 'after');
     await api(t.app).post('/auth/register').send(registerBody());
     const body = registerBody();
-    expect((await api(t.app).post('/auth/register').send(body)).status).toBe(201);
+    expect((await api(t.app).post('/auth/register').send(body)).status).toBe(202);
     expect(await usersWithEmail(body.email)).toBe(1);
   });
 

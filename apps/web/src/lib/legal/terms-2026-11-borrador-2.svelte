@@ -6,7 +6,9 @@
 <!--
   Borrador de /legal/terms, versión 2026-11-borrador-2 (SERVICE_TERMS_VERSION).
   Texto de H0 UX §5.9 con las secciones 4, 5, 7 y 9 del diseño UX de la entrada con terceros
-  (§5.9), palabra por palabra. Los [PENDIENTE] se muestran tal cual.
+  (§5.9), y los retoques de las secciones 4 y 5 del diseño UX de correo (§7), palabra por palabra.
+  Los retoques de correo van en esta misma versión, sin subirla (decisión 9 del cliente del hito de
+  correo: no hay usuarios reales que la hayan aceptado). Los [PENDIENTE] se muestran tal cual.
   Una versión nueva del texto es un archivo nuevo y un cambio de SERVICE_TERMS_VERSION. El
   archivo anterior se conserva sin enlazar: es lo que aceptaron las cuentas existentes.
 -->
@@ -46,8 +48,8 @@
   <p>
     Puedes entrar con un correo y una contraseña, o con tu cuenta de Google o de Facebook. Puedes
     tener varias formas de entrar a la vez, añadirlas o quitarlas desde «Tu cuenta», siempre que te
-    quede al menos una. Cuida tus formas de entrar y no las compartas. Por ahora no hay forma de
-    recuperar una contraseña si la pierdes.
+    quede al menos una. Cuida tus formas de entrar y no las compartas. Si pierdes tu contraseña,
+    puedes crear una nueva desde tu correo.
   </p>
 
   <h2>5. Qué datos pedimos y para qué</h2>
@@ -56,9 +58,12 @@
     una contraseña. Los usamos para que puedas entrar y para comprobar que eres mayor de edad. Si
     entras con Google o Facebook, recibimos de ellos solo un identificador tuyo en ese servicio y tu
     correo. No usamos tu nombre, tu foto ni tus contactos y no guardamos ningún acceso a tu cuenta
-    en ese servicio. Guardamos también que has aceptado estas condiciones: qué versión y cuándo.
-    [PENDIENTE: base jurídica, plazos de conservación, encargados del tratamiento, derechos y cómo
-    ejercerlos. Irá en la política de privacidad, cuyo enlace piden Google y Facebook.]
+    en ese servicio. Guardamos también que has aceptado estas condiciones: qué versión y cuándo. Te
+    escribimos al correo solo para confirmarlo, para ayudarte a recuperar tu contraseña, para
+    avisarte si alguien intenta registrarse con él, para recordarte que lo confirmes antes de que se
+    borre una cuenta sin confirmar y para avisarte de que tu contraseña ha cambiado. [PENDIENTE:
+    base jurídica, plazos de conservación, encargados del tratamiento, derechos y cómo ejercerlos.
+    Irá en la política de privacidad, cuyo enlace piden Google y Facebook.]
   </p>
 
   <h2>6. Qué aceptas al registrarte</h2>

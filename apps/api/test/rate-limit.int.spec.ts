@@ -45,7 +45,7 @@ describe('Límite de intentos (I-11)', () => {
     const sameIp = api(t.app, '192.0.2.10');
     for (let attempt = 1; attempt <= 5; attempt++) {
       const response = await sameIp.post('/auth/register').send(registerBody());
-      expect(response.status).toBe(201);
+      expect(response.status).toBe(202);
     }
     const blocked = await sameIp.post('/auth/register').send(registerBody());
     expect(blocked.status).toBe(429);

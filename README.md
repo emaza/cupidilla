@@ -10,6 +10,8 @@ Hito **H0 — base mínima** implementado (11 de noviembre de 2026): registro, e
 
 **Entrada con Google y Facebook** (decisión 19, 13 de noviembre de 2026): entrar y darse de alta con un proveedor, unirlo a una cuenta con contraseña y, desde «Tu cuenta», añadir o quitar proveedores, crear una contraseña y borrar la cuenta sin contraseña. Probada contra un proveedor falso; falta comprobarla con Google y Facebook reales (ver abajo). El diseño está en [Diseño técnico](docs/login-terceros-diseno-tecnico.md) y [Diseño UX](docs/login-terceros-diseno-ux.md).
 
+**Correo** (decisión 22, 14 de noviembre de 2026): registro con respuesta uniforme, confirmación del correo, recuperación de la contraseña y revisión de datos tras recuperar una cuenta sin confirmar, con envío por SMTP (Mailpit en local). Falta elegir el proveedor SMTP de producción. El diseño está en [Diseño técnico](docs/correo-diseno-tecnico.md) y [Diseño UX](docs/correo-diseno-ux.md).
+
 El código es un monorepo con npm workspaces:
 
 | Paquete | Qué es |
@@ -30,12 +32,21 @@ npm ci
 npm install-scripts ls        # debe salir vacío (todo denegado en allowScripts)
 npm run db:up                 # PostgreSQL 18 en Docker, espera a que esté sano
 npm run db:migrate
-npm run dev                   # web en http://localhost:5173 · API en http://127.0.0.1:3001
+npm run dev                   # levanta db y mail; web en http://localhost:5173 · API en http://127.0.0.1:3001
 ```
+
+**Correo**: en local, la API envía por SMTP a Mailpit (`npm run mail:up`, que `npm run dev` ya ejecuta), y los correos se leen en http://localhost:8025. La API no arranca sin `SMTP_URL` (salvo en los tests de integración) ni sin `PUBLIC_WEB_URL`, el origen público de la web, que es la base de los enlaces de los correos y de la *redirect URI* de OAuth. `PUBLIC_WEB_URL` sustituye a `OAUTH_REDIRECT_BASE_URL`: con esta en el `.env`, la API no arranca. En producción, `MAIL_FROM` y `MAIL_SUPPORT_ADDRESS` tienen que ser direcciones reales.
 
 `INTERNAL_API_KEY` viene vacía en `.env.example` a propósito: la API y la web se niegan a arrancar hasta que pongas una clave aleatoria propia de 32 caracteres o más. Genérala con `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"` y pégala en `.env`.
 
-**Tests**: con `npm run db:up` hecho, `npm test` (unitarios e integración). La primera vez, `npm run e2e:install` (descarga Chromium en `~/.cache/ms-playwright`); después, `npm run test:e2e`, que levanta la API (puerto 3101, base de datos `cupidilla_e2e`) y la web compilada (puerto 4173) y prueba los flujos con JavaScript y sin él. `npm run lint` y `npm run typecheck` comprueban el estilo y los tipos de todo el monorepo.
+**Tests**: con `npm run db:up` hecho, `npm test` (unitarios e integración; el correo va a una bandeja en memoria). La primera vez, `npm run e2e:install` (descarga Chromium en `~/.cache/ms-playwright`); después, `npm run test:e2e`, que levanta Mailpit, la API (puerto 3101, base de datos `cupidilla_e2e`) y la web compilada (puerto 4173) y prueba los flujos con JavaScript y sin él: el proyecto `chromium` ejecuta todas las pruebas y `chromium-no-js` solo las etiquetadas `@nojs` (`test('…', { tag: '@nojs' }, …)`: formularios y flujos cuyo resultado puede cambiar sin JavaScript; etiqueta así las pruebas nuevas de ese tipo). `npm run lint` y `npm run typecheck` comprueban el estilo y los tipos de todo el monorepo.
+
+**Dos modos de lanzar los e2e** (las variables de los servidores viven en `apps/web/tests/e2e/helpers/servers.ts`):
+
+- `npm run test:e2e`: lo de siempre y lo que corre CI. Compila y arranca API, web y proveedor falso, y los para al acabar. Nunca reutiliza servidores: si quedó uno viejo en 3101, 4173 o 4400, falla por puerto ocupado. Úsalo antes de dar algo por bueno.
+- `npm run test:e2e:serve`: compila y deja corriendo los tres servidores (Ctrl+C los para). En otra terminal, `E2E_REUSE=1 npx playwright test <archivo> [--project=chromium]` (en `apps/web`) o, desde la raíz, `npm run test:e2e:reuse -- <archivo>` (Linux y macOS) arranca en segundos, sin recompilar. Úsalo para iterar sobre una prueba.
+
+Con servidores reutilizados se prueba el código con que se compilaron, no el actual. Tras cambiar código de la API, la web o los contratos, para `test:e2e:serve` y vuélvelo a lanzar; y no dejes servidores viejos levantados cuando vayas a dar por buena una ejecución. La base `cupidilla_e2e` se reinicia solo al arrancar la API, y el límite de intentos vive en memoria de la API, así que muchas ejecuciones seguidas contra los mismos servidores acumulan peticiones (con `RATE_LIMIT_FACTOR=100` no debería notarse).
 
 **Despliegue detrás de un proxy inverso**: la web (`adapter-node`) pasa a la API la IP de cada persona para el límite de intentos. Detrás de un proxy hay que configurar `ADDRESS_HEADER` (por ejemplo, `X-Forwarded-For`, con `XFF_DEPTH` según el número de proxies) y `ORIGIN` (la URL pública, para la comprobación de CSRF) de `adapter-node`. Sin `ADDRESS_HEADER`, todas las peticiones llegarían con la IP del proxy y todas las personas compartirían el mismo límite de intentos. Dos avisos:
 
@@ -51,7 +62,6 @@ Los botones solo aparecen para los proveedores configurados: sin credenciales, l
 **Con el proveedor falso** (sin cuentas de Google ni de Meta). Añade al `.env`:
 
 ```sh
-OAUTH_REDIRECT_BASE_URL=http://localhost:5173
 GOOGLE_CLIENT_ID=falso-google
 GOOGLE_CLIENT_SECRET=falso-google-secreto
 FACEBOOK_APP_ID=1234567890
@@ -59,7 +69,7 @@ FACEBOOK_APP_SECRET=falso-facebook-secreto
 OAUTH_FAKE_PROVIDER_URL=http://127.0.0.1:4400
 ```
 
-y arranca el proveedor falso en otra terminal, junto a `npm run dev`:
+(con `PUBLIC_WEB_URL=http://localhost:5173`, que ya trae `.env.example`) y arranca el proveedor falso en otra terminal, junto a `npm run dev`:
 
 ```sh
 npm run oauth:fake            # proveedor falso en http://127.0.0.1:4400
@@ -72,7 +82,7 @@ Al pulsar «Continuar con Google» se abre su formulario: escribe un correo y pu
 - Google: `http://localhost:5173/auth/google/callback`
 - Facebook: `http://localhost:5173/auth/facebook/callback`
 
-Después pon en el `.env` `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET` y `OAUTH_REDIRECT_BASE_URL=http://localhost:5173`, **sin** `OAUTH_FAKE_PROVIDER_URL`, y reinicia `npm run dev`. Mientras las apps estén en modo de pruebas, solo entran las cuentas añadidas como probadoras. Cada proveedor necesita su pareja completa: con media pareja, la API no arranca. Los secretos solo los usa la API y nunca van al navegador.
+Después pon en el `.env` `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET` con `PUBLIC_WEB_URL=http://localhost:5173`, **sin** `OAUTH_FAKE_PROVIDER_URL`, y reinicia `npm run dev`. Mientras las apps estén en modo de pruebas, solo entran las cuentas añadidas como probadoras. Cada proveedor necesita su pareja completa: con media pareja, la API no arranca. Los secretos solo los usa la API y nunca van al navegador.
 
 Los e2e (`npm run test:e2e`) arrancan su propio proveedor falso en el puerto 4400 y no necesitan nada de esto.
 
@@ -92,6 +102,8 @@ Los scripts de `docker/postgres/init` solo se ejecutan con el volumen vacío: si
 | [H0 — Diseño UX](docs/h0-diseno-ux.md) | Pantallas, textos, estados, accesibilidad y criterios de aceptación de la base mínima |
 | [Entrada con terceros — Diseño técnico](docs/login-terceros-diseno-tecnico.md) | Google y Facebook: protocolo, datos, API, web, seguridad, pruebas y pasos en las consolas |
 | [Entrada con terceros — Diseño UX](docs/login-terceros-diseno-ux.md) | Botones, alta, unión, «Formas de entrar», textos y criterios de aceptación |
+| [Correo — Diseño técnico](docs/correo-diseno-tecnico.md) | Verificación, recuperación, registro uniforme y revisión de datos: datos, envío, API, web, seguridad y pruebas |
+| [Correo — Diseño UX](docs/correo-diseno-ux.md) | Pantallas, los cinco correos, textos y criterios de aceptación del hito de correo |
 
 ## Decisiones clave
 

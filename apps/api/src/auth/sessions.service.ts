@@ -55,6 +55,8 @@ export class SessionsService {
         id: users.id,
         email: users.email,
         createdAt: users.createdAt,
+        emailVerifiedAt: users.emailVerifiedAt,
+        dataReviewRequiredAt: users.dataReviewRequiredAt,
       })
       .from(sessions)
       .innerJoin(users, eq(users.id, sessions.userId))
@@ -87,6 +89,18 @@ export class SessionsService {
 
   async revoke(tokenHash: string): Promise<void> {
     await this.db.delete(sessions).where(eq(sessions.tokenHash, tokenHash));
+  }
+
+  /**
+   * Cierra todas las sesiones de la cuenta (correo §4.1, §5.6). Sus `oauth_states`
+   * (reautenticaciones y uniones a medias) desaparecen en cascada. Devuelve cuántas cerró.
+   */
+  async revokeAllForUser(db: Executor, userId: string): Promise<number> {
+    const revoked = await db
+      .delete(sessions)
+      .where(eq(sessions.userId, userId))
+      .returning({ tokenHash: sessions.tokenHash });
+    return revoked.length;
   }
 
   async deleteExpiredForUser(userId: string): Promise<void> {

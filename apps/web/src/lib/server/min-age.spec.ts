@@ -4,8 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const api = vi.hoisted(() => ({ config: vi.fn() }));
 vi.mock('#lib/server/api-client.ts', () => ({ api }));
 
-const { currentMinAge, displayMinAge, MIN_AGE_RETRY_MS, MIN_AGE_TTL_MS, resetMinAgeCache } =
-  await import('./min-age.ts');
+const {
+  currentMinAge,
+  displayMailConfig,
+  displayMinAge,
+  MIN_AGE_RETRY_MS,
+  MIN_AGE_TTL_MS,
+  resetMinAgeCache,
+} = await import('./min-age.ts');
 
 const event = {} as RequestEvent;
 const ok = (minAge: number) => ({ ok: true, status: 200, data: { minAge } });
@@ -83,5 +89,28 @@ describe('edad mínima de la web: caché y respaldo', () => {
   it('displayMinAge no lanza aunque la llamada falle con una excepción', async () => {
     api.config.mockRejectedValue(new Error('boom'));
     expect(await displayMinAge(event)).toBe(18);
+  });
+});
+
+describe('correos opcionales: de la misma caché de GET /config (correo §5.8)', () => {
+  beforeEach(() => {
+    api.config.mockReset();
+    resetMinAgeCache();
+  });
+
+  it('devuelve los interruptores de la API', async () => {
+    const mail = { unverifiedReminder: false, passwordChangedNotice: true };
+    api.config.mockResolvedValue({ ok: true, status: 200, data: { minAge: 18, mail } });
+    expect(await displayMailConfig(event)).toEqual(mail);
+    expect(await displayMinAge(event)).toBe(18);
+    expect(api.config).toHaveBeenCalledOnce();
+  });
+
+  it('sin saberlo, los dos falsos: no se promete ningún correo', async () => {
+    api.config.mockResolvedValue(down);
+    expect(await displayMailConfig(event)).toEqual({
+      unverifiedReminder: false,
+      passwordChangedNotice: false,
+    });
   });
 });

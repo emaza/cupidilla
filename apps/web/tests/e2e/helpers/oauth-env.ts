@@ -8,7 +8,8 @@ export const FAKE_PROVIDER_URL = 'http://127.0.0.1:4400';
 
 /** Credenciales de prueba que comparten la API de los e2e y el proveedor falso. */
 export const OAUTH_E2E_ENV = {
-  OAUTH_REDIRECT_BASE_URL: WEB_URL,
+  // Origen de la web (correo §11.2): base de la redirect URI y de los enlaces de los correos.
+  PUBLIC_WEB_URL: WEB_URL,
   GOOGLE_CLIENT_ID: 'google-cliente-e2e',
   GOOGLE_CLIENT_SECRET: 'google-secreto-e2e-0123456789',
   FACEBOOK_APP_ID: '987654321',

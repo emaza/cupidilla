@@ -1,5 +1,5 @@
 {
-  "id": "ff4417da-7535-495b-9f58-7c5f960330d1",
+  "id": "94acec4a-b323-4502-bd23-873d35e0c2fd",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -116,6 +116,243 @@
         "consents_revoked_after_granted": {
           "name": "consents_revoked_after_granted",
           "value": "\"consents\".\"revoked_at\" is null or \"consents\".\"revoked_at\" >= \"consents\".\"granted_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.email_outbox": {
+      "name": "email_outbox",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "to_email": {
+          "name": "to_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "next_attempt_at": {
+          "name": "next_attempt_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "locked_until": {
+          "name": "locked_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failed_at": {
+          "name": "failed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "email_outbox_pending_unique": {
+          "name": "email_outbox_pending_unique",
+          "columns": [
+            {
+              "expression": "kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "to_email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"email_outbox\".\"failed_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "email_outbox_due_idx": {
+          "name": "email_outbox_due_idx",
+          "columns": [
+            {
+              "expression": "next_attempt_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"email_outbox\".\"failed_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "email_outbox_kind_known": {
+          "name": "email_outbox_kind_known",
+          "value": "\"email_outbox\".\"kind\" in ('verify_email', 'verify_reminder', 'reset_password', 'signup_notice', 'password_changed')"
+        },
+        "email_outbox_to_email_normalized": {
+          "name": "email_outbox_to_email_normalized",
+          "value": "\"email_outbox\".\"to_email\" = lower(btrim(\"email_outbox\".\"to_email\"))"
+        },
+        "email_outbox_to_email_length": {
+          "name": "email_outbox_to_email_length",
+          "value": "char_length(\"email_outbox\".\"to_email\") between 3 and 254"
+        },
+        "email_outbox_attempts_range": {
+          "name": "email_outbox_attempts_range",
+          "value": "\"email_outbox\".\"attempts\" between 0 and 8"
+        },
+        "email_outbox_last_error_length": {
+          "name": "email_outbox_last_error_length",
+          "value": "char_length(\"email_outbox\".\"last_error\") <= 64"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.email_tokens": {
+      "name": "email_tokens",
+      "schema": "",
+      "columns": {
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "failed_attempts": {
+          "name": "failed_attempts",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "email_tokens_expires_at_idx": {
+          "name": "email_tokens_expires_at_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "email_tokens_user_id_users_id_fk": {
+          "name": "email_tokens_user_id_users_id_fk",
+          "tableFrom": "email_tokens",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "email_tokens_user_purpose_unique": {
+          "name": "email_tokens_user_purpose_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id",
+            "purpose"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "email_tokens_token_hash_format": {
+          "name": "email_tokens_token_hash_format",
+          "value": "\"email_tokens\".\"token_hash\" ~ '^[0-9a-f]{64}$'"
+        },
+        "email_tokens_purpose_known": {
+          "name": "email_tokens_purpose_known",
+          "value": "\"email_tokens\".\"purpose\" in ('verify_email', 'reset_password')"
+        },
+        "email_tokens_failed_attempts_range": {
+          "name": "email_tokens_failed_attempts_range",
+          "value": "\"email_tokens\".\"failed_attempts\" between 0 and 5"
         }
       },
       "isRLSEnabled": false
@@ -698,9 +935,44 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "email_verified_at": {
+          "name": "email_verified_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "verification_reminded_at": {
+          "name": "verification_reminded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "data_review_required_at": {
+          "name": "data_review_required_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "users_unverified_created_at_idx": {
+          "name": "users_unverified_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"users\".\"email_verified_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
@@ -725,6 +997,14 @@
         "users_birth_date_min": {
           "name": "users_birth_date_min",
           "value": "\"users\".\"birth_date\" >= date '1900-01-01'"
+        },
+        "users_unverified_has_password": {
+          "name": "users_unverified_has_password",
+          "value": "\"users\".\"email_verified_at\" is not null or \"users\".\"password_hash\" is not null"
+        },
+        "users_review_requires_verified": {
+          "name": "users_review_requires_verified",
+          "value": "\"users\".\"data_review_required_at\" is null or \"users\".\"email_verified_at\" is not null"
         }
       },
       "isRLSEnabled": false

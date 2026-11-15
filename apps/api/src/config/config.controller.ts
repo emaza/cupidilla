@@ -12,6 +12,13 @@ export class ConfigController {
   @Get()
   @Public()
   get(): ConfigResponse {
-    return { minAge: this.config.get('MIN_AGE', { infer: true }) };
+    return {
+      minAge: this.config.get('MIN_AGE', { infer: true }),
+      // Correos opcionales (correo §5.8): la web decide con ellos qué textos pinta.
+      mail: {
+        unverifiedReminder: this.config.get('EMAIL_UNVERIFIED_REMINDER', { infer: true }),
+        passwordChangedNotice: this.config.get('EMAIL_PASSWORD_CHANGED_NOTICE', { infer: true }),
+      },
+    };
   }
 }
