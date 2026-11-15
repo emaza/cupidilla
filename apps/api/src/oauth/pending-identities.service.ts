@@ -262,7 +262,11 @@ export class PendingIdentitiesService {
     const rehash = this.passwords.needsRehash(passwordHash)
       ? await this.passwords.hash(request.password)
       : undefined;
-    let result: { session: { token: string; expiresAt: Date }; verified: boolean };
+    let result: {
+      session: { token: string; expiresAt: Date };
+      verified: boolean;
+      emailVerifiedAt: Date | null;
+    };
     try {
       result = await this.transactions.run(async (tx) => {
         // Una unión que ha llegado a 5 fallos está bloqueada aunque su fila aún no se haya borrado:
@@ -295,7 +299,17 @@ export class PendingIdentitiesService {
           pending.emailVerified && pending.providerEmail === account.email
             ? await this.users.markEmailVerified(tx, account.id, account.email)
             : false;
-        return { session: await this.sessions.create(tx, account.id), verified };
+        // El estado final, leído con la fila bloqueada: otra petición pudo verificar la cuenta
+        // después de la lectura inicial (entonces `verified` es false, pero ya está verificada).
+        const [current] = await tx
+          .select({ emailVerifiedAt: users.emailVerifiedAt })
+          .from(users)
+          .where(eq(users.id, account.id));
+        return {
+          session: await this.sessions.create(tx, account.id),
+          verified,
+          emailVerifiedAt: current?.emailVerifiedAt ?? null,
+        };
       });
     } catch (error) {
       // La identidad se unió entre medias (otra pestaña) o la cuenta ya tiene ese proveedor.
@@ -315,7 +329,7 @@ export class PendingIdentitiesService {
     return {
       user: toPublicUser({
         ...account,
-        emailVerifiedAt: result.verified ? this.clock.now() : account.emailVerifiedAt,
+        emailVerifiedAt: result.emailVerifiedAt,
       }),
       session: { token: session.token, expiresAt: session.expiresAt.toISOString() },
       returnPath: pending.returnPath,

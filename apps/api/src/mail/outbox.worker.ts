@@ -5,7 +5,7 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
-import { and, eq, isNotNull, lte, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { Clock } from '../common/clock.js';
 import { DB, type Database } from '../database/database.types.js';
 import { emailOutbox } from '../database/schema/index.js';
@@ -46,6 +46,9 @@ export interface DrainResult {
   retried: number;
   failed: number;
 }
+
+/** Correos que llevan un enlace con token. */
+const TOKEN_KINDS: readonly MailKind[] = ['verify_email', 'verify_reminder', 'reset_password'];
 
 type ClaimedRow = {
   id: string;
@@ -232,6 +235,19 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
       // Resolver y emitir el token se confirman antes de enviar: el token en claro solo existe
       // en memoria y en el correo. Si el envío falla, ese token no lo tiene nadie.
       const message = await this.transactions.run(async (tx) => {
+        // Con enlace, antes de emitir el token se comprueba que la fila siga ahí: un restablecimiento
+        // o una verificación que ocurran tras el reclamo borran los correos pendientes (§5.6, §5.4)
+        // y este no debe resucitar un enlace válido. Primero la fila del usuario y después la del
+        // *outbox*, el mismo orden que esas operaciones (cuenta, tokens, *outbox*): sin interbloqueo.
+        if (TOKEN_KINDS.includes(row.kind)) {
+          await tx.execute(sql`select id from users where email = ${row.to_email} for update`);
+          const [pending] = await tx
+            .select({ id: emailOutbox.id })
+            .from(emailOutbox)
+            .where(and(eq(emailOutbox.id, row.id), isNull(emailOutbox.failedAt)))
+            .for('update');
+          if (!pending) return null;
+        }
         const resolved = await this.resolver.resolve(tx, row.kind, row.to_email);
         if (!resolved) await tx.delete(emailOutbox).where(eq(emailOutbox.id, row.id));
         return resolved;
