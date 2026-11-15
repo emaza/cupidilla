@@ -115,6 +115,23 @@ describe('QA fase B', () => {
     expect(row?.emailVerifiedAt).not.toBeNull();
   });
 
+  it('unión con la cuenta verificada por otra petición tras la lectura inicial: la respuesta sale verificada', async () => {
+    const { pendingToken } = await startLink();
+    const passwords = t.app.get(PasswordService);
+    const verify = passwords.verify.bind(passwords);
+    vi.spyOn(passwords, 'verify').mockImplementation(async (hash, password) => {
+      const ok = await verify(hash, password);
+      // Otra petición (p. ej. la confirmación del enlace) verifica la cuenta ya leída como sin verificar.
+      await t.db.update(users).set({ emailVerifiedAt: t.clock.now() }).where(eq(users.email, BETO));
+      return ok;
+    });
+    const linked = await api(t.app)
+      .post('/auth/oauth/link')
+      .send({ pendingToken, email: BETO, password: TEST_PASSWORD });
+    expect(linked.status).toBe(200);
+    expect(linked.body.user.emailVerified).toBe(true);
+  });
+
   it('8 contraseñas erróneas simultáneas: el enlace acaba anulado, nadie abre sesión y la correcta después da 400', async () => {
     const { link } = await registerBeto(t.app, t.db);
     const responses = await Promise.all(

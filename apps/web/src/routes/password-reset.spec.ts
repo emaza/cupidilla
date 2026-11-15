@@ -27,6 +27,7 @@ vi.mock('#lib/server/session-cookie.ts', () => ({
 const forgotPage = await import('./forgot-password/+page.server.ts');
 const forgotCheckPage = await import('./forgot-password/check-email/+page.server.ts');
 const resetPage = await import('./reset-password/+page.server.ts');
+const { tokenBinding } = await import('#lib/server/email-cookies.ts');
 const reviewPage = await import('./(private)/account/review/+page.server.ts');
 
 const TOKEN = 'A'.repeat(43);
@@ -178,8 +179,8 @@ describe('/forgot-password/check-email', () => {
 describe('/reset-password (C4-1, C4-4)', () => {
   const load = (url: string, locals: Record<string, unknown> = {}) =>
     run(() => resetPage.load(formEvent({}, locals, url)) as Promise<unknown>);
-  const submit = (password = 'otra frase larga nueva') =>
-    run(() => resetPage.actions.default(formEvent({ password })) as Promise<unknown>);
+  const submit = (password = 'otra frase larga nueva', link = tokenBinding(TOKEN)) =>
+    run(() => resetPage.actions.default(formEvent({ password, link })) as Promise<unknown>);
   const resetOk = (dataReviewRequired: boolean) => ({
     ok: true,
     status: 200,
@@ -224,6 +225,7 @@ describe('/reset-password (C4-1, C4-4)', () => {
       state: 'form',
       emailHint: 'a•••@example.com',
       signedIn: false,
+      link: tokenBinding(TOKEN),
     });
     expect(api.inspectEmailToken).toHaveBeenCalledWith(expect.anything(), {
       token: TOKEN,
@@ -242,7 +244,12 @@ describe('/reset-password (C4-1, C4-4)', () => {
     const event = formEvent({}, {}, 'http://localhost/reset-password');
     (event as unknown as { request: { method: string } }).request.method = 'POST';
     const outcome = await run(() => resetPage.load(event as never) as Promise<unknown>);
-    expect(outcome.result).toEqual({ state: 'form', emailHint: null, signedIn: false });
+    expect(outcome.result).toEqual({
+      state: 'form',
+      emailHint: null,
+      signedIn: false,
+      link: tokenBinding(TOKEN),
+    });
     expect(cookies.jar.has('cupidilla_email_token')).toBe(true);
   });
 
@@ -263,6 +270,24 @@ describe('/reset-password (C4-1, C4-4)', () => {
       expect(cookies.jar.has('cupidilla_pending_email')).toBe(false);
     },
   );
+
+  it('el formulario de otra pestaña (huella de otro enlace) no restablece la cuenta del enlace de la cookie', async () => {
+    cookies = fakeCookies({ cupidilla_email_token: TOKEN });
+    const stale = tokenBinding('B'.repeat(43));
+    for (const link of [stale, '']) {
+      expect((await submit('otra frase larga nueva', link)).result).toMatchObject({
+        status: 409,
+        data: { general: 'restablecer.error.enlace_cambiado' },
+      });
+    }
+    expect(api.resetPassword).not.toHaveBeenCalled();
+    expect(cookies.jar.has('cupidilla_email_token')).toBe(true);
+  });
+
+  it('la huella no contiene el token', () => {
+    expect(tokenBinding(TOKEN)).toMatch(/^[0-9a-f]{16}$/);
+    expect(TOKEN).not.toContain(tokenBinding(TOKEN));
+  });
 
   it('contraseña de 9 caracteres: error de campo y no llama a la API; el token se conserva', async () => {
     cookies = fakeCookies({ cupidilla_email_token: TOKEN });

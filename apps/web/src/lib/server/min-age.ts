@@ -7,7 +7,7 @@ export const MIN_AGE_TTL_MS = 60_000;
 /** Tras un fallo, los textos de las páginas no vuelven a preguntar a la API durante este tiempo. */
 export const MIN_AGE_RETRY_MS = 5_000;
 
-let cached: { value: number; mail: ConfigResponse['mail'] | null; at: number } | null = null;
+let cached: { value: number; mail: ConfigResponse['mail']; at: number } | null = null;
 let failedAt: number | null = null;
 let inFlight: Promise<number | null> | null = null;
 
@@ -22,8 +22,9 @@ async function refresh(event: RequestEvent): Promise<number | null> {
   const result = await api.config(event);
   const now = Date.now();
   if (result.ok) {
-    // `mail` puede faltar si la API es anterior al hito de correo: entonces no se sabe.
-    cached = { value: result.data.minAge, mail: result.data.mail ?? null, at: now };
+    // `mail` es obligatorio en el contrato: web y API se despliegan juntas desde este monorepo,
+    // así que no hay un caso de API anterior que contemplar.
+    cached = { value: result.data.minAge, mail: result.data.mail, at: now };
     failedAt = null;
     return result.data.minAge;
   }

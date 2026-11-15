@@ -351,6 +351,8 @@ export const texts = {
     'Algo ha fallado por nuestra parte y no hemos podido confirmar tu correo. Puedes volver a intentarlo con este enlace mientras no caduque.',
   'confirmar.error.resultado_incierto':
     'No sabemos si se ha confirmado tu correo: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta: si ya no ves el aviso de correo sin confirmar, está hecho. Si lo ves, vuelve a abrir el enlace del correo. Si te dice que ya no sirve, no podemos saber si se confirmó: comprueba el estado en tu cuenta o pide un enlace nuevo.',
+  'confirmar.error.enlace_cambiado':
+    'Has abierto un enlace más reciente en otra pestaña, así que este formulario ya no vale. No hemos confirmado nada. Recarga la página para continuar con el enlace más reciente.',
   'confirmar.enlace.comprobar': 'Ir a mi cuenta para comprobarlo',
   // 6.4 Enlaces que no sirven
   'enlace.meta.titulo': 'Este enlace ya no sirve',
@@ -414,6 +416,8 @@ export const texts = {
     'Algo ha fallado por nuestra parte y no hemos podido guardar tu contraseña. Tu contraseña anterior sigue como estaba. Puedes volver a intentarlo con este enlace mientras no caduque.',
   'restablecer.error.resultado_incierto':
     'No sabemos si se ha guardado tu contraseña: se ha perdido la conexión antes de recibir la respuesta. Prueba a entrar con la contraseña nueva. Si no puedes, vuelve a abrir el enlace del correo; si te dice que ya no sirve, pide uno nuevo.',
+  'restablecer.error.enlace_cambiado':
+    'Has abierto un enlace más reciente en otra pestaña, así que este formulario ya no vale. No hemos cambiado tu contraseña. Recarga la página para continuar con el enlace más reciente.',
   'restablecer.enlace.comprobar': 'Probar a entrar',
   // 6.7 Aviso en la cuenta y proveedores
   'entrar.enlace.olvido': '¿Olvidaste tu contraseña?',

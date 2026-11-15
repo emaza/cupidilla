@@ -47,6 +47,7 @@
     <!-- El token no va en el formulario: vive en una cookie de esta ruta (técnico §9.1). -->
     {#key form}
       <form method="POST" novalidate use:enhance={submission.submit}>
+        <input type="hidden" name="link" value={data.link} />
         {#if data.signedIn}
           <div class="notice notice-info">
             <span class="icon" aria-hidden="true">ℹ</span>

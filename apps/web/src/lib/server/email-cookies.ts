@@ -1,4 +1,5 @@
 import type { Cookies } from '@sveltejs/kit';
+import { createHash } from 'node:crypto';
 import { dev } from '$app/env';
 
 /**
@@ -52,4 +53,14 @@ export function getEmailToken(cookies: Cookies): string | null {
 
 export function clearEmailToken(cookies: Cookies, path: TokenPage): void {
   cookies.delete(EMAIL_TOKEN_COOKIE, tokenOptions(path));
+}
+
+/**
+ * Huella no secreta del token que pintó el formulario (64 bits de su SHA-256): va en un campo
+ * oculto y la acción la compara con la de la cookie. Con dos pestañas (enlace A y después B) la
+ * cookie compartida pasa a B, y el formulario de A, que enseña la cuenta de A, no debe actuar sobre
+ * la de B. No revela el token (la huella truncada de 256 bits no permite recuperarlo).
+ */
+export function tokenBinding(token: string): string {
+  return createHash('sha256').update(token).digest('hex').slice(0, 16);
 }
