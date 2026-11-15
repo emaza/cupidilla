@@ -9,8 +9,10 @@ import { createTestApp, truncateAll } from './helpers/test-app.js';
 class SlowMailer extends Mailer {
   readonly sent: MailMessage[] = [];
   entered = 0;
+  readonly enteredTo: string[] = [];
   async send(message: MailMessage): Promise<void> {
     this.entered += 1;
+    this.enteredTo.push(message.to);
     await new Promise((done) => setTimeout(done, 300));
     this.sent.push(message);
   }
@@ -102,13 +104,15 @@ describe('QA: ciclo de vida del worker con un SMTP', () => {
       );
       const draining = worker.drain();
       const deadline = Date.now() + 5000;
-      while (mailer.entered === 0) {
+      while (!mailer.enteredTo.some((to) => to.startsWith('lote'))) {
         if (Date.now() > deadline) throw new Error('El worker no llegó a enviar en 5 s');
         await new Promise((done) => setTimeout(done, 10));
       }
       await closeApp();
       await draining;
-      expect(mailer.entered).toBe(OUTBOX_BATCH);
+      // Solo las filas de este test: el drain() de arranque pudo enviar una fila que dejó el test
+      // anterior (la tabla se vacía después de crear la app).
+      expect(mailer.enteredTo.filter((to) => to.startsWith('lote'))).toHaveLength(OUTBOX_BATCH);
     } finally {
       await closeApp();
     }

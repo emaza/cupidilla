@@ -66,39 +66,53 @@ describe('QA fase B', () => {
 
   it('unión a la vez que el barrido del día 7: ningún 500 (interbloqueo) y resultado coherente', async () => {
     const sweeper = t.app.get(UnverifiedAccountsSweeper);
-    const seen = new Set<string>();
-    const verifySpy = vi.spyOn(t.app.get(PasswordService), 'verify');
-    for (let round = 0; round < 8; round += 1) {
-      await truncateAll(t.db);
-      resetRateLimits(t.app);
-      inbox(t.app).clear();
-      t.clock.set(TEST_NOW);
-      // El token pendiente nace con la cuenta ya vencida: así la carrera llega a la comprobación
-      // de la contraseña y a la verificación, y no se queda en un token caducado.
-      const { pendingToken } = await startLink('2026-11-18T10:00:00Z');
-      const link = () =>
-        api(t.app)
-          .post('/auth/oauth/link')
-          .send({ pendingToken, email: BETO, password: TEST_PASSWORD });
-      const [response] =
-        round % 2 === 0
-          ? await Promise.all([link(), sweeper.sweep()])
-          : await Promise.all([sweeper.sweep().then(() => undefined), link()]).then(([, r]) => [r]);
-      seen.add(String(response?.status));
-      const [row] = await t.db.select().from(users);
-      if (row) {
-        expect(response?.status, `ronda ${round}`).toBe(200);
-        expect(row.emailVerifiedAt).not.toBeNull();
-      } else {
-        expect([400, 403, 404, 409], `ronda ${round} (${response?.status})`).toContain(
-          response?.status,
-        );
-      }
-      expect(response?.status, `ronda ${round}`).toBeLessThan(500);
+    const passwords = t.app.get(PasswordService);
+    const verify = passwords.verify.bind(passwords);
+
+    // Orden 1, controlado con una compuerta: el barrido corre mientras la unión está dentro de la
+    // verificación de la contraseña. La cuenta (y con ella el token pendiente) desaparece y la
+    // unión no puede completarse: 400, sin sesión ni identidad, nunca un 500.
+    const { pendingToken } = await startLink('2026-11-18T10:00:00Z');
+    let reached!: () => void;
+    const inVerify = new Promise<void>((resolve) => (reached = resolve));
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    vi.spyOn(passwords, 'verify').mockImplementation(async (hash, password) => {
+      reached();
+      await gate;
+      return verify(hash, password);
+    });
+    const linking = api(t.app)
+      .post('/auth/oauth/link')
+      .send({ pendingToken, email: BETO, password: TEST_PASSWORD })
+      .then((response) => response);
+    try {
+      await inVerify;
+      expect((await sweeper.sweep()).deleted).toBe(1);
+    } finally {
+      release();
     }
-    // La petición llegó a la comprobación de la contraseña (con el token pendiente caducado ni
-    // siquiera la habría intentado): la carrera con el barrido se prueba de verdad.
-    expect(verifySpy.mock.calls.length).toBeGreaterThanOrEqual(1);
+    const swept = await linking;
+    expect(swept.status).toBe(400);
+    expect(swept.body.error.code).toBe('OAUTH_FLOW_INVALID');
+    expect(await t.db.select().from(users)).toEqual([]);
+    expect(await countRows(t.db, 'sessions')).toBe(0);
+    expect(await t.db.select().from(identities)).toEqual([]);
+    vi.restoreAllMocks();
+
+    // Orden 2: la unión termina antes del barrido; la cuenta queda verificada y no se borra.
+    await truncateAll(t.db);
+    resetRateLimits(t.app);
+    inbox(t.app).clear();
+    t.clock.set(TEST_NOW);
+    const second = await startLink('2026-11-18T10:00:00Z');
+    const linked = await api(t.app)
+      .post('/auth/oauth/link')
+      .send({ pendingToken: second.pendingToken, email: BETO, password: TEST_PASSWORD });
+    expect(linked.status).toBe(200);
+    expect((await sweeper.sweep()).deleted).toBe(0);
+    const [row] = await t.db.select().from(users);
+    expect(row?.emailVerifiedAt).not.toBeNull();
   });
 
   it('8 contraseñas erróneas simultáneas: el enlace acaba anulado, nadie abre sesión y la correcta después da 400', async () => {
