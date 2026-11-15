@@ -31,9 +31,11 @@ async function waitFor(url: string, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     try {
-      if ((await fetch(url)).ok) return;
+      // Cada petición, acotada por el tiempo que queda (y como mucho 5 s).
+      const remaining = Math.max(1, Math.min(deadline - Date.now(), 5000));
+      if ((await fetch(url, { signal: AbortSignal.timeout(remaining) })).ok) return;
     } catch {
-      // Todavía no escucha.
+      // Todavía no escucha (o no ha respondido a tiempo).
     }
     if (stopping) return;
     if (Date.now() > deadline) throw new Error(`no respondió a tiempo: ${url}`);
@@ -47,8 +49,9 @@ process.on('SIGTERM', () => stopAll(0));
 await assertMailpitUp();
 const servers = e2eServers();
 for (const server of servers) {
+  if (stopping) break;
   if (
-    await fetch(server.url).then(
+    await fetch(server.url, { signal: AbortSignal.timeout(3000) }).then(
       (r) => r.ok,
       () => false,
     )
@@ -57,7 +60,7 @@ for (const server of servers) {
     process.exit(1);
   }
 }
-for (const server of servers) {
+for (const server of stopping ? [] : servers) {
   const child = spawn(server.command, {
     cwd: ROOT,
     shell: true,

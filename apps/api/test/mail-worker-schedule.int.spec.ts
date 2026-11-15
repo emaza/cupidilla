@@ -56,6 +56,20 @@ async function until(condition: () => boolean | Promise<boolean>, timeoutMs: num
   }
 }
 
+/**
+ * Espera a que el *worker* esté en reposo: sin `drain()` en curso, sin consultar el siguiente y
+ * sin un `drain()` inmediato programado (se exige verlo así en dos lecturas seguidas).
+ */
+async function untilWorkerIdle(worker: OutboxWorker): Promise<void> {
+  const state = worker as unknown as { inFlight: Set<unknown>; planning: boolean };
+  let quiet = 0;
+  await until(async () => {
+    const idle = state.inFlight.size === 0 && !state.planning;
+    quiet = idle ? quiet + 1 : 0;
+    return quiet >= 2;
+  }, 5000);
+}
+
 describe('Programación del worker con un SMTP (correo §4.3)', () => {
   let t: TestApp;
   const mailer = new ControlledMailer();
@@ -74,8 +88,9 @@ describe('Programación del worker con un SMTP (correo §4.3)', () => {
     await t.app.close();
   });
   beforeEach(async () => {
-    // Que no quede ningún drain() en curso de la prueba anterior.
+    // Que no quede ningún drain() en curso de la prueba anterior, ni uno a punto de empezar.
     await until(() => !mailer.blocked, 2000);
+    await untilWorkerIdle(worker);
     await truncateAll(t.db);
     mailer.sent.length = 0;
     mailer.failNext = false;

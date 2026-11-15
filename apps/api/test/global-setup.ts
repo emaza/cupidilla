@@ -15,7 +15,19 @@ import { INT_MAX_WORKERS, workerDatabaseName } from './helpers/test-databases.js
  * Antes de la integración: vacía y migra cupidilla_test con los mismos scripts, la clona para cada worker y
  * arranca el proveedor OAuth falso (§14.1). Devuelve la parada del proveedor.
  */
-export default async function setup(): Promise<() => Promise<void>> {
+export default function setup(): Promise<() => Promise<void>> {
+  // Los proyectos integration e integration-serial comparten este archivo: Vitest lo ejecuta una
+  // vez por proyecto, pero el trabajo (bases, proveedor en un puerto fijo) debe hacerse una sola.
+  // Cada proyecto carga su propia copia del módulo: el estado compartido va en `globalThis`.
+  const shared = globalThis as { __cupidillaIntegrationSetup?: Promise<() => Promise<void>> };
+  shared.__cupidillaIntegrationSetup ??= prepare();
+  return shared.__cupidillaIntegrationSetup.then((teardown) => {
+    let closing: Promise<void> | undefined;
+    return () => (closing ??= teardown());
+  });
+}
+
+async function prepare(): Promise<() => Promise<void>> {
   const apiRoot = resolve(import.meta.dirname, '..');
   const rootEnv = loadEnv('test', resolve(apiRoot, '../..'), '');
   const databaseUrl = process.env.TEST_DATABASE_URL ?? rootEnv.TEST_DATABASE_URL;

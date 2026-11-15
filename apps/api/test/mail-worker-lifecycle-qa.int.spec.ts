@@ -21,27 +21,40 @@ describe('QA: ciclo de vida del worker con un SMTP', () => {
     const t = await createTestApp({
       override: (builder) => builder.overrideProvider(Mailer).useValue(mailer),
     });
-    await truncateAll(t.db);
-    await seedAna(t.db);
-    await seedBeto(t.db);
-    const worker = t.app.get(OutboxWorker);
-    const outbox = t.app.get(OutboxService);
-    await outbox.enqueue(t.db, 'password_changed', ANA);
-    outbox.kick();
-    while (mailer.entered === 0) await new Promise((done) => setTimeout(done, 10));
-    // kicks repetidos durante el envío: una sola repetición, nunca drains concurrentes.
-    await outbox.enqueue(t.db, 'password_changed', BETO);
-    for (let i = 0; i < 20; i += 1) outbox.kick();
+    let closed = false;
+    const closeApp = async () => {
+      if (closed) return;
+      closed = true;
+      await t.app.close();
+    };
+    try {
+      await truncateAll(t.db);
+      await seedAna(t.db);
+      await seedBeto(t.db);
+      const worker = t.app.get(OutboxWorker);
+      const outbox = t.app.get(OutboxService);
+      await outbox.enqueue(t.db, 'password_changed', ANA);
+      outbox.kick();
+      const deadline = Date.now() + 5000;
+      while (mailer.entered === 0) {
+        if (Date.now() > deadline) throw new Error('El worker no llegó a enviar en 5 s');
+        await new Promise((done) => setTimeout(done, 10));
+      }
+      // kicks repetidos durante el envío: una sola repetición, nunca drains concurrentes.
+      await outbox.enqueue(t.db, 'password_changed', BETO);
+      for (let i = 0; i < 20; i += 1) outbox.kick();
 
-    const closing = t.app.close();
-    await closing;
-    expect(worker.nextDrainAt).toBeUndefined();
-    const sentAtClose = mailer.sent.length;
-    outbox.kick();
-    await new Promise((done) => setTimeout(done, 1500));
-    expect(worker.nextDrainAt).toBeUndefined();
-    expect(mailer.sent.length).toBe(sentAtClose);
-    expect(mailer.entered).toBeLessThanOrEqual(2);
-    expect(sentAtClose).toBeGreaterThanOrEqual(1);
+      await closeApp();
+      expect(worker.nextDrainAt).toBeUndefined();
+      const sentAtClose = mailer.sent.length;
+      outbox.kick();
+      await new Promise((done) => setTimeout(done, 1500));
+      expect(worker.nextDrainAt).toBeUndefined();
+      expect(mailer.sent.length).toBe(sentAtClose);
+      expect(mailer.entered).toBeLessThanOrEqual(2);
+      expect(sentAtClose).toBeGreaterThanOrEqual(1);
+    } finally {
+      await closeApp();
+    }
   });
 });

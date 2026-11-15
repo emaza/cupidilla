@@ -20,7 +20,7 @@ export const UNVERIFIED_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 /** Cuentas por sentencia de borrado: se repite mientras borre el lote entero. */
 export const UNVERIFIED_DELETE_BATCH = 100;
 /** Recordatorios por transacción: acota los parámetros del `INSERT` en el *outbox*. */
-export const UNVERIFIED_REMINDER_BATCH = 100;
+export const UNVERIFIED_REMINDER_BATCH = 1000;
 
 export interface SweepResult {
   deleted: number;
@@ -122,7 +122,7 @@ export class UnverifiedAccountsSweeper implements OnModuleInit, OnModuleDestroy 
   }
 
   /**
-   * Recordatorio el 5.º día, una sola vez por cuenta (`verification_reminded_at`), en lotes de 100
+   * Recordatorio el 5.º día, una sola vez por cuenta (`verification_reminded_at`), en lotes de 1000
    * (cada uno en su transacción, la que lo marca y lo encola): un único `INSERT` con una fila por
    * cuenta pasaría del máximo de parámetros de PostgreSQL (65 535) con muchas cuentas a la vez.
    */

@@ -33,8 +33,10 @@ describe('QA fase B', () => {
     vi.restoreAllMocks();
   });
 
-  const startLink = async () => {
+  /** Con `agedTo`, la cuenta se envejece antes de crear el token pendiente (que no caduque antes). */
+  const startLink = async (agedTo?: string) => {
     const { userId } = await registerBeto(t.app, t.db);
+    if (agedTo) t.clock.set(agedTo);
     const flow = await runFlow(t.app, { identity: { email: BETO } });
     expect(flow.response.body.result).toBe('link_required');
     return { userId, pendingToken: flow.response.body.pending.token as string };
@@ -65,13 +67,15 @@ describe('QA fase B', () => {
   it('unión a la vez que el barrido del día 7: ningún 500 (interbloqueo) y resultado coherente', async () => {
     const sweeper = t.app.get(UnverifiedAccountsSweeper);
     const seen = new Set<string>();
+    const verifySpy = vi.spyOn(t.app.get(PasswordService), 'verify');
     for (let round = 0; round < 8; round += 1) {
       await truncateAll(t.db);
       resetRateLimits(t.app);
       inbox(t.app).clear();
       t.clock.set(TEST_NOW);
-      const { pendingToken } = await startLink();
-      t.clock.set('2026-11-18T10:00:00Z');
+      // El token pendiente nace con la cuenta ya vencida: así la carrera llega a la comprobación
+      // de la contraseña y a la verificación, y no se queda en un token caducado.
+      const { pendingToken } = await startLink('2026-11-18T10:00:00Z');
       const link = () =>
         api(t.app)
           .post('/auth/oauth/link')
@@ -92,6 +96,9 @@ describe('QA fase B', () => {
       }
       expect(response?.status, `ronda ${round}`).toBeLessThan(500);
     }
+    // La petición llegó a la comprobación de la contraseña (con el token pendiente caducado ni
+    // siquiera la habría intentado): la carrera con el barrido se prueba de verdad.
+    expect(verifySpy.mock.calls.length).toBeGreaterThanOrEqual(1);
   });
 
   it('8 contraseñas erróneas simultáneas: el enlace acaba anulado, nadie abre sesión y la correcta después da 400', async () => {
