@@ -16,6 +16,7 @@ const account: AccountResponse = {
     email: 'ana@example.com',
     createdAt: '2026-11-10T23:30:00.000Z',
     emailVerified: true,
+    dataReviewRequired: false,
     birthDate: '1990-01-01',
     emailVerifiedAt: '2026-11-10T23:30:00.000Z',
     unverifiedDeletionAt: null,

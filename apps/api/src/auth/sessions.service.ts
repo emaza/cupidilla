@@ -56,6 +56,7 @@ export class SessionsService {
         email: users.email,
         createdAt: users.createdAt,
         emailVerifiedAt: users.emailVerifiedAt,
+        dataReviewRequiredAt: users.dataReviewRequiredAt,
       })
       .from(sessions)
       .innerJoin(users, eq(users.id, sessions.userId))

@@ -10,6 +10,8 @@ Hito **H0 — base mínima** implementado (11 de noviembre de 2026): registro, e
 
 **Entrada con Google y Facebook** (decisión 19, 13 de noviembre de 2026): entrar y darse de alta con un proveedor, unirlo a una cuenta con contraseña y, desde «Tu cuenta», añadir o quitar proveedores, crear una contraseña y borrar la cuenta sin contraseña. Probada contra un proveedor falso; falta comprobarla con Google y Facebook reales (ver abajo). El diseño está en [Diseño técnico](docs/login-terceros-diseno-tecnico.md) y [Diseño UX](docs/login-terceros-diseno-ux.md).
 
+**Correo** (decisión 22, 14 de noviembre de 2026): registro con respuesta uniforme, confirmación del correo, recuperación de la contraseña y revisión de datos tras recuperar una cuenta sin confirmar, con envío por SMTP (Mailpit en local). Falta elegir el proveedor SMTP de producción. El diseño está en [Diseño técnico](docs/correo-diseno-tecnico.md) y [Diseño UX](docs/correo-diseno-ux.md).
+
 El código es un monorepo con npm workspaces:
 
 | Paquete | Qué es |
@@ -100,6 +102,8 @@ Los scripts de `docker/postgres/init` solo se ejecutan con el volumen vacío: si
 | [H0 — Diseño UX](docs/h0-diseno-ux.md) | Pantallas, textos, estados, accesibilidad y criterios de aceptación de la base mínima |
 | [Entrada con terceros — Diseño técnico](docs/login-terceros-diseno-tecnico.md) | Google y Facebook: protocolo, datos, API, web, seguridad, pruebas y pasos en las consolas |
 | [Entrada con terceros — Diseño UX](docs/login-terceros-diseno-ux.md) | Botones, alta, unión, «Formas de entrar», textos y criterios de aceptación |
+| [Correo — Diseño técnico](docs/correo-diseno-tecnico.md) | Verificación, recuperación, registro uniforme y revisión de datos: datos, envío, API, web, seguridad y pruebas |
+| [Correo — Diseño UX](docs/correo-diseno-ux.md) | Pantallas, los cinco correos, textos y criterios de aceptación del hito de correo |
 
 ## Decisiones clave
 

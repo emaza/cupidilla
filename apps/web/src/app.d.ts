@@ -2,8 +2,16 @@
 declare global {
   namespace App {
     interface Locals {
-      /** Persona con sesión válida, o `null`. `emailVerified`: para la banda de la cabecera. */
-      user: { id: string; email: string; emailVerified: boolean } | null;
+      /**
+       * Persona con sesión válida, o `null`. `emailVerified`: para la banda de la cabecera.
+       * `dataReviewRequired`: revisión de datos pendiente (correo §5.11).
+       */
+      user: {
+        id: string;
+        email: string;
+        emailVerified: boolean;
+        dataReviewRequired: boolean;
+      } | null;
       /** Token de la cookie. Solo vive en el servidor: nunca se devuelve en `data` ni en `form`. */
       sessionToken: string | null;
       /** `true` si no se pudo comprobar la sesión porque la API no respondió. */

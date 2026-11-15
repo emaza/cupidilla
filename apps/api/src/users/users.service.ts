@@ -36,12 +36,13 @@ export interface UserCredentials {
 type UserRow = typeof users.$inferSelect;
 
 export const toPublicUser = (
-  row: Pick<UserRow, 'id' | 'email' | 'createdAt' | 'emailVerifiedAt'>,
+  row: Pick<UserRow, 'id' | 'email' | 'createdAt' | 'emailVerifiedAt' | 'dataReviewRequiredAt'>,
 ): PublicUser => ({
   id: row.id,
   email: row.email,
   createdAt: row.createdAt.toISOString(),
   emailVerified: row.emailVerifiedAt !== null,
+  dataReviewRequired: row.dataReviewRequiredAt !== null,
 });
 
 @Injectable()

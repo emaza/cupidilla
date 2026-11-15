@@ -76,16 +76,19 @@ export const birthDateSchema = z.iso
 export const strictObjectError = (issue: { code: string }): string =>
   issue.code === 'unrecognized_keys' ? 'unrecognized' : 'invalid';
 
+/** Versión de las condiciones que la persona acepta (alta y revisión de datos). */
+export const termsVersionSchema = z
+  .string({ error: 'required' })
+  .min(1, { error: 'required' })
+  .max(64, { error: 'too_long' });
+
 export const registerRequestSchema = z.strictObject(
   {
     email: emailSchema,
     password: newPasswordSchema,
     birthDate: birthDateSchema,
     acceptTerms: z.literal(true, { error: 'required' }),
-    termsVersion: z
-      .string({ error: 'required' })
-      .min(1, { error: 'required' })
-      .max(64, { error: 'too_long' }),
+    termsVersion: termsVersionSchema,
   },
   { error: strictObjectError },
 );
@@ -106,6 +109,8 @@ export const publicUserSchema = z.object({
   createdAt: z.iso.datetime(),
   /** El correo de la cuenta está verificado (correo §5.8). */
   emailVerified: z.boolean(),
+  /** La cuenta está pendiente de revisar sus datos tras un restablecimiento (correo §5.11). */
+  dataReviewRequired: z.boolean(),
 });
 
 export type PublicUser = z.infer<typeof publicUserSchema>;
@@ -177,3 +182,17 @@ export const emailVerificationResponseSchema = z.discriminatedUnion('session', [
 ]);
 
 export type EmailVerificationResponse = z.infer<typeof emailVerificationResponseSchema>;
+
+/**
+ * POST /auth/password-reset/request: pedir el enlace de recuperación. Responde siempre `202` sin
+ * cuerpo, exista o no la cuenta (correo §5.5); el cuerpo es `emailRequestSchema`.
+ *
+ * POST /auth/password-reset: fijar la contraseña con el enlace (correo §5.6). La respuesta es
+ * `authResponseSchema`, con la sesión nueva.
+ */
+export const passwordResetSchema = z.strictObject(
+  { token: opaqueTokenSchema, password: newPasswordSchema },
+  { error: strictObjectError },
+);
+
+export type PasswordResetRequest = z.infer<typeof passwordResetSchema>;

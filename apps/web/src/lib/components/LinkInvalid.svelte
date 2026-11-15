@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { FORGOT_PASSWORD_PATH, withSuffix } from '#lib/paths.ts';
+  import { withSuffix } from '#lib/paths.ts';
   import { t } from '#lib/texts.ts';
 
   /**
@@ -12,9 +12,11 @@
     kind: 'invalid' | 'attempts';
     /** `null` sin sesión; si no, si la cuenta de la sesión tiene el correo confirmado. */
     emailVerified: boolean | null;
+    /** Enlace de confirmar (`/verify-email`) o de restablecer (`/reset-password`). */
+    purpose?: 'verify' | 'reset';
   }
 
-  let { kind, emailVerified }: Props = $props();
+  let { kind, emailVerified, purpose = 'verify' }: Props = $props();
 
   let heading: HTMLHeadingElement | undefined = $state();
   $effect(() => {
@@ -28,12 +30,21 @@
     <p>{t('enlace.intentos.texto')}</p>
     <p>{t('enlace.intentos.siguiente')}</p>
     <div class="actions">
-      <a class="button button-primary" href={FORGOT_PASSWORD_PATH}>{t('enlace.boton.recuperar')}</a>
+      <a class="button button-primary" href={resolve('forgot-password')}
+        >{t('enlace.boton.recuperar')}</a
+      >
     </div>
   {:else}
     <h1 tabindex="-1" bind:this={heading}>{t('enlace.titulo')}</h1>
     <p>{t('enlace.texto')}</p>
-    {#if emailVerified === false}
+    {#if purpose === 'reset'}
+      <p>{t('enlace.restablecer.siguiente')}</p>
+      <div class="actions">
+        <a class="button button-primary" href={resolve('forgot-password')}
+          >{t('enlace.boton.nuevo')}</a
+        >
+      </div>
+    {:else if emailVerified === false}
       <p>{t('enlace.verificar.sesion_sin_confirmar')}</p>
       <form method="POST" action="/account?/resendVerification">
         <div class="actions">
@@ -50,7 +61,9 @@
           >{t('comun.nav.entrar')}</a
         >
       </p>
-      <p><a class="block-link" href={FORGOT_PASSWORD_PATH}>{t('entrar.enlace.olvido')}</a></p>
+      <p>
+        <a class="block-link" href={resolve('forgot-password')}>{t('entrar.enlace.olvido')}</a>
+      </p>
     {/if}
   {/if}
 </div>

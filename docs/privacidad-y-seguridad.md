@@ -46,6 +46,24 @@ De los consentimientos generales se guarda además la finalidad y la versión de
 | **H3** | Registro de autorizaciones por presentación · bloquear, denunciar y retirar el consentimiento · un rechazo no se puede saltar pagando |
 | **H4** | Moderación con revisión humana y apelación · detección de spam y posibles estafas · recomendaciones para encuentros seguros |
 
+## Correo
+
+Desde el hito de correo (decisión 22, [diseño técnico](correo-diseno-tecnico.md)) Cupidilla envía correos automáticos: confirmar el correo, recordatorio antes de borrar una cuenta sin confirmar, restablecer la contraseña, aviso de que alguien intentó registrarse con tu correo y aviso de contraseña cambiada. Los enlaces llevan un token de un solo uso del que solo se guarda el hash; ningún correo lleva rastreadores.
+
+**Retención** ([técnico §3.5](correo-diseno-tecnico.md#35-retención)):
+
+| Dato | Cuánto vive |
+|---|---|
+| Fila del *outbox* enviada o descartada | Se borra en el acto |
+| Fila del *outbox* fallida | 7 días (para diagnosticar), luego la limpieza |
+| Fila del *outbox* pendiente | Hasta enviarse; como mucho unas 8 h de reintentos |
+| Tokens de los enlaces (`email_tokens`, solo el hash) | Hasta usarse, caducar (24 h para confirmar, 1 h para restablecer) o borrarse la cuenta |
+| Cuenta sin confirmar el correo | 7 días desde su creación; después se borra con todos sus datos |
+
+Al borrar una cuenta se borran también, en la misma operación, las filas del *outbox* con su correo. El *outbox* guarda el correo de destino y el tipo de mensaje, nunca un token ni un enlace.
+
+**Proveedor SMTP**: el servicio que envíe los correos en producción será **encargado del tratamiento** (recibe el correo de cada persona y el contenido de los mensajes). **Pendiente de elegir** antes del despliegue, junto a «Marca y dominio» (ver [decisiones](decisiones.md#antes-de-la-beta)): tiene que tener servidores en la UE y un contrato de encargo, y el dominio remitente necesita SPF, DKIM y DMARC. En local y en las pruebas se usa Mailpit, que no sale de la máquina.
+
 ## La IA
 
 ### Transparencia
@@ -71,6 +89,7 @@ Regla de diseño desde el primer día: enviar al modelo lo mínimo necesario par
 - [ ] Mecanismo de verificación de edad (ver [decisiones](decisiones.md#abiertas)).
 - [ ] Procedimiento de denuncias, revisión y apelación.
 - [ ] Condiciones del proveedor del modelo revisadas.
+- [ ] Proveedor SMTP de producción elegido, con contrato de encargo y servidores en la UE (ver [Correo](#correo)).
 - [ ] Comprobación de la marca y del dominio.
 
 No se debe asumir que toda plataforma de contactos tiene las mismas obligaciones: dependen de las funciones, los datos y el tratamiento concretos.

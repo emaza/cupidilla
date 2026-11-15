@@ -5,7 +5,7 @@
   import PasswordField from '#lib/components/PasswordField.svelte';
   import SubmitButton from '#lib/components/SubmitButton.svelte';
   import { createSubmission } from '#lib/forms/submission.svelte.ts';
-  import { FORGOT_PASSWORD_PATH } from '#lib/paths.ts';
+  import { resolve } from '$app/paths';
   import { linkInvalidTitle, pageTitle, t } from '#lib/texts.ts';
   import type { PageProps } from './$types';
 
@@ -62,7 +62,7 @@
           describedBy={data.otherSession ? 'other-session' : undefined}
         />
         <p>
-          <a class="block-link" href={FORGOT_PASSWORD_PATH}>{t('confirmar.enlace.olvido')}</a>
+          <a class="block-link" href={resolve('forgot-password')}>{t('confirmar.enlace.olvido')}</a>
         </p>
         <p class="help">{t('confirmar.ayuda.olvido')}</p>
       {/if}

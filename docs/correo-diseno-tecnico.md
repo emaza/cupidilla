@@ -431,19 +431,20 @@ Una cuenta con el correo sin verificar puede ser de su dueño, que no llegó a c
 
 **La marca** es la columna `users.data_review_required_at` (§3.1). No se puede derivar: tras el restablecimiento la cuenta está verificada y nada más la distingue de otra. La pone solo §5.6 cuando `email_verified_at` era `NULL`. La confirmación con contraseña y la unión no la ponen: las hace quien sabe la contraseña, es decir, quien creó la cuenta.
 
-**Quitarla**: `POST /users/me/data-review` `{ birthDate, acceptTerms: true, termsVersion }` (sesión), en el orden del alta (H0 §8.5):
+**Quitarla**: `POST /users/me/data-review` `{ birthDate, acceptTerms?, termsVersion }` (sesión). Como en el alta (H0 §8.5), la edad va antes que nada; a diferencia del alta, también antes que la casilla de las condiciones, porque con un menor hay que borrar la cuenta aunque no la haya marcado:
 
-1. Esquema (`dataReviewRequestSchema`) → 400.
+1. Esquema (`dataReviewRequestSchema`, con `acceptTerms` booleano y opcional) → 400.
 2. `checkBirthDate(birthDate, referenceToday(clock.now()), minAge)`, **antes de leer nada**, con la misma regla y **la misma edad mínima configurada (`MIN_AGE`, 18 por defecto, de 18 a 25)** que el alta (Europe/Madrid, 29 de febrero incluido). La revisión es una declaración nueva, así que se aplica el `MIN_AGE` vigente, no el que había cuando se creó la cuenta; las cuentas que no pasan por la revisión se respetan aunque `MIN_AGE` suba. Futura → 400 `in_future`. **Menor** → `DELETE FROM users WHERE id = $1 AND data_review_required_at IS NOT NULL` (cascada de siempre) y 422 `UNDERAGE`. Como en el alta, un menor no tiene cuenta y su fecha no se guarda ni se registra. Si la fila ya no estaba pendiente, el `DELETE` no borra nada y responde igual.
-3. `termsVersion` distinto de `SERVICE_TERMS_VERSION` → 409 `TERMS_VERSION_OUTDATED`.
-4. `Transactions.run`: `SELECT … FROM users WHERE id = $1 AND data_review_required_at IS NOT NULL FOR UPDATE` → sin fila, 404 `NOT_FOUND` (esta ruta no sirve para cambiar la fecha cuando no hay revisión pendiente) → `UPDATE users SET birth_date, data_review_required_at = NULL, updated_at` → `ConsentsService.revoke(service_use)` y `grant(service_use, termsVersion)`, con `granted_at` del `Clock`. La fila anterior queda con `revoked_at` como histórico.
-5. `204`. Log `{ event: 'data_review_completed' }`, sin la fecha.
+3. Solo con un adulto: `acceptTerms` distinto de `true` (`dataReviewAcceptanceSchema`) → 400 `VALIDATION_FAILED` `acceptTerms: required`, sin cambiar nada. Así nunca se registra una aceptación que la persona no marcó.
+4. `termsVersion` distinto de `SERVICE_TERMS_VERSION` → 409 `TERMS_VERSION_OUTDATED`.
+5. `Transactions.run`: `SELECT … FROM users WHERE id = $1 AND data_review_required_at IS NOT NULL FOR UPDATE` → sin fila, 404 `NOT_FOUND` (esta ruta no sirve para cambiar la fecha cuando no hay revisión pendiente) → `UPDATE users SET birth_date, data_review_required_at = NULL, updated_at` → `ConsentsService.revoke(service_use)` y `grant(service_use, termsVersion)`, con `granted_at` del `Clock`. La fila anterior queda con `revoked_at` como histórico.
+6. `204`. Log `{ event: 'data_review_completed' }`, sin la fecha.
 
 La persona escribe la fecha de nuevo; puede coincidir con la guardada o no. Límite: 10 por sesión cada 15 min (conjunto `session`).
 
 **Bloqueo**: `DataReviewGuard`, global, el último (clave interna → límites → sesión → correo verificado → revisión). Con sesión y `request.session.user.dataReviewRequired`, toda ruta sin `@AllowDuringDataReview()` responde 403 `DATA_REVIEW_REQUIRED`. Es una lista blanca: las rutas nuevas (H1) quedan bloqueadas sin hacer nada. Llevan el decorador `GET /auth/session`, `POST /auth/logout`, `GET /users/me`, `POST /users/me/data-review` y `POST /users/me/deletion` (quien no quiera la cuenta puede borrarla). Las rutas `@Public()` no se ven afectadas. `SessionsService.validate` selecciona la columna y `ActiveSession.user` lleva `dataReviewRequired`.
 
-**En la web**: `guardRoutes` redirige con 303 a `/account/review` a quien tenga `locals.user.dataReviewRequired`, salvo en `/account/review`, `/account/delete`, `/legal/terms`, `/verify-email`, `/forgot-password` y `/reset-password`. `/account/review` (privada) tiene su propia acción `logout`. Tras restablecer, si `dataReviewRequired`, la web va a `/account/review?notice=password-reset` en vez de a `/account`. **La fecha de nacimiento sale vacía** (decisión del CTO, UX §3.10): la guardada puede ser de otra persona, así que la web no la pide a la API ni la pinta. Con un menor, la acción **sí** llama a la API (hay una cuenta que borrar), borra la cookie de sesión y pinta la pantalla de cierre de UX §3.10 sin valores (acuerdo A3). Con `204` → `/account?notice=details-reviewed`.
+**En la web**: `guardRoutes` redirige con 303 a `/account/review` a quien tenga `locals.user.dataReviewRequired`, salvo en `/account/review`, `/account/delete`, `/legal/terms`, `/verify-email`, `/forgot-password` y `/reset-password`. `/account/review` (privada) tiene su propia acción `logout`. Tras restablecer, si `dataReviewRequired`, la web va a `/account/review?notice=password-reset` en vez de a `/account`. **La fecha de nacimiento sale vacía** (decisión del CTO, UX §3.10): la guardada puede ser de otra persona, así que la web no la pide a la API ni la pinta. **Quién es menor lo decide solo la API** (su `MIN_AGE` puede no coincidir con el de la caché de 60 s de la web): con una fecha real y no futura, la acción llama siempre a la API con la casilla tal como está, y solo con 422 `UNDERAGE` borra la cookie de sesión y pinta la pantalla de cierre de UX §3.10 sin valores (acuerdo A3). Un 400 `acceptTerms: required` se pinta como el error de la casilla. Con `204` → `/account?notice=details-reviewed`.
 
 ---
 
@@ -537,9 +538,13 @@ export const passwordResetSchema = z.strictObject(
 // users.ts (fase C): POST /users/me/data-review → 204
 export const dataReviewRequestSchema = z.strictObject({
   birthDate: birthDateSchema,
-  acceptTerms: z.literal(true, { error: 'required' }),
+  acceptTerms: z.boolean({ error: 'required' }).optional(),   // la edad se comprueba antes (§5.11)
   termsVersion: /* el de registerRequestSchema */,
 }, { error: strictObjectError });
+// La revisión de un adulto, ya con la edad comprobada
+export const dataReviewAcceptanceSchema = dataReviewRequestSchema.extend({
+  acceptTerms: z.literal(true, { error: 'required' }),
+});
 
 // users.ts: accountResponseSchema.user añade
 //   emailVerifiedAt: z.iso.datetime().nullable(), unverifiedDeletionAt: z.iso.datetime().nullable()
@@ -906,7 +911,7 @@ Programador Opus.
 **C.1 `contracts`** (`passwordResetSchema`, `dataReviewRequestSchema`, `DATA_REVIEW_REQUIRED`, `dataReviewRequired` en `publicUserSchema`). Hecho cuando:
 
 - **C1-1.** Dado `{ token, password }` con una contraseña de 9 caracteres, cuando se valida con `passwordResetSchema`, entonces da `too_short`; con 10, se acepta.
-- **C1-2.** Dado `{ birthDate: '1990-05-05', acceptTerms: false, termsVersion }`, cuando se valida con `dataReviewRequestSchema`, entonces da `acceptTerms: required`; con un campo desconocido, `unrecognized`.
+- **C1-2.** Dado `{ birthDate: '1990-05-05', acceptTerms: false, termsVersion }`, cuando se valida con `dataReviewAcceptanceSchema` (la revisión de un adulto), entonces da `acceptTerms: required`; con `dataReviewRequestSchema` (la entrada, antes de la edad) se acepta; con un campo desconocido, `unrecognized`.
 - **C1-3.** Dado `ERROR_CODES`, entonces contiene `DATA_REVIEW_REQUIRED`.
 
 **C.2 Solicitud y restablecimiento** (§5.5, §5.6, plantillas de recuperación y de contraseña cambiada). Hecho cuando:
