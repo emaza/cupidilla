@@ -99,10 +99,20 @@ export async function waitForMailCount(
   { timeoutMs = 10_000 }: { timeoutMs?: number } = {},
 ): Promise<MailpitMessage[]> {
   const deadline = Date.now() + timeoutMs;
+  const notArrived = () => new Error(`No han llegado ${count} correos a ${to}`);
   for (;;) {
-    const messages = await mailTo(to);
+    // El plazo cuenta también para la petición, y con el plazo agotado no se empieza otra.
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw notArrived();
+    let messages: MailpitMessage[];
+    try {
+      messages = await mailTo(to, remaining);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'TimeoutError') throw notArrived();
+      throw error;
+    }
     if (messages.length >= count) return messages;
-    if (Date.now() > deadline) throw new Error(`No han llegado ${count} correos a ${to}`);
+    if (Date.now() > deadline) throw notArrived();
     await new Promise((done) => setTimeout(done, 200));
   }
 }

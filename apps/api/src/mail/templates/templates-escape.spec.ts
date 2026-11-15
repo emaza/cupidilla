@@ -33,4 +33,16 @@ describe('QA: escapado del HTML de las plantillas', () => {
       expect(mail.html).not.toMatch(/href="[^"]*"[^>]*"[^>]*>[^<]*<script/);
     }
   });
+
+  it('una URL con comillas y & queda dentro de un único href, con &quot; y &amp;', () => {
+    const mail = renderResetPassword(context, {
+      email: 'beto@example.com',
+      link: 'http://localhost:5173/x?a=1&b="2"',
+    });
+    const hrefs = [...mail.html.matchAll(/href="([^"]*)"/g)].map((match) => match[1]);
+    expect(hrefs).toContain('http://localhost:5173/x?a=1&amp;b=&quot;2&quot;');
+    // Ningún href sin escapar: las comillas y el & de la URL no abren atributos nuevos.
+    expect(mail.html).not.toContain('b="2"');
+    expect(mail.html).not.toMatch(/a=1&b=/);
+  });
 });

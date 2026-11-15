@@ -776,7 +776,7 @@ Convención de H0 §5. Las claves nuevas se añaden a `apps/web/src/lib/texts.ts
 | `confirmar.error.contrasena_vacia` | Escribe la contraseña de la cuenta para confirmar tu correo. No hemos confirmado nada. |
 | `confirmar.error.contrasena` | La contraseña no es correcta. No hemos confirmado nada. |
 | `confirmar.error.servidor` | Algo ha fallado por nuestra parte y no hemos podido confirmar tu correo. Puedes volver a intentarlo con este enlace mientras no caduque. |
-| `confirmar.error.resultado_incierto` | No sabemos si se ha confirmado tu correo: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta: si ya no ves el aviso de correo sin confirmar, está hecho. Si lo ves, vuelve a abrir el enlace del correo; si te dice que ya no sirve, es que la primera vez sí se confirmó. |
+| `confirmar.error.resultado_incierto` | No sabemos si se ha confirmado tu correo: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta: si ya no ves el aviso de correo sin confirmar, está hecho. Si lo ves, vuelve a abrir el enlace del correo. Si te dice que ya no sirve, no podemos saber si se confirmó: comprueba el estado en tu cuenta o pide un enlace nuevo. |
 | `confirmar.enlace.comprobar` | Ir a mi cuenta para comprobarlo |
 
 `confirmar.error.contrasena` no cambia según el motivo del fallo (contraseña errónea, cambiada entre medias) y no dice cuántos intentos quedan.

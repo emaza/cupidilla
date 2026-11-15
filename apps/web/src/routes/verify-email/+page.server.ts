@@ -38,13 +38,28 @@ export const load: PageServerLoad = async (event) => {
   if (shown === 'attempts-exceeded') return { state: 'attempts' as const };
   if (shown === 'token-invalid') return { state: 'invalid' as const };
 
+  // Sin JS, tras una acción que ha fallado el `load` vuelve a ejecutarse con la misma petición
+  // POST. Tras un `OUTCOME_UNKNOWN` el token pudo gastarse: que la comprobación ya no lo vea
+  // válido no debe sustituir el aviso de la acción por la página 410. Si la acción hubiera visto
+  // el enlace rechazado, habría redirigido y no se llegaría aquí.
+  const afterAction = event.request.method === 'POST';
+  const keepForm = {
+    state: 'form' as const,
+    emailHint: null,
+    needsPassword: true,
+    otherSession: false,
+  };
   const token = getEmailToken(cookies);
-  if (!token) linkGone(cookies);
+  if (!token) {
+    if (afterAction) return keepForm;
+    linkGone(cookies);
+  }
   const result = await api.inspectEmailToken(
     event,
     { token, purpose: 'verify_email' },
     locals.sessionToken ?? undefined,
   );
+  if (afterAction && !result.ok) return keepForm;
   if (result.ok) {
     const { emailHint, sessionMatches } = result.data;
     return {

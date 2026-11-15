@@ -26,6 +26,7 @@ const LOGOUT_SERVER_ERROR =
 const REGISTER = 'POST /auth/register';
 const DELETION = 'POST /users/me/deletion';
 const RESET_PASSWORD = 'POST /auth/password-reset';
+const VERIFY_EMAIL = 'POST /auth/email-verification';
 
 let proxy: ApiProxy;
 let stack: Stack;
@@ -45,6 +46,7 @@ test.afterEach(() => {
   proxy.setFault(REGISTER, null);
   proxy.setFault(DELETION, null);
   proxy.setFault(RESET_PASSWORD, null);
+  proxy.setFault(VERIFY_EMAIL, null);
   proxy.setFault('POST /auth/login', null);
   proxy.setFault('POST /auth/logout', null);
 });
@@ -417,6 +419,37 @@ test(
       'No sabemos si se ha guardado tu contraseña',
     );
     await expect(page.getByRole('heading', { name: 'Crea tu contraseña nueva' })).toBeVisible();
+    await context.close();
+  },
+);
+
+test(
+  'confirmar el correo se procesa pero la respuesta no llega: aviso de resultado incierto, no la página 410',
+  { tag: '@nojs' },
+  async ({ browser, javaScriptEnabled }) => {
+    const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
+    const page = await context.newPage();
+    const email = uniqueEmail();
+    await registerAdult(page, email, { verified: false });
+    await context.clearCookies();
+    const message = await waitForMail(email, { subject: 'Confirma tu correo' });
+    await page.goto(await pathIn(message, '/verify-email'));
+    await expect(page).toHaveURL('/verify-email');
+
+    const before = proxy.count(VERIFY_EMAIL);
+    proxy.setFault(VERIFY_EMAIL, 'cut');
+    const status = await actionStatus(page, '/verify-email', async () => {
+      await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
+      await page.getByRole('button', { name: 'Confirmar mi correo' }).click();
+    });
+    expect(status).toBe(503);
+    expect(proxy.count(VERIFY_EMAIL) - before).toBe(1);
+
+    // La API sí lo procesó y el token ya está gastado: aun así, el aviso es el de la acción.
+    await expect(page.locator('main > .error-summary')).toContainText(
+      'No sabemos si se ha confirmado tu correo',
+    );
+    await expect(page.getByRole('button', { name: 'Confirmar mi correo' })).toBeVisible();
     await context.close();
   },
 );

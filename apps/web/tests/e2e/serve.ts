@@ -24,6 +24,9 @@ function stopAll(code: number): void {
       // Ya había terminado.
     }
   }
+  // Si los hijos paran antes de 500 ms y el temporizador (unref) no llega a correr, el proceso
+  // sale solo: que lo haga con este código y no con 0.
+  process.exitCode = code;
   setTimeout(() => process.exit(code), 500).unref();
 }
 
