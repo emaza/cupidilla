@@ -83,8 +83,13 @@ describe('Textos de interfaz = tabla de UX §5 (criterio 49)', () => {
     for (const [key, rawText] of Object.entries(texts)) {
       // La edad mínima es configurable: las tablas de UX describen el valor por defecto, 18.
       const text = rawText.replaceAll('{edad}', '18');
-      const expected =
-        mailChanges.get(key) ?? mailTable.get(key) ?? table.get(key) ?? oauthTable.get(key);
+      // Una tabla puede escribir `{edad}` (el diseño de correo) o el 18 por defecto (los demás).
+      const expected = (
+        mailChanges.get(key) ??
+        mailTable.get(key) ??
+        table.get(key) ??
+        oauthTable.get(key)
+      )?.replaceAll('{edad}', '18');
       if (expected === undefined) different.push(`${key}: no está en ninguna tabla de UX §5`);
       else if (expected !== text) different.push(`${key}: «${text}» ≠ «${expected}»`);
     }

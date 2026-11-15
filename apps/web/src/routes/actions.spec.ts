@@ -34,6 +34,7 @@ const loginPage = await import('./(guest)/login/+page.server.ts');
 const accountPage = await import('./(private)/account/+page.server.ts');
 const deletePage = await import('./(private)/account/delete/+page.server.ts');
 const verifyPage = await import('./verify-email/+page.server.ts');
+const { tokenBinding } = await import('#lib/server/email-cookies.ts');
 
 const TERMS = SERVICE_TERMS_VERSION;
 
@@ -478,6 +479,7 @@ describe('/verify-email (B7-2, B7-3)', () => {
       emailHint: 'b•••@example.com',
       needsPassword: true,
       otherSession: true,
+      link: tokenBinding(TOKEN),
     });
     expect(api.inspectEmailToken).toHaveBeenCalledWith(
       expect.anything(),
@@ -497,13 +499,27 @@ describe('/verify-email (B7-2, B7-3)', () => {
       },
     });
     const confirm = (fields: Record<string, string>) =>
-      run(() => verifyPage.actions.confirm(formEvent(fields)) as Promise<unknown>);
+      run(
+        () =>
+          verifyPage.actions.confirm(
+            formEvent({ link: tokenBinding(TOKEN), ...fields }),
+          ) as Promise<unknown>,
+      );
     expect((await confirm({ withPassword: '1', password: 'x' })).redirect).toEqual({
       status: 303,
       location: '/account?notice=email-verified-signin',
     });
     expect(cookie.set).toHaveBeenCalledWith(expect.anything(), 'NUEVA', expect.any(String));
     expect(cookies.jar.size).toBe(0);
+
+    // El formulario de otra pestaña (huella de otro enlace) no confirma la cuenta de la cookie.
+    cookies = fakeCookies({ cupidilla_email_token: TOKEN });
+    api.verifyEmail.mockClear();
+    expect(
+      (await confirm({ withPassword: '1', password: 'x', link: tokenBinding('B'.repeat(43)) }))
+        .result,
+    ).toMatchObject({ status: 409, data: { general: 'confirmar.error.enlace_cambiado' } });
+    expect(api.verifyEmail).not.toHaveBeenCalled();
 
     cookies = fakeCookies({ cupidilla_email_token: TOKEN });
     expect((await confirm({ withPassword: '1', password: '' })).result).toMatchObject({

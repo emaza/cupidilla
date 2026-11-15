@@ -41,6 +41,7 @@
 
     <!-- El token no va en el formulario: vive en una cookie de esta ruta (técnico §9.1). -->
     <form method="POST" action="?/confirm" novalidate use:enhance={submission.submit}>
+      <input type="hidden" name="link" value={data.link} />
       {#if data.needsPassword}
         <input type="hidden" name="withPassword" value="1" />
         {#if data.otherSession}

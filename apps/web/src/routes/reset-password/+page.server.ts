@@ -1,7 +1,7 @@
 import { opaqueTokenSchema } from '@cupidilla/contracts';
 import { error, fail, redirect, type Cookies } from '@sveltejs/kit';
 import { errorMessages, fieldMessages } from '#lib/errors/messages.ts';
-import { firstApiIssueByField } from '#lib/forms/form-data.ts';
+import { firstApiIssueByField, textField } from '#lib/forms/form-data.ts';
 import { parseNewPassword } from '#lib/forms/password-reset.ts';
 import { api } from '#lib/server/api-client.ts';
 import {
@@ -9,6 +9,7 @@ import {
   clearPendingEmail,
   getEmailToken,
   setEmailToken,
+  tokenBinding,
 } from '#lib/server/email-cookies.ts';
 import { setSessionCookie } from '#lib/server/session-cookie.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -43,13 +44,15 @@ export const load: PageServerLoad = async (event) => {
   const afterAction = event.request.method === 'POST';
   const token = getEmailToken(cookies);
   if (!token) {
-    if (afterAction)
-      return { state: 'form' as const, emailHint: null, signedIn: locals.user !== null };
+    if (afterAction) {
+      return { state: 'form' as const, emailHint: null, signedIn: locals.user !== null, link: '' };
+    }
     linkGone(cookies);
   }
   const result = await api.inspectEmailToken(event, { token, purpose: 'reset_password' });
+  const link = tokenBinding(token);
   if (afterAction && !result.ok) {
-    return { state: 'form' as const, emailHint: null, signedIn: locals.user !== null };
+    return { state: 'form' as const, emailHint: null, signedIn: locals.user !== null, link };
   }
   if (result.ok) {
     return {
@@ -57,6 +60,8 @@ export const load: PageServerLoad = async (event) => {
       emailHint: result.data.emailHint,
       // Con cualquier sesión abierta: al terminar, el navegador pasa a la cuenta del enlace.
       signedIn: locals.user !== null,
+      // Huella del token que pinta este formulario: la acción comprueba que sigue siendo el de la cookie.
+      link,
     };
   }
   if (
@@ -74,7 +79,13 @@ export const actions = {
     const { cookies } = event;
     const token = getEmailToken(cookies);
     if (!token) redirect(303, `${PAGE}?error=token-invalid`);
-    const parsed = parseNewPassword(await event.request.formData());
+    const data = await event.request.formData();
+    // Otra pestaña abrió un enlace más reciente y cambió la cookie: este formulario enseña otra
+    // cuenta y no debe restablecer la de ese enlace. No se cambia nada.
+    if (textField(data, 'link') !== tokenBinding(token)) {
+      return fail(409, { general: 'restablecer.error.enlace_cambiado' as const });
+    }
+    const parsed = parseNewPassword(data);
     if (parsed.kind === 'invalid') return fail(400, { passwordError: parsed.error });
 
     const result = await api.resetPassword(event, { token, password: parsed.password });

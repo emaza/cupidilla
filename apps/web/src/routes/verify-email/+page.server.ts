@@ -8,6 +8,7 @@ import {
   clearPendingEmail,
   getEmailToken,
   setEmailToken,
+  tokenBinding,
 } from '#lib/server/email-cookies.ts';
 import { setSessionCookie } from '#lib/server/session-cookie.ts';
 import type { TextKey } from '#lib/texts.ts';
@@ -48,6 +49,7 @@ export const load: PageServerLoad = async (event) => {
     emailHint: null,
     needsPassword: true,
     otherSession: false,
+    link: '',
   };
   const token = getEmailToken(cookies);
   if (!token) {
@@ -59,7 +61,8 @@ export const load: PageServerLoad = async (event) => {
     { token, purpose: 'verify_email' },
     locals.sessionToken ?? undefined,
   );
-  if (afterAction && !result.ok) return keepForm;
+  const link = tokenBinding(token);
+  if (afterAction && !result.ok) return { ...keepForm, link };
   if (result.ok) {
     const { emailHint, sessionMatches } = result.data;
     return {
@@ -67,6 +70,8 @@ export const load: PageServerLoad = async (event) => {
       emailHint,
       needsPassword: !sessionMatches,
       otherSession: locals.user !== null && !sessionMatches,
+      // Huella del token que pinta este formulario: la acción comprueba que sigue siendo el de la cookie.
+      link,
     };
   }
   if (
@@ -85,6 +90,11 @@ export const actions = {
     const token = getEmailToken(cookies);
     if (!token) redirect(303, `${PAGE}?error=token-invalid`);
     const data = await event.request.formData();
+    // Otra pestaña abrió un enlace más reciente y cambió la cookie: este formulario enseña otra
+    // cuenta y no debe confirmar la de ese enlace. No se cambia nada.
+    if (textField(data, 'link') !== tokenBinding(token)) {
+      return fail(409, { general: 'confirmar.error.enlace_cambiado' as const });
+    }
     const withPassword = textField(data, 'withPassword') === '1';
     const password = textField(data, 'password');
     const passwordError = (key: TextKey, status: number) => fail(status, { passwordError: key });

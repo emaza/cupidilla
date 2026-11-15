@@ -254,6 +254,7 @@ Contraseña   [ ________ ] [Mostrar contraseña]
 | Límite | `comun.error.limite`, se queda en la pantalla con el token intacto |
 | Error del servidor (5xx sin efecto) | `confirmar.error.servidor`, el botón sigue y el token vale |
 | Resultado incierto (503) | `confirmar.error.resultado_incierto` y enlace `confirmar.enlace.comprobar` a `/account` |
+| Otro enlace abierto en otra pestaña (409) | `confirmar.error.enlace_cambiado`; el formulario se vuelve a pintar con la cuenta del enlace más reciente. No se confirma nada |
 | Éxito | 303 a `/account` con aviso |
 
 ### 3.3 `/forgot-password`: pedir el enlace
@@ -330,6 +331,7 @@ Contraseña nueva   [ ________ ] [Mostrar contraseña]
 | Token caducado, usado o inválido | §3.6 (303 a `/reset-password?error=token-invalid`) |
 | Error del servidor | `restablecer.error.servidor`, campo vacío, el token sigue valiendo |
 | Resultado incierto (503) | `restablecer.error.resultado_incierto` y enlace a `/login` |
+| Otro enlace abierto en otra pestaña (409) | `restablecer.error.enlace_cambiado`; el formulario se vuelve a pintar con la cuenta del enlace más reciente. No se cambia nada |
 | Éxito, correo ya confirmado | 303 a `/account` con aviso |
 | Éxito, correo sin confirmar | 303 a `/account/review` con aviso |
 
@@ -460,7 +462,7 @@ Eliminar mi cuenta       (enlace a /account/delete)
 
 ```
 <h1> No podemos mantener tu cuenta
-<p>  Cupidilla es solo para personas de 18 años o más, así que hemos eliminado esta cuenta y los datos que tenía.
+<p>  Cupidilla es solo para personas de {edad} años o más, así que hemos eliminado esta cuenta y los datos que tenía.
 <p>  No es nada personal: es una condición del servicio.
 [ Volver al inicio ]
 ```
@@ -777,6 +779,7 @@ Convención de H0 §5. Las claves nuevas se añaden a `apps/web/src/lib/texts.ts
 | `confirmar.error.contrasena` | La contraseña no es correcta. No hemos confirmado nada. |
 | `confirmar.error.servidor` | Algo ha fallado por nuestra parte y no hemos podido confirmar tu correo. Puedes volver a intentarlo con este enlace mientras no caduque. |
 | `confirmar.error.resultado_incierto` | No sabemos si se ha confirmado tu correo: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, ve a tu cuenta: si ya no ves el aviso de correo sin confirmar, está hecho. Si lo ves, vuelve a abrir el enlace del correo. Si te dice que ya no sirve, no podemos saber si se confirmó: comprueba el estado en tu cuenta o pide un enlace nuevo. |
+| `confirmar.error.enlace_cambiado` | Has abierto un enlace más reciente en otra pestaña, así que este formulario ya no vale. No hemos confirmado nada. Recarga la página para continuar con el enlace más reciente. |
 | `confirmar.enlace.comprobar` | Ir a mi cuenta para comprobarlo |
 
 `confirmar.error.contrasena` no cambia según el motivo del fallo (contraseña errónea, cambiada entre medias) y no dice cuántos intentos quedan.
@@ -842,6 +845,7 @@ Errores de campo: `registro.error.correo_vacio`, `registro.error.correo_formato`
 | `restablecer.aviso.correo_enviado` | También te hemos enviado un correo para avisarte del cambio. |
 | `restablecer.error.servidor` | Algo ha fallado por nuestra parte y no hemos podido guardar tu contraseña. Tu contraseña anterior sigue como estaba. Puedes volver a intentarlo con este enlace mientras no caduque. |
 | `restablecer.error.resultado_incierto` | No sabemos si se ha guardado tu contraseña: se ha perdido la conexión antes de recibir la respuesta. Prueba a entrar con la contraseña nueva. Si no puedes, vuelve a abrir el enlace del correo; si te dice que ya no sirve, pide uno nuevo. |
+| `restablecer.error.enlace_cambiado` | Has abierto un enlace más reciente en otra pestaña, así que este formulario ya no vale. No hemos cambiado tu contraseña. Recarga la página para continuar con el enlace más reciente. |
 | `restablecer.enlace.comprobar` | Probar a entrar |
 
 `restablecer.aviso.correo_enviado` se añade como segunda frase de `restablecer.aviso.hecho` **solo si `locals.mail.passwordChangedNotice` es verdadero**. Ayuda y errores de la contraseña: `registro.ayuda.contrasena` (nuevo texto, §7) y `registro.error.contrasena_vacia`, `.contrasena_corta`, `.contrasena_larga`.
@@ -892,7 +896,7 @@ Reutiliza `registro.campo.nacimiento`, `registro.ayuda.nacimiento`, `registro.ca
 | `revision.error.resultado_incierto` | No sabemos si se han guardado tus datos: se ha perdido la conexión antes de recibir la respuesta. Recarga esta página: si te vuelve a pedir la fecha de nacimiento, no se han guardado y puedes repetirlo; si entras en tu cuenta, ya está hecho. |
 | `revision.menor.meta.titulo` | No podemos mantener tu cuenta |
 | `revision.menor.titulo` | No podemos mantener tu cuenta |
-| `revision.menor.texto1` | Cupidilla es solo para personas de 18 años o más, así que hemos eliminado esta cuenta y los datos que tenía. |
+| `revision.menor.texto1` | Cupidilla es solo para personas de {edad} años o más, así que hemos eliminado esta cuenta y los datos que tenía. |
 
 ### 6.9 Qué texto cambia según la configuración
 
@@ -1073,7 +1077,7 @@ Formato Dado-Cuando-Entonces, numerados y agrupados por recorrido o pantalla. Sa
 48. **No se puede usar nada más.** Dado que Ana tiene la revisión pendiente, cuando intenta abrir `/account`, `/account/password` o cualquier ruta privada, entonces recibe 303 a `/account/review`; cuando abre `/account/delete`, `/legal/terms`, `/verify-email`, `/forgot-password` o `/reset-password`, entonces la ruta carga sin redirección; y cuando llega a la API una petición suya a una ruta no exenta, recibe 403 `DATA_REVIEW_REQUIRED` y la web la convierte en 303 a `/account/review` sin mensaje de error. La banda de correo no aparece.
 49. **Revisión correcta.** Dado que Ana escribe día 14, mes 3, año 1990 y marca las condiciones, cuando pulsa «Guardar y continuar», entonces se guarda su fecha y un consentimiento nuevo con la versión `2026-11-borrador-2` (el anterior queda como histórico), va a `/account?notice=details-reviewed` con `revision.aviso.hecha`, y puede usar su cuenta; y recargar `/account/review` redirige a `/account` sin mensaje.
 50. **Errores de campo.** Dado que Ana deja el día en blanco, o escribe 31 de febrero, o no marca las condiciones, cuando envía, entonces ve `registro.error.fecha_vacia`/`.fecha_inexistente`/`.condiciones` en campo y resumen, y conserva día, mes, año y casilla.
-51. **Menor de edad.** Dado que quien recupera la cuenta escribe una fecha que da 17 años (aunque haya otros errores), cuando envía, entonces la API responde 422 `UNDERAGE` y elimina la cuenta, la web borra la cookie de sesión y muestra «No podemos mantener tu cuenta» con `revision.menor.texto1`, sin formulario ni enlace para corregir, sin ningún valor escrito, con `role="alert"` y un único botón «Volver al inicio»; y `ana@example.com` queda libre.
+51. **Menor de edad.** Dado que quien recupera la cuenta escribe una fecha que da 17 años (aunque haya otros errores), cuando envía, entonces la API responde 422 `UNDERAGE` y elimina la cuenta, la web borra la cookie de sesión y muestra «No podemos mantener tu cuenta» (la edad mínima configurada, `{edad}`) con `revision.menor.texto1`, sin formulario ni enlace para corregir, sin ningún valor escrito, con `role="alert"` y un único botón «Volver al inicio»; y `ana@example.com` queda libre.
 52. **Salir sin completar.** Dado que Ana tiene la revisión pendiente, cuando pulsa «Cerrar sesión» y vuelve a entrar con su contraseña nueva, entonces vuelve a `/account/review`; y pulsar Intro en un campo de fecha envía los datos, nunca cierra la sesión.
 53. **Sin sesión o sin revisión pendiente.** Dado que alguien sin sesión abre `/account/review`, cuando carga, entonces va a `/login?next=/account/review`; y si tiene sesión sin revisión pendiente, va a `/account`.
 54. **Errores técnicos.** Dado que la API falla con 5xx al guardar, cuando Ana envía, entonces ve `revision.error.servidor` y conserva los valores; y sin respuesta (503), `revision.error.resultado_incierto`, y recargar muestra de nuevo el formulario si no se guardó o la cuenta si ya está hecho.
