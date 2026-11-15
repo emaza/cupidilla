@@ -12,12 +12,14 @@ Hito **H0 — base mínima** implementado (11 de noviembre de 2026): registro, e
 
 **Correo** (decisión 22, 14 de noviembre de 2026): registro con respuesta uniforme, confirmación del correo, recuperación de la contraseña y revisión de datos tras recuperar una cuenta sin confirmar, con envío por SMTP (Mailpit en local). Falta elegir el proveedor SMTP de producción. El diseño está en [Diseño técnico](docs/correo-diseno-tecnico.md) y [Diseño UX](docs/correo-diseno-ux.md).
 
+**Falta para producción**: el proveedor SMTP y el dominio remitente, probar la entrada con Google y Facebook reales y, si va a haber más de una instancia de la API, resolver el riesgo R-M17 del envío de correos ([diseño de correo](docs/correo-diseno-tecnico.md)). Lo siguiente es H1, la [entrevista con Cupidilla](docs/entrevista-cupidilla.md).
+
 El código es un monorepo con npm workspaces:
 
 | Paquete | Qué es |
 |---|---|
 | `apps/web` | SvelteKit 3 sobre Svelte 5 (runas). Lo único que ve el navegador; habla con la API desde el servidor |
-| `apps/api` | NestJS 12 con Drizzle ORM sobre PostgreSQL 18 (módulos `auth`, `users` y `consents`) |
+| `apps/api` | NestJS 12 con Drizzle ORM sobre PostgreSQL 18 (módulos `auth`, `oauth`, `users`, `consents` y `mail`) |
 | `packages/contracts` | Esquemas Zod, códigos de error y la regla de mayoría de edad, compartidos por la web y la API |
 | `packages/fake-oauth-provider` | Proveedor OAuth falso (Google y Facebook) para las pruebas y para `npm run dev` sin cuentas reales |
 
@@ -111,6 +113,8 @@ Los scripts de `docker/postgres/init` solo se ejecutan con el volumen vacío: si
 - **Arquitectura**: monorepo con SvelteKit sobre **Svelte 5 estable** (web) + NestJS (API) + PostgreSQL, como monolito modular.
 - **Modelo de lenguaje**: Claude Opus 5.5 detrás de una interfaz propia intercambiable.
 - **Primer hito**: entrevista con Cupidilla y perfil privado editable.
+- **Entrada con Google y Facebook**: Authorization Code con PKCE y secretos solo en la API; en una cuenta sin contraseña, los cambios delicados se confirman con un proveedor ya unido (decisiones 19 a 21).
+- **Correo**: *outbox* transaccional, tokens de un solo uso guardados como hash y respuestas que no revelan si un correo tiene cuenta (decisión 22).
 - **Regla de oro**: el modelo propone; el backend valida. El consentimiento se implementa en código, nunca en un prompt.
 
 ## Origen de estos documentos
