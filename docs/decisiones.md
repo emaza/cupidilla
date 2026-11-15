@@ -69,6 +69,7 @@ Ordenadas por cuándo bloquean. La recomendación es mía; quien decide aparece 
 | **Prueba del consentimiento tras borrar la cuenta** | No conservar nada · conservar una prueba anonimizada | Resolverlo dentro de la revisión jurídica. H0 lo borra todo y así lo dice la interfaz | Tú, con asesoría legal |
 | **Versión de Node en producción** | Node 24 · Node 26 | Pasar a Node 26 antes del primer despliegue; H0 se desarrolla en la 24, que es la instalada | Arquitecto |
 | **Proveedor SMTP de producción y dominio remitente** | Por definir, con «Marca y dominio» | Un encargado del tratamiento con servidores en la UE, y SPF, DKIM y DMARC en el dominio de `MAIL_FROM` (R-M15 del [diseño de correo](correo-diseno-tecnico.md)) | Tú, con el arquitecto |
+| **Comprobar el correo de Facebook (D9)** | Seguir aceptándolo como verificado · añadir una verificación propia | Aceptado como verificado (R-M14 del [diseño de correo](correo-diseno-tecnico.md), R1 del [técnico de terceros](login-terceros-diseno-tecnico.md)), pero **hay que probarlo al desplegar con Facebook real**: cuenta con el correo sin confirmar en Meta, cuenta registrada solo con teléfono y cambio de correo reciente. Si Meta devuelve un correo no confirmado, reabrir la decisión | CTO, al desplegar |
 | **Revisión jurídica de la entrada con terceros** | Textos legales, política de privacidad e instrucciones de borrado que exige Meta | Incluirla en la revisión jurídica general | Tú, con asesoría legal |
 
 ### Después de la beta

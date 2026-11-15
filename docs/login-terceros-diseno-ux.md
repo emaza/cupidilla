@@ -946,7 +946,7 @@ T18. **`authenticated_at`** (decisión 21): se actualiza al reautenticarse y se 
 
 ### 8.3 Para el CEO
 
-D9. **Política de correo de Facebook.** Meta no da indicador de «verificado»; lo damos por verificado por decisión nuestra. La unión siempre pide contraseña, así que el riesgo es el de H0 (alguien registra el correo de otra persona). ¿Se acepta?
+D9. **Política de correo de Facebook.** **Aceptada; por comprobar al desplegar con Facebook real** (ver [decisiones](decisiones.md#antes-de-la-beta)). Meta no da indicador de «verificado»; lo damos por verificado por decisión nuestra. La unión siempre pide contraseña, así que el riesgo es el de H0 (alguien registra el correo de otra persona). ¿Se acepta?
 D10. **Confirmar con Meta** que el botón blanco con «f» azul y «Continuar con Facebook» son admisibles, y que pedir fecha de nacimiento y condiciones tras entrar no choca con sus reglas. Sin esa respuesta, plan B.
 D11. **Texto legal y políticas.** El borrador de 5.9 y la política de privacidad (Google y Facebook piden su enlace; Facebook, instrucciones de eliminación de datos) necesitan revisión jurídica antes de publicar. Se propone el nombre de versión `2026-11-borrador-2`.
 D12. ~~**Contraseña sin recuperación.** Con D1 y D3, ahora se pueden crear contraseñas que no se pueden recuperar. Se avisa en el texto, pero la recuperación por correo pasa a ser más urgente antes de abrir la beta.~~ **Retirado (decisión 22):** resuelta. Ya hay recuperación por correo, así que una contraseña creada aquí se puede recuperar (`/forgot-password`) y el aviso «no se puede recuperar» desaparece de los textos.

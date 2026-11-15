@@ -12,7 +12,7 @@ Hito **H0 — base mínima** implementado (11 de noviembre de 2026): registro, e
 
 **Correo** (decisión 22, 14 de noviembre de 2026): registro con respuesta uniforme, confirmación del correo, recuperación de la contraseña y revisión de datos tras recuperar una cuenta sin confirmar, con envío por SMTP (Mailpit en local). Falta elegir el proveedor SMTP de producción. El diseño está en [Diseño técnico](docs/correo-diseno-tecnico.md) y [Diseño UX](docs/correo-diseno-ux.md).
 
-**Falta para producción**: el proveedor SMTP y el dominio remitente, probar la entrada con Google y Facebook reales y, si va a haber más de una instancia de la API, resolver el riesgo R-M17 del envío de correos ([diseño de correo](docs/correo-diseno-tecnico.md)). Lo siguiente es H1, la [entrevista con Cupidilla](docs/entrevista-cupidilla.md).
+**Falta para producción**: el proveedor SMTP y el dominio remitente, probar la entrada con Google y Facebook reales (con Facebook, comprobar que el correo que devuelve está de verdad confirmado: D9) y, si va a haber más de una instancia de la API, resolver el riesgo R-M17 del envío de correos ([diseño de correo](docs/correo-diseno-tecnico.md)). Lo siguiente es H1, la [entrevista con Cupidilla](docs/entrevista-cupidilla.md).
 
 El código es un monorepo con npm workspaces:
 
