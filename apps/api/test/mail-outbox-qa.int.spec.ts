@@ -43,13 +43,20 @@ describe('QA A.4: intentos agotados con la API caída', () => {
   it('con la concesión del 8.º intento aún vigente, no se toca', async () => {
     await seedBeto(t.db);
     await t.app.get(OutboxService).enqueue(t.db, 'verify_email', BETO);
+    // El worker es el mismo que en la prueba anterior y limpia como mucho una vez por minuto:
+    // el reloj va ≥ 1 min después de aquel drain (08:00) para que `cleanup()` llegue a mirar la
+    // concesión, que se mueve con él para seguir vigente.
+    t.clock.set('2027-01-01T08:02:00.000Z');
+    const lease = new Date('2027-01-01T08:03:00.000Z');
     await t.db
       .update(emailOutbox)
-      .set({ attempts: OUTBOX_MAX_ATTEMPTS, lockedUntil: new Date('2027-01-01T08:01:00.000Z') })
+      .set({ attempts: OUTBOX_MAX_ATTEMPTS, lockedUntil: lease })
       .where(eq(emailOutbox.toEmail, BETO));
 
     await deliverMail(t.app);
     const row = await rowOf();
     expect(row?.failedAt).toBeNull();
+    expect(row?.lockedUntil).toEqual(lease);
+    expect(row?.lastError).toBeNull();
   });
 });
