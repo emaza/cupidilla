@@ -6,10 +6,14 @@ Especificación de interfaz para entrar y registrarse con Google y Facebook, y p
 
 **Reparto con el diseño técnico.** El técnico manda en código, datos, API y seguridad; este documento, en pantallas, textos y flujo visible. Las rutas de §2.1 y los valores de `?notice=` y `?error=` de §5.8 coinciden con los del técnico (§11.4).
 
+> **Cambiado por el hito de correo (decisión 22):** el hito de correo modifica partes de este documento (pantalla de unión, `/login`, `/account`, textos de contraseña y condiciones, criterio 36b y decisiones D1 y D12). Donde difieran, manda [correo-diseno-ux §7](correo-diseno-ux.md#7-cambios-en-lo-ya-existente). Cada cambio lleva su nota «Cambiado por el hito de correo» en el sitio afectado, y lo que ya no existe va marcado como «Retirado (decisión 22)», sin borrarlo. Para lo técnico, ver [correo-diseno-tecnico §1.2](correo-diseno-tecnico.md#12-cómo-concreto-las-decisiones-del-cto) (K6 y K7).
+
 ## 0. Alcance y principios
 
 **Dentro**: botones de proveedor en `/login` y `/register`; completar el alta; unir con una cuenta existente; errores del proveedor; en `/account`: formas de entrar, añadir y quitar proveedor, crear contraseña, y borrado sin contraseña (decisión 20: solo con ELIMINAR).
 **Fuera**: recuperación de contraseña, **cambiar** una contraseña que ya existe, verificación de correo propia, otros proveedores, cambio de correo.
+
+> **Cambiado por el hito de correo (decisión 22):** la recuperación de contraseña por correo y la verificación del correo **ya existen** en el producto. Este documento sigue sin diseñarlas, pero ya no se pueden dar por inexistentes: las define [correo-diseno-ux §3.3](correo-diseno-ux.md#33-forgot-password-pedir-el-enlace) (recuperar) y [§1.2](correo-diseno-ux.md#12-recorrido-a-alta--correo--confirmar) (confirmar). Cambiar una contraseña existente y cambiar el correo siguen fuera.
 
 **Usuarios y objetivo.** Una persona adulta que no quiere inventar otra contraseña y prefiere pulsar un botón conocido. Quiere entrar en dos pasos, saber qué recibe Cupidilla de su cuenta de Google o Facebook y no quedarse encerrada ni perder su cuenta por error. La edad sigue siendo un requisito: ningún camino salta la comprobación de 18 años.
 
@@ -62,6 +66,8 @@ flowchart TD
     R3 -->|No| E["Escribir ELIMINAR"]
 ```
 
+> **Cambiado por el hito de correo (decisión 22):** en `/login/link` (nodo `U` del primer mapa) hay ahora una salida más, el enlace «¿Olvidaste tu contraseña?», que lleva a `/forgot-password` y deja el estado de la unión inutilizable. En `/account` (segundo mapa), «Añadir proveedor» exige además el correo confirmado: sin confirmar, la fila no ofrece el botón. Ver [correo-diseno-ux §3.9](correo-diseno-ux.md#39-pantalla-de-unión-loginlink) y [§3.7](correo-diseno-ux.md#37-aviso-de-correo-sin-confirmar-cabecera-privada-y-account).
+
 ### 1.2 Entrada con proveedor (cuenta ya unida)
 
 1. En `/login` (o `/register`) la persona pulsa «Continuar con Google».
@@ -77,6 +83,8 @@ flowchart TD
 
 **Orden de validación** (igual que H0 §1.2, sin el paso de unicidad): forma de los campos → menor (pantalla inmediata aunque haya otros errores) → casilla de condiciones → creación atómica. Si entre medias alguien ha creado una cuenta con ese correo: si tiene contraseña, 303 a `/login/link` sin error; si no la tiene, 303 a `/login` con `?error=other-provider`.
 
+> **Cambiado por el hito de correo (decisión 22):** esta carrera sigue igual (el código `EMAIL_TAKEN` se conserva solo para el alta con proveedor, y la web lo traduce a la redirección de arriba, sin error de campo). Cambia el alta **con contraseña**: ya no devuelve `EMAIL_TAKEN`, y `registro.error.correo_existente` se elimina. La cuenta que ocupó el correo puede estar sin confirmar, y entonces el 303 a `/login/link` lleva `union.texto.sin_confirmar`. Ver [correo-diseno-ux §7](correo-diseno-ux.md#7-cambios-en-lo-ya-existente).
+
 ### 1.4 Correo con cuenta con contraseña: unión
 
 1. El correo que da el proveedor coincide con una cuenta con contraseña.
@@ -85,15 +93,19 @@ flowchart TD
 
 **Por qué es razonable decir «ya tienes una cuenta con este correo».** Se llega aquí solo si el proveedor entrega un correo que damos por fiable, es decir, quien llega controla ese correo en el proveedor. No sirve para listar correos registrados. **Con Google**, el proveedor declara el correo verificado. **Con Facebook, el correo se da por verificado por una decisión nuestra, no porque Meta lo diga**: Meta no ofrece ningún indicador de verificación y lo único que hacemos es aceptar el correo que devuelve (técnico §6; pregunta D9 al CEO). Por eso la garantía real de la unión no es el proveedor sino la contraseña: sin ella no se une nada. Un correo ausente o no verificado nunca llega a esta pantalla (§3.4).
 
+> **Cambiado por el hito de correo (decisión 22):** la cuenta con la que se une puede tener el **correo sin confirmar** (la abrió alguien registrando ese correo). Se sigue ofreciendo la unión con contraseña, pero la pantalla muestra `union.texto.sin_confirmar` y el enlace «¿Olvidaste tu contraseña?». Si se une con la contraseña correcta, el correo de esa cuenta queda confirmado. La contraseña sigue siendo la garantía. Ver [correo-diseno-ux §3.9](correo-diseno-ux.md#39-pantalla-de-unión-loginlink) y [correo-diseno-tecnico §1.2, K6](correo-diseno-tecnico.md#12-cómo-concreto-las-decisiones-del-cto) y [§5.10](correo-diseno-tecnico.md#510-cuentas-con-proveedor-unión-y-añadir-proveedor).
+
 ### 1.5 Casos que no cubre la decisión inicial
 
 | Caso | Resolución |
 |---|---|
 | El correo tiene una cuenta **sin contraseña** creada con otro proveedor (alta con Google, ahora entra con Facebook) | No se une nada. 303 a `/login` con `?error=other-provider&provider=google`: «entra con Google y añade el otro desde Tu cuenta». Decidido (D2) |
 | Quien creó su cuenta con proveedor intenta entrar con correo y contraseña | Error genérico de H0 y línea fija `entrar.ayuda.proveedor`, que se muestra siempre: no revela nada |
-| Quien olvidó su contraseña y entra con proveedor | No puede unir las cuentas hasta que haya recuperación de contraseña por correo. **Riesgo aceptado (D1)**. La pantalla de unión lo dice (`union.ayuda.olvido`) |
+| ~~Quien olvidó su contraseña y entra con proveedor~~ | ~~No puede unir las cuentas hasta que haya recuperación de contraseña por correo. **Riesgo aceptado (D1)**. La pantalla de unión lo dice (`union.ayuda.olvido`)~~ **Retirado (decisión 22):** ya hay recuperación por correo. La pantalla de unión ofrece «¿Olvidaste tu contraseña?» (`union.enlace.olvido`), que lleva a `/forgot-password`; con la contraseña nueva se entra a la cuenta y se añade el proveedor desde Tu cuenta. D1 queda cerrado. Ver [correo-diseno-ux §3.9](correo-diseno-ux.md#39-pantalla-de-unión-loginlink) |
 | Con sesión abierta | Los botones solo existen en `/login` y `/register`, que redirigen a `/account` con sesión. En `/account` los botones de añadir son otro caso (§3.5.1) |
 | Identidad ya unida, pero el proveedor devuelve otro correo | Se entra igualmente: manda el identificador, no el correo |
+
+> **Cambiado por el hito de correo (decisión 22):** la fila de «Quien creó su cuenta con proveedor intenta entrar con correo y contraseña» sigue valiendo. Además, quien solo tiene proveedor puede ahora crear una contraseña desde `/forgot-password` ([correo-diseno-ux §3.8](correo-diseno-ux.md#38-enlace-olvidaste-tu-contraseña-en-login)); `entrar.ayuda.proveedor` no cambia.
 
 ## 2. Estructura común nueva
 
@@ -143,6 +155,8 @@ Contraseña ...
 [ Entrar ]
 ¿No tienes cuenta? Crea una
 ```
+
+> **Cambiado por el hito de correo (decisión 22):** en `/login`, entre «Contraseña» y «[ Entrar ]» va el enlace «¿Olvidaste tu contraseña?» (a `/forgot-password`), siempre visible; el orden de tabulación pasa a: botones de proveedor → correo → contraseña → «Mostrar contraseña» (JS) → ¿Olvidaste tu contraseña? → Entrar → «¿No tienes cuenta?». En `/register`, bajo el correo va `registro.ayuda.correo` y, tras un alta con contraseña, se va a `/register/check-email` en vez de abrir sesión. Ver [correo-diseno-ux §3.8](correo-diseno-ux.md#38-enlace-olvidaste-tu-contraseña-en-login) y [§7](correo-diseno-ux.md#7-cambios-en-lo-ya-existente).
 
 Razones: camino más corto y con menos escritura (en `/register` evita cuatro campos); Facebook pide que el botón se vea sin pulsar antes «Entrar» o «Registrarse»; el botón principal ciruela de H0 sigue siendo el único relleno de color, y los de proveedor son secundarios de fondo claro, como mandan sus marcas.
 
@@ -263,11 +277,13 @@ Contraseña   [ ________ ] [Mostrar contraseña]
 (formulario aparte)  [ Cancelar ]
 ```
 
+> **Retirado (decisión 22):** las dos líneas «Si no la recuerdas, de momento no podemos recuperarla…» y «Podrás hacerlo cuando haya recuperación…» (la clave `union.ayuda.olvido`, D1). **Sustituto:** tras «Es la que elegiste…» va el enlace «¿Olvidaste tu contraseña?» (`union.enlace.olvido`, a `/forgot-password`, misma pestaña) con `union.ayuda.olvido_destino`, entre el campo y «Unir cuentas». Si la cuenta tiene el correo sin confirmar (`accountEmailVerified: false`), `union.texto.sin_confirmar` va **antes del campo**, como párrafo informativo asociado con `aria-describedby`. Orden de tabulación: … contraseña → mostrar → ¿Olvidaste tu contraseña? → Unir cuentas → Cancelar → pie. Al salir por el enlace, el estado de la unión deja de ser utilizable (con sesión, `/login/link` redirige a `/account`). Ver [correo-diseno-ux §3.9](correo-diseno-ux.md#39-pantalla-de-unión-loginlink).
+
 - Contraseña: `type="password"`, `name="password"`, `autocomplete="current-password"`, control de H0 §2.3.
 - Correo como texto, igual que §3.2. Para los gestores de contraseñas puede añadirse un `<input type="text" autocomplete="username" readonly>` **sin `name`** (no se envía), `aria-hidden`, `tabindex="-1"`, fuera de la vista. Opcional. (La acción web sí reenvía el correo que le dio la API para el contador de intentos; es un detalle técnico, no un campo visible.)
-- No hay «unir sin contraseña». Quien no recuerda su contraseña no puede unir hasta que haya recuperación (D1, riesgo aceptado).
+- No hay «unir sin contraseña». ~~Quien no recuerda su contraseña no puede unir hasta que haya recuperación (D1, riesgo aceptado).~~ **Retirado (decisión 22):** quien no la recuerda la recupera por correo desde «¿Olvidaste tu contraseña?» (D1 cerrado). Lo de «no hay unir sin contraseña» sigue valiendo (escenario 66 de correo).
 - «Cancelar» en formulario aparte; descarta el estado y va a `/login?notice=link-cancelled`.
-- Orden de tabulación: saltar → encabezado → (resumen) → contraseña → mostrar (JS) → Unir cuentas → Cancelar → pie.
+- Orden de tabulación: saltar → encabezado → (resumen) → contraseña → mostrar (JS) → Unir cuentas → Cancelar → pie. *(Cambiado por el hito de correo (decisión 22): se añade «¿Olvidaste tu contraseña?» entre «mostrar» y «Unir cuentas».)*
 
 | Estado | Comportamiento |
 |---|---|
@@ -324,6 +340,8 @@ Reglas:
 <section> <h2> Eliminar tu cuenta
 ```
 
+> **Cambiado por el hito de correo (decisión 22):** con el correo **sin confirmar** (solo ocurre en cuentas con contraseña), `/account` añade antes de «Tus datos» la sección «Confirma tu correo» (`id="correo"`), «Tus datos» muestra el estado del correo como texto («Confirmado» / «Sin confirmar») y la cabecera lleva una banda de aviso. En «Formas de entrar», la fila de cada proveedor no unido **no dibuja el botón de marca ni el panel** y muestra `cuenta.acceso.requiere_correo` con enlace a `#correo`; quitar o gestionar lo ya unido no cambia. Ver [correo-diseno-ux §3.7](correo-diseno-ux.md#37-aviso-de-correo-sin-confirmar-cabecera-privada-y-account) y [correo-diseno-tecnico §1.2, K7](correo-diseno-tecnico.md#12-cómo-concreto-las-decisiones-del-cto).
+
 Va entre «Tus datos» y «Cupidilla». Lista `<ul>`, una fila por forma, con nombre, estado y acción. Móvil: nombre y estado arriba, acción debajo a ancho completo; escritorio: acción a la derecha.
 
 | Forma | Estado |
@@ -345,6 +363,8 @@ Va entre «Tus datos» y «Cupidilla». Lista `<ul>`, una fila por forma, con no
 Es el botón de marca («f Continuar con Facebook»), **sin** «Añadir»: las guías de marca solo permiten sus textos. El contexto lo da la fila («Facebook, No unido»). El formulario es siempre `POST /auth/{proveedor}` con `from=account`, `intent=connect` y `next=/account`. Qué se pide antes depende de la cuenta:
 
 **Con contraseña en la cuenta** (decisión 20). El botón se muestra siempre, con el campo `cuenta.acceso.campo_anadir` antes, en el mismo formulario. Vacía: `?error=password-required` → `cuenta.error.contrasena_vacia`; errónea: `?error=password-incorrect` → `cuenta.error.contrasena`. Sin salir al proveedor mientras haya error de contraseña.
+
+> **Cambiado por el hito de correo (decisión 22):** el «siempre» de arriba solo vale con el **correo confirmado**. Sin confirmar, la fila no dibuja el botón (`cuenta.acceso.requiere_correo`). Si aun así la API responde 403 `EMAIL_NOT_VERIFIED` (carrera o sesión antigua), se vuelve a `/account?error=email-not-verified&provider=…` con `cuenta.error.correo_no_confirmado` y sin cambios; como en esa fila no hay panel, el error sale arriba en `<main>`. Esto no afecta a las cuentas sin contraseña: nacen con el correo confirmado. Ver [correo-diseno-ux §3.7](correo-diseno-ux.md#37-aviso-de-correo-sin-confirmar-cabecera-privada-y-account) y [correo-diseno-tecnico §5.10](correo-diseno-tecnico.md#510-cuentas-con-proveedor-unión-y-añadir-proveedor).
 
 **Sin contraseña** (decisión 21). Se confirma siempre con un proveedor ya unido, sea cual sea la antigüedad de la sesión; ya no hay regla de tiempo. Es un solo clic que encadena dos viajes: primero al proveedor ya unido (confirmar que eres tú) y, al volver, sin parar en `/account`, al proveedor nuevo. El proveedor que confirma es el unido que se usó más recientemente (se nombra en el panel). Con JavaScript, el botón de marca no sale directo: abre antes el panel «Confirma que eres tú» de §3.5.2, que explica los dos pasos. Sin JavaScript, el mismo botón envía el formulario sin panel (el texto de la fila y los avisos de vuelta bastan).
 
@@ -403,6 +423,8 @@ flowchart TD
 | Enviando (JS) | Quitar: el botón pulsado, «Quitando…». Añadir: «Conectando con {proveedor}…». `aria-disabled` |
 | Cuenta sin contraseña | Panel de confirmación en cada proveedor por añadir; nunca botones que pidan una sesión reciente |
 
+> **Cambiado por el hito de correo (decisión 22):** a la lista de errores de `/account` se suma `email-not-verified` (`cuenta.error.correo_no_confirmado`), que sale arriba en `<main>` porque en esa fila no hay panel. Ver [correo-diseno-ux §6.10](correo-diseno-ux.md#610-correspondencia-con-notice-y-error).
+
 ### 3.6 `/account/delete`
 
 Tres casos según la cuenta:
@@ -454,6 +476,8 @@ Contraseña   [ ________ ] [Mostrar contraseña]
 Cancelar     (enlace a /account)
 ```
 
+> **Retirado (decisión 22):** la línea «De momento no podemos recuperarla, así que guárdala en un gestor…». La ayuda de la contraseña (`registro.ayuda.contrasena`, que esta pantalla reutiliza) pasa a ser «Mínimo 10 caracteres, sin más reglas: una frase larga vale. Si la olvidas, podrás crear otra desde tu correo.». Ver [correo-diseno-ux §7](correo-diseno-ux.md#7-cambios-en-lo-ya-existente). Además, quien solo tiene proveedor también puede crear la contraseña desde `/forgot-password` ([correo-diseno-ux §3.3](correo-diseno-ux.md#33-forgot-password-pedir-el-enlace)); esta pantalla sigue siendo el camino desde `/account` con sesión.
+
 **Cómo funciona (decisión 21).** Sin contraseña, crear una se confirma siempre con un proveedor ya unido (el usado más recientemente, que nombra el texto). No hay bloque aparte ni paso previo: la persona escribe la contraseña, pulsa «Crear contraseña» y el mismo envío la lleva al proveedor; la contraseña se crea al volver. La pantalla se queda en el formulario hasta entonces. La validación de longitud ocurre antes de salir de Cupidilla, con los errores de siempre, sin ir al proveedor.
 
 - Campo: `type="password"`, `name="password"`, `autocomplete="new-password"`, `autocapitalize="none"`, `spellcheck="false"`. **Mismas reglas que el registro** (H0 §2.3 y §3.2): 10 a 128 caracteres, sin más reglas, sin segundo campo de repetición, se permite pegar, botón «Mostrar contraseña» solo con JavaScript. Errores: `registro.error.contrasena_vacia`, `contrasena_corta`, `contrasena_larga`.
@@ -492,7 +516,11 @@ Después de crear la contraseña: el borrado pide la contraseña (H0), se puede 
 
 Casos límite: correo de 254 caracteres (se parte); zoom 200 % y 320 px; sin JavaScript; doble envío; «atrás» tras unir, tras el alta y tras cerrar sesión; dos pestañas con el mismo estado temporal (la segunda recibe `provider-expired`); repetir el enlace de retorno.
 
+> **Cambiado por el hito de correo (decisión 22):** en `/account`, el error «correo no confirmado» (`email-not-verified`) se añade a la lista de errores generales (§3.5.1); y en `/login/link`, la salida por «¿Olvidaste tu contraseña?» es un recorrido más (§3.3). Ver [correo-diseno-ux §4](correo-diseno-ux.md#4-estados-resumen-transversal).
+
 ## 5. Textos de interfaz
+
+> **Estas tablas son especificación ejecutable.** [`texts.spec.ts`](../apps/web/src/lib/texts.spec.ts) lee las filas `` | `clave` | texto | `` de esta sección y exige que `apps/web/src/lib/texts.ts` y las condiciones de uso digan exactamente lo mismo. No edites, taches ni anotes una fila sin cambiar también el código; las notas y los cambios de fases posteriores van fuera de la tabla, en un párrafo o cita aparte.
 
 Convención de H0 §5. `{proveedor}` es «Google» o «Facebook»; `{minutos}`, el límite vigente (30 para el estado pendiente).
 
@@ -559,7 +587,7 @@ Se reutilizan de H0 §5.3 sin cambios: `registro.campo.nacimiento`, `registro.ay
 | `union.campo.correo` | Correo de la cuenta |
 | `union.campo.contrasena` | Contraseña |
 | `union.ayuda.contrasena` | Es la que elegiste al crear tu cuenta. Solo te la pedimos esta vez. |
-| `union.ayuda.olvido` | Si no la recuerdas, de momento no podemos recuperarla y no podrás unir las cuentas. Podrás hacerlo cuando haya recuperación de contraseña por correo. |
+| ~~`union.ayuda.olvido`~~ | ~~Si no la recuerdas, de momento no podemos recuperarla y no podrás unir las cuentas. Podrás hacerlo cuando haya recuperación de contraseña por correo.~~ **Retirado (decisión 22):** sustituido por `union.enlace.olvido` y `union.ayuda.olvido_destino` (correo §6.7), más `union.texto.sin_confirmar` si la cuenta no tiene el correo confirmado. |
 | `union.boton.enviar` | Unir cuentas |
 | `union.boton.enviando` | Uniendo cuentas… |
 | `union.estado.enviando` | Uniendo tus cuentas… |
@@ -572,6 +600,8 @@ Se reutilizan de H0 §5.3 sin cambios: `registro.campo.nacimiento`, `registro.ay
 | `union.error.resultado_incierto` | No sabemos si se han unido las cuentas: se ha perdido la conexión antes de recibir la respuesta. Para comprobarlo, entra con {proveedor}: si llegas a tu cuenta, ya están unidas. Si vuelves a enviar este formulario y te dice que ha pasado demasiado tiempo, es que la primera vez sí se unieron. |
 
 `union.error.limite` aparece en `/login` (tras `link-limit`), no en la pantalla de unión.
+
+> **Cambiado por el hito de correo (decisión 22):** las claves nuevas de esta pantalla, `union.enlace.olvido` («¿Olvidaste tu contraseña?»), `union.ayuda.olvido_destino` y `union.texto.sin_confirmar`, están en [correo-diseno-ux §6.7](correo-diseno-ux.md#67-enlaces-de-recuperación-aviso-en-la-cuenta-y-proveedores) y no se repiten aquí.
 
 ### 5.5 Cuenta (añadidos)
 
@@ -620,6 +650,8 @@ Se reutilizan de H0 §5.3 sin cambios: `registro.campo.nacimiento`, `registro.ay
 
 «Con él» vale para Google y Facebook; con otros proveedores se sustituye por «con esa forma». `cuenta.aviso.unida` se usa también en `/account/password` y `/account/delete` cuando llega `?notice=linked` (tras una unión por contraseña con `next` a esas pantallas).
 
+> **Cambiado por el hito de correo (decisión 22):** se añaden `cuenta.acceso.requiere_correo`, `cuenta.acceso.enlace_requiere_correo`, `cuenta.error.correo_no_confirmado` y los estados del correo en «Tus datos» (`cuenta.datos.correo_confirmado` / `cuenta.datos.correo_pendiente`). Están en [correo-diseno-ux §6.7](correo-diseno-ux.md#67-enlaces-de-recuperación-aviso-en-la-cuenta-y-proveedores). `cuenta.error.correo_sin_verificar` (correo **del proveedor**) no es lo mismo que `cuenta.error.correo_no_confirmado` (correo **de la cuenta de Cupidilla**).
+
 ### 5.6 Confirmar que eres tú
 
 Decisión 21: sin contraseña en la cuenta, añadir un proveedor o crear una contraseña se confirma siempre con un proveedor ya unido (ya no hay regla de 10 minutos). `{proveedor}` es el proveedor unido con el que se confirma (el usado más recientemente) y `{proveedorNuevo}`, el que se añade.
@@ -639,6 +671,8 @@ Decisión 21: sin contraseña en la cuenta, añadir un proveedor o crear una con
 ### 5.7 Crear contraseña y eliminar sin contraseña
 
 Crear contraseña reutiliza `registro.ayuda.contrasena` y `registro.error.contrasena_vacia`, `.contrasena_corta`, `.contrasena_larga`.
+
+> **Cambiado por el hito de correo (decisión 22):** `registro.ayuda.contrasena` tiene texto nuevo («…una frase larga vale. Si la olvidas, podrás crear otra desde tu correo.»); la versión anterior, con «De momento no podemos recuperarla…», queda retirada. Ver [correo-diseno-ux §7](correo-diseno-ux.md#7-cambios-en-lo-ya-existente).
 
 | Clave | Texto |
 |---|---|
@@ -703,6 +737,8 @@ Coincide con las listas cerradas del técnico (§11.4). `*` marca los valores qu
 
 `verificar.aviso.cancelado` y `verificar.error.otra_cuenta` llevan `{proveedor}`: se toman de `&provider=`, que el técnico añade a `failed` (§11.3). `from` no aparece en ninguna URL de aviso.
 
+> **Cambiado por el hito de correo (decisión 22):** estas listas cerradas se amplían. En `/account` se añade `error=email-not-verified`* → `cuenta.error.correo_no_confirmado`, y el hito añade además sus propios valores (`email-verified`, `password-reset`, `details-reviewed`, `verification-sent`, etc.). La tabla completa está en [correo-diseno-ux §6.10](correo-diseno-ux.md#610-correspondencia-con-notice-y-error); esta tabla no la repite.
+
 ### 5.9 Condiciones de uso: borrador de las secciones que cambian
 
 Decidido (D6): se **sube la versión** del texto para las altas nuevas; quien ya aceptó una versión anterior **no** tiene que volver a aceptar. Propuesta de versión: `2026-11-borrador-2` (la constante la fija el técnico; la casilla, el consentimiento y `/account` la usan). Marcado en pantalla como en H0 §5.9: borrador pendiente de revisión jurídica; los `[PENDIENTE]` los rellena quien tenga la información.
@@ -720,6 +756,8 @@ Decidido (D6): se **sube la versión** del texto para las altas nuevas; quien ya
 | `condiciones.s9.texto` | Si cambiamos estas condiciones publicaremos una nueva versión. Si el cambio te afecta de forma importante, te avisaremos y te pediremos que la aceptes antes de seguir usando el servicio; en los demás casos, sigue valiendo la versión que aceptaste. [PENDIENTE: revisión jurídica de este criterio.] |
 
 `condiciones.s3`, `s6` y `s8` no cambian. `condiciones.s9.texto` sustituye al de H0 §5.9, que decía que siempre se pediría aceptar la nueva versión: ya no es cierto con esta decisión. El enlace «Leer las condiciones» de `/register/complete` y `/register` abre siempre la versión vigente.
+
+> **Cambiado por el hito de correo (decisión 22):** en `condiciones.s4.texto`, la última frase («Por ahora no hay forma de recuperar…») se sustituye por «Si pierdes tu contraseña, puedes crear una nueva desde tu correo.» (la fila de arriba se deja con el texto original porque las pruebas de `texts.spec.ts` la leen y aplican ese cambio), y a `condiciones.s5.texto` se le añade la frase sobre los correos que enviamos (confirmar el correo, recuperar la contraseña, avisos de alta, recordatorio y aviso de cambio de contraseña; texto exacto en correo §7). **Ambos cambios van dentro de la versión `2026-11-borrador-2`, sin subir la versión** (decidido), así que lo de «se sube la versión» de D6 no se repite en este hito. Ver [correo-diseno-ux §7](correo-diseno-ux.md#7-cambios-en-lo-ya-existente).
 
 ## 6. Responsive y accesibilidad
 
@@ -752,9 +790,13 @@ Aplica H0 §6 y §7.4. Lo específico:
 
 **Privacidad de la interfaz**: pantallas con el correo del proveedor, `no-store`; logos y fuentes desde Cupidilla, sin peticiones a terceros antes de pulsar.
 
+> **Cambiado por el hito de correo (decisión 22):** [correo-diseno-ux §8](correo-diseno-ux.md#8-responsive-y-accesibilidad) amplía esta sección sin sustituirla: la banda de correo sin confirmar de la cabecera (región con nombre, sin posición fija, enlace con zona táctil de 44 px), el enlace «¿Olvidaste tu contraseña?» en el orden de tabulación de `/login` y de `/login/link`, y los avisos de URL con el patrón de §2.2 de este documento.
+
 ## 7. Criterios de aceptación
 
 Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con los ajustes marcados como «(revisado)». Del 62 en adelante: nuevos; del 62 al 77, revisados con la decisión 21 (sin regla de 10 minutos).
+
+> **Cambiado por el hito de correo (decisión 22):** los criterios de este documento conservan su numeración. El hito de correo tiene su propia lista de escenarios, también numerados (por ejemplo, el 66), en [correo-diseno-ux §9](correo-diseno-ux.md#9-criterios-de-aceptación): al citar uno, indica de qué documento es. Los criterios afectados llevan su nota (11, 28, 36b, 49, 56 y 79).
 
 ### Botones de proveedor
 
@@ -769,6 +811,7 @@ Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con l
 9. `/register` muestra `proveedor.ayuda.registro`; `/login` no.
 10. El separador usa `proveedor.separador.entrar` en `/login` y `proveedor.separador.registro` en `/register`.
 11. El orden de tabulación es botones de proveedor → campos del formulario de correo.
+    > **Cambiado por el hito de correo (decisión 22):** en `/login` el orden completo pasa a ser botones de proveedor → correo → contraseña → «Mostrar contraseña» (JS) → «¿Olvidaste tu contraseña?» → Entrar → «¿No tienes cuenta?». Ver [correo-diseno-ux §3.8](correo-diseno-ux.md#38-enlace-olvidaste-tu-contraseña-en-login).
 12. Con sesión iniciada, `/login` y `/register` redirigen a `/account`.
 13. Un error de credenciales en `/login` muestra `entrar.error.credenciales` y debajo `entrar.ayuda.proveedor`, igual para correo inexistente que para contraseña errónea.
 13b. Un proveedor sin credenciales configuradas no dibuja su botón; si no hay ninguno, tampoco el grupo ni el separador.
@@ -793,6 +836,7 @@ Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con l
 26. Si el correo que da el proveedor coincide con una cuenta con contraseña, se llega a `/login/link`, sin sesión ni alta.
 27. La pantalla muestra el correo como texto no editable y pide solo la contraseña (`autocomplete="current-password"`, «Mostrar contraseña» solo con JavaScript).
 28. Con contraseña correcta: se une la identidad, se inicia sesión, se va a `next` o `/account` con `cuenta.aviso.unida`, y después se puede entrar con el proveedor y con correo y contraseña.
+    > **Cambiado por el hito de correo (decisión 22):** si la cuenta tenía el correo sin confirmar, queda confirmado al unir con la contraseña correcta. Ver [correo-diseno-ux §3.9](correo-diseno-ux.md#39-pantalla-de-unión-loginlink) y el escenario 64 de correo ([§9.F](correo-diseno-ux.md#f-unión-y-textos-existentes)).
 29. Con contraseña incorrecta: `union.error.contrasena` en campo y resumen, campo vacío, nada se une y no hay sesión.
 30. Con contraseña vacía: `union.error.contrasena_vacia`.
 31. (revisado) Al 5.º fallo se destruye el estado y se va a `/login?error=link-limit` con `union.error.limite`; para seguir hay que repetir el flujo. El límite general (compartido con `/login`) muestra `comun.error.limite` en la misma pantalla.
@@ -801,7 +845,7 @@ Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con l
 34. La contraseña nunca reaparece rellena en el HTML.
 35. (revisado) Si el correo existe y la cuenta no tiene contraseña, se muestra `proveedor.error.cuenta_con_otro` en `/login` nombrando el proveedor de esa cuenta y no se llega a ninguna pantalla de contraseña.
 36. Un correo no verificado o ausente nunca lleva a `/login/link` ni a `/register/complete` ni revela si existe una cuenta con ese correo.
-36b. La pantalla de unión incluye `union.ayuda.olvido`: dice que quien no recuerda su contraseña no puede unir hasta que haya recuperación por correo, y no ofrece ninguna forma de saltarse la contraseña.
+36b. ~~La pantalla de unión incluye `union.ayuda.olvido`: dice que quien no recuerda su contraseña no puede unir hasta que haya recuperación por correo, y no ofrece ninguna forma de saltarse la contraseña.~~ **Retirado (decisión 22):** sustituido por el escenario 66 de [correo-diseno-ux §9.F](correo-diseno-ux.md#f-unión-y-textos-existentes) («La unión no se salta»: no hay forma de unir sin contraseña). La pantalla ya no dice que no se pueda recuperar: muestra «¿Olvidaste tu contraseña?» (escenarios 44 y 64 de correo).
 
 ### Errores del proveedor
 
@@ -822,6 +866,7 @@ Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con l
 47. Si solo queda una forma no hay botón de quitar y se muestra `cuenta.acceso.ultima`.
 48. Un POST de quitar la última forma o dos peticiones simultáneas para quitar las dos últimas: queda al menos una; la primera da `?error=last-method`.
 49. (revisado, decisión 21) Con contraseña en la cuenta, cada proveedor no unido muestra siempre su botón de marca con `cuenta.acceso.campo_anadir` antes; contraseña vacía o errónea: `?error=password-required` o `?error=password-incorrect`, sin salir al proveedor. Sin contraseña, el botón de marca está siempre disponible (con la sesión que sea) y lleva a la confirmación de 69 a 69e. Al volver con éxito, `/account?notice=linked&provider=…` con `cuenta.aviso.unida` (con contraseña) o `cuenta.confirmar.exito` (sin ella). El correo del proveedor puede ser distinto del de la cuenta. Si esa identidad es de otra cuenta, `?error=identity-in-use`; si ya es de esta, `?error=already-linked`.
+    > **Cambiado por el hito de correo (decisión 22):** el «siempre» de la parte «con contraseña» solo vale con el correo de la cuenta **confirmado**. Sin confirmar, la fila no muestra el botón ni el panel, sino `cuenta.acceso.requiere_correo`; si la API responde 403 `EMAIL_NOT_VERIFIED`, `?error=email-not-verified&provider=…` con `cuenta.error.correo_no_confirmado` y sin cambios. Es el escenario 63 de [correo-diseno-ux §9.E](correo-diseno-ux.md#e-aviso-y-sección-de-correo-sin-confirmar). Sin contraseña no cambia (esas cuentas nacen con el correo confirmado).
 
 ### Eliminar sin contraseña (revisado)
 
@@ -835,6 +880,7 @@ Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con l
 ### Accesibilidad y textos
 
 56. Todos los textos nuevos coinciden palabra por palabra con la sección 5, sin textos fuera de ella.
+    > **Cambiado por el hito de correo (decisión 22):** los textos que añade el hito a estas pantallas (`union.enlace.olvido`, `union.ayuda.olvido_destino`, `union.texto.sin_confirmar`, `cuenta.acceso.requiere_correo`, `cuenta.error.correo_no_confirmado` y el nuevo `registro.ayuda.contrasena`) se comprueban contra [correo-diseno-ux §6.7](correo-diseno-ux.md#67-enlaces-de-recuperación-aviso-en-la-cuenta-y-proveedores) y [§7](correo-diseno-ux.md#7-cambios-en-lo-ya-existente), no contra la sección 5 de este documento.
 57. Todo el flujo (proveedor, alta, unión, cancelar, quitar, añadir, confirmar, crear contraseña, eliminar) se completa solo con teclado, en el orden descrito, sin trampas de foco.
 58. Las pantallas nuevas cumplen los criterios 33 a 48 de H0.
 59. `/register/complete` y `/login/link` llevan `Cache-Control: no-store`; «atrás» tras terminar no muestra el correo.
@@ -872,6 +918,7 @@ Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con l
 
 78. `entrar.ayuda.proveedor` sigue apareciendo igual para credenciales inexistentes y erróneas (criterio 13).
 79. Las condiciones muestran la versión nueva (5.9) con las secciones 4, 5, 7 y 9 revisadas; una cuenta que aceptó la versión anterior no es obligada a aceptar de nuevo y `/account` sigue mostrando la versión y la fecha que aceptó; una alta nueva guarda la versión nueva.
+    > **Cambiado por el hito de correo (decisión 22):** las secciones 4 y 5 cambian de nuevo (recuperar la contraseña por correo; correos que enviamos) **dentro de la misma versión `2026-11-borrador-2`**, sin subir la versión y sin pedir aceptar otra. Ver [correo-diseno-ux §7](correo-diseno-ux.md#7-cambios-en-lo-ya-existente) y el escenario 67 de correo.
 80. `/register` y `/register/complete` enlazan a la versión vigente de las condiciones.
 81. `from` solo toma los valores `login`, `register` y `account`; ningún formulario del documento envía otro.
 
@@ -881,13 +928,15 @@ Salvo que se indique, con y sin JavaScript. Del 1 al 61: primera versión, con l
 
 | Tema | Decisión |
 |---|---|
-| D1 | Quien olvidó su contraseña no puede unir cuentas hasta que haya recuperación por correo. Riesgo aceptado; el texto lo dice (`union.ayuda.olvido`) |
+| ~~D1~~ | ~~Quien olvidó su contraseña no puede unir cuentas hasta que haya recuperación por correo. Riesgo aceptado; el texto lo dice (`union.ayuda.olvido`)~~ **Retirado (decisión 22):** D1 queda **cerrada**; ya hay recuperación por correo y deja de ser un riesgo aceptado. La pantalla de unión ofrece «¿Olvidaste tu contraseña?» (correo §3.9) |
 | D2 | Cuenta sin contraseña de otro proveedor: entra con el que ya tiene y añade el otro desde `/account` |
 | D3 y D4 | En `/account` se puede añadir un proveedor, quitarlo si queda otra forma de entrar y crear una contraseña. Con contraseña, añadir y quitar la piden en el formulario; sin ella, añadir y crear contraseña se confirman siempre con un proveedor ya unido (decisión 21). Cambiar una contraseña existente, fuera |
 | D5 | Botón de Facebook blanco con «f» azul, pendiente de que Meta lo confirme (plan B en 3.1.2). Fuente del sistema |
 | D6 | Se sube la versión de las condiciones para las altas nuevas; nadie que ya aceptó vuelve a aceptar. Borrador en 5.9 |
 | D7 | Solo identificador y correo |
 | D8 | Borrado sin contraseña: palabra ELIMINAR. La sesión de menos de 10 minutos que se pedía la quitó la decisión 20 |
+
+> **Cambiado por el hito de correo (decisión 22):** D3 y D4 se matizan: añadir un proveedor desde `/account` exige además el correo de la cuenta confirmado (K7). D6 sigue igual, pero los cambios de condiciones del hito de correo no suben la versión (ver §5.9). Ver [correo-diseno-ux §7](correo-diseno-ux.md#7-cambios-en-lo-ya-existente).
 
 ### 8.2 Para el arquitecto
 
@@ -899,10 +948,12 @@ T18. **`authenticated_at`** (decisión 21): se actualiza al reautenticarse y se 
 
 ### 8.3 Para el CEO
 
-D9. **Política de correo de Facebook.** Meta no da indicador de «verificado»; lo damos por verificado por decisión nuestra. La unión siempre pide contraseña, así que el riesgo es el de H0 (alguien registra el correo de otra persona). ¿Se acepta?
+D9. **Política de correo de Facebook.** **Aceptada; por comprobar al desplegar con Facebook real** (ver [decisiones](decisiones.md#antes-de-la-beta)). Meta no da indicador de «verificado»; lo damos por verificado por decisión nuestra. La unión siempre pide contraseña, así que el riesgo es el de H0 (alguien registra el correo de otra persona). ¿Se acepta?
 D10. **Confirmar con Meta** que el botón blanco con «f» azul y «Continuar con Facebook» son admisibles, y que pedir fecha de nacimiento y condiciones tras entrar no choca con sus reglas. Sin esa respuesta, plan B.
 D11. **Texto legal y políticas.** El borrador de 5.9 y la política de privacidad (Google y Facebook piden su enlace; Facebook, instrucciones de eliminación de datos) necesitan revisión jurídica antes de publicar. Se propone el nombre de versión `2026-11-borrador-2`.
-D12. **Contraseña sin recuperación.** Con D1 y D3, ahora se pueden crear contraseñas que no se pueden recuperar. Se avisa en el texto, pero la recuperación por correo pasa a ser más urgente antes de abrir la beta.
+D12. ~~**Contraseña sin recuperación.** Con D1 y D3, ahora se pueden crear contraseñas que no se pueden recuperar. Se avisa en el texto, pero la recuperación por correo pasa a ser más urgente antes de abrir la beta.~~ **Retirado (decisión 22):** resuelta. Ya hay recuperación por correo, así que una contraseña creada aquí se puede recuperar (`/forgot-password`) y el aviso «no se puede recuperar» desaparece de los textos.
+
+> **Cambiado por el hito de correo (decisión 22):** D9 (política de correo de Facebook): el CTO confirmó el 14 de noviembre seguir dando por verificado el correo de Facebook (R-M14 de [correo-diseno-tecnico](correo-diseno-tecnico.md)); en este documento sigue figurando como pregunta al CEO. D1 y D12 están retiradas arriba.
 
 ## 9. Lo que cambia respecto a H0
 
@@ -914,3 +965,5 @@ D12. **Contraseña sin recuperación.** Con D1 y D3, ahora se pueden crear contr
 | H0 §1.7 | `next` admite `/account/password`; `/register/complete` y `/login/link` se comportan como `/register` y `/login` respecto a la sesión |
 | H0 §5 | Claves nuevas `proveedor.*`, `alta.*`, `union.*`, `verificar.*`, `contrasena.*`, `cuenta.acceso.*`, `cuenta.aviso.*`, `cuenta.error.*` (nuevas), `eliminar.*` (nuevas), `entrar.ayuda.proveedor` |
 | H0 §5.9 | Versión nueva y secciones 4, 5, 7 y 9 revisadas (5.9 de este documento). H0 §5.9 decía que se pediría aceptar toda versión nueva: ya no |
+
+> **Cambiado por el hito de correo (decisión 22):** el hito de correo añade sus propios cambios sobre H0 y sobre este documento; están en [correo-diseno-ux §7](correo-diseno-ux.md#7-cambios-en-lo-ya-existente) (por ejemplo, H0 §1.2 y §3.2: el alta con contraseña deja de iniciar sesión).
