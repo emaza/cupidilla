@@ -730,6 +730,8 @@ No incluye la hora, el lugar ni el dispositivo (no se guardan; coherente con `cu
 
 ## 6. Textos de interfaz
 
+> **Estas tablas son especificación ejecutable.** [`texts.spec.ts`](../apps/web/src/lib/texts.spec.ts) lee las filas `` | `clave` | texto | `` de esta sección y las frases entre «» de la §7 y exige que `apps/web/src/lib/texts.ts` y las condiciones de uso digan exactamente lo mismo. No edites, taches ni anotes una fila sin cambiar también el código; las notas y los cambios de fases posteriores van fuera de la tabla, en un párrafo o cita aparte.
+
 Convención de H0 §5. Las claves nuevas se añaden a `apps/web/src/lib/texts.ts` en un bloque «Verificación de correo y recuperación (correo-diseno-ux.md §6)». `{duracion}` es «24 horas» o «1 hora» (valor del TTL real); `{fecha}`, la fecha de borrado de §5; `{proveedor}`, «Google» o «Facebook»; `{version}`, la de las condiciones vigentes. El marcador `{soporte}` solo aparece en los correos.
 
 ### 6.1 Alta: ayuda del correo y «Revisa tu correo»

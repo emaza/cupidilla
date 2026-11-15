@@ -520,6 +520,8 @@ Casos límite: correo de 254 caracteres (se parte); zoom 200 % y 320 px; sin Jav
 
 ## 5. Textos de interfaz
 
+> **Estas tablas son especificación ejecutable.** [`texts.spec.ts`](../apps/web/src/lib/texts.spec.ts) lee las filas `` | `clave` | texto | `` de esta sección y exige que `apps/web/src/lib/texts.ts` y las condiciones de uso digan exactamente lo mismo. No edites, taches ni anotes una fila sin cambiar también el código; las notas y los cambios de fases posteriores van fuera de la tabla, en un párrafo o cita aparte.
+
 Convención de H0 §5. `{proveedor}` es «Google» o «Facebook»; `{minutos}`, el límite vigente (30 para el estado pendiente).
 
 ### 5.1 Proveedores (botones y errores compartidos)

@@ -348,6 +348,8 @@ Casos límite: correo de hasta 254 caracteres (se parte, no desborda); contrase�
 
 ## 5. Textos de interfaz
 
+> **Estas tablas son especificación ejecutable.** [`texts.spec.ts`](../apps/web/src/lib/texts.spec.ts) lee las filas `` | `clave` | texto | `` de esta sección y exige que `apps/web/src/lib/texts.ts` y las condiciones de uso digan exactamente lo mismo. No edites, taches ni anotes una fila sin cambiar también el código; las notas y los cambios de fases posteriores van fuera de la tabla, en un párrafo o cita aparte.
+
 Convención de claves: `pantalla.tipo.nombre`. Tipos: `meta` (título del documento), `titulo`, `campo` (etiqueta), `ayuda`, `boton`, `enlace`, `error`, `aviso`, `texto`. Los textos con `«…»` son literales; `{x}` es un valor variable.
 
 ### 5.1 Comunes
