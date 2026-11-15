@@ -1,4 +1,4 @@
-import { referenceToday } from '@cupidilla/contracts';
+import { MIN_AGE_RANGE, referenceToday } from '@cupidilla/contracts';
 import { fail, redirect } from '@sveltejs/kit';
 import { errorMessages } from '#lib/errors/messages.ts';
 import { firstApiIssueByField } from '#lib/forms/form-data.ts';
@@ -26,9 +26,18 @@ const onlyField = (fields: RegisterErrors['fields']): RegisterErrors => ({ field
 export const actions = {
   default: async (event) => {
     const data = await event.request.formData();
-    // Sin la edad mínima no se puede validar: igual que con la API caída (la API decide).
-    const minAge = await currentMinAge(event);
-    if (minAge === null) {
+    const knownMinAge = await currentMinAge(event);
+    // Sin la edad mínima se valida con el suelo del rango (nunca baja de él): un menor de ese
+    // suelo lo es con cualquier configuración. El resto, como con la API caída (la API decide).
+    const parsed = parseRegisterForm(
+      data,
+      referenceToday(new Date()),
+      knownMinAge ?? MIN_AGE_RANGE.min,
+    );
+
+    // Con un menor no vuelve ningún valor y no se llama a la API (acuerdos A3 y A4).
+    if (parsed.kind === 'underage') return fail(422, { underage: true as const });
+    if (knownMinAge === null) {
       const errors: RegisterErrors = {
         fields: {},
         dateParts: [],
@@ -36,10 +45,6 @@ export const actions = {
       };
       return fail(503, { values: registerValues(data), errors });
     }
-    const parsed = parseRegisterForm(data, referenceToday(new Date()), minAge);
-
-    // Con un menor no vuelve ningún valor y no se llama a la API (acuerdos A3 y A4).
-    if (parsed.kind === 'underage') return fail(422, { underage: true as const });
     if (parsed.kind === 'invalid') {
       return fail(400, { values: parsed.values, errors: parsed.errors });
     }
