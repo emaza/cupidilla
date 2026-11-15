@@ -137,4 +137,56 @@ describe('QA fase C', () => {
     const [row] = await t.db.select().from(users).where(eq(users.id, userId));
     expect(row?.dataReviewRequiredAt).toBeNull();
   });
+
+  it('menor sin casilla (ausente o false): 422, cuenta borrada, sin consentimiento nuevo y sin fecha en logs', async () => {
+    for (const acceptTerms of [undefined, false]) {
+      await truncateAll(t.db);
+      resetRateLimits(t.app);
+      const { userId, token } = await pendingBeto(t);
+      const output: string[] = [];
+      const capture = (chunk: unknown): boolean => {
+        output.push(String(chunk));
+        return true;
+      };
+      vi.spyOn(process.stdout, 'write').mockImplementation(capture);
+      vi.spyOn(process.stderr, 'write').mockImplementation(capture);
+      const response = await review(token, { birthDate: '2015-03-04', acceptTerms });
+      vi.restoreAllMocks();
+      expect(response.status, String(acceptTerms)).toBe(422);
+      expect(await t.db.select().from(users).where(eq(users.id, userId))).toEqual([]);
+      expect(await consentsOf(userId)).toEqual([]);
+      expect(output.join('')).not.toContain('2015');
+    }
+  });
+
+  it('adulto con tipos raros o casilla falsa: 400 y no cambia nada (ni consentimiento ni fecha)', async () => {
+    const { userId, token } = await pendingBeto(t);
+    const before = {
+      user: (await t.db.select().from(users).where(eq(users.id, userId)))[0],
+      consents: await consentsOf(userId),
+    };
+    for (const acceptTerms of [false, undefined, 'true', 'on', 1, 0, null, [], {}]) {
+      const response = await review(token, { birthDate: '1985-01-20', acceptTerms });
+      expect(response.status, JSON.stringify(acceptTerms)).toBe(400);
+    }
+    expect((await t.db.select().from(users).where(eq(users.id, userId)))[0]).toEqual(before.user);
+    expect(await consentsOf(userId)).toEqual(before.consents);
+  });
+
+  it('menor con versión de condiciones antigua: 422 (la edad va antes que la versión) y borrado', async () => {
+    const { userId, token } = await pendingBeto(t);
+    const response = await review(token, {
+      birthDate: '2015-03-04',
+      termsVersion: '2026-11-borrador',
+    });
+    expect(response.status).toBe(422);
+    expect(await t.db.select().from(users).where(eq(users.id, userId))).toEqual([]);
+  });
+
+  it('HALLAZGO: menor con termsVersion mal formada → 400 de forma, la cuenta no se borra', async () => {
+    const { userId, token } = await pendingBeto(t);
+    const response = await review(token, { birthDate: '2015-03-04', termsVersion: '' });
+    expect(response.status).toBe(400);
+    expect(await t.db.select().from(users).where(eq(users.id, userId))).toHaveLength(1);
+  });
 });
