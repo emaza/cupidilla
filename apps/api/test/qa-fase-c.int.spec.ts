@@ -200,4 +200,61 @@ describe('QA fase C', () => {
     expect(response.status).toBe(400);
     expect(await t.db.select().from(users).where(eq(users.id, userId))).toHaveLength(1);
   });
+
+  it('menor con claves desconocidas o tipos raros en otros campos: 422, borrado y sin fecha en respuesta ni logs', async () => {
+    const bodies: Record<string, unknown>[] = [
+      { extra: 'x' },
+      { acceptTerms: 'true' },
+      { acceptTerms: null },
+      { acceptTerms: 1, termsVersion: 5 },
+      { termsVersion: undefined },
+    ];
+    for (const extra of bodies) {
+      await truncateAll(t.db);
+      resetRateLimits(t.app);
+      const { userId, token } = await pendingBeto(t);
+      const output: string[] = [];
+      const capture = (chunk: unknown): boolean => {
+        output.push(String(chunk));
+        return true;
+      };
+      vi.spyOn(process.stdout, 'write').mockImplementation(capture);
+      vi.spyOn(process.stderr, 'write').mockImplementation(capture);
+      const response = await review(token, { birthDate: '2015-03-04', ...extra });
+      vi.restoreAllMocks();
+      const label = JSON.stringify(extra);
+      expect(response.status, label).toBe(422);
+      expect(JSON.stringify(response.body), label).not.toContain('2015');
+      expect(output.join(''), label).not.toContain('2015');
+      expect(await t.db.select().from(users).where(eq(users.id, userId)), label).toEqual([]);
+    }
+  });
+
+  it('cuerpo sin forma de fecha válida (no objeto, fecha rara, ausente): 400 y la cuenta se conserva; la fecha no se repite en la respuesta', async () => {
+    const { userId, token } = await pendingBeto(t);
+    const send = (body: unknown) =>
+      api(t.app)
+        .post('/users/me/data-review')
+        .set('Authorization', `Bearer ${token}`)
+        .set('Content-Type', 'application/json')
+        .send(JSON.stringify(body));
+    const bodies: unknown[] = [
+      [],
+      'texto',
+      null,
+      {},
+      { birthDate: 20150304, acceptTerms: true, termsVersion: SERVICE_TERMS_VERSION },
+      { birthDate: '2015-3-4', acceptTerms: true, termsVersion: SERVICE_TERMS_VERSION },
+      { birthDate: '2015-03-04T00:00:00Z', acceptTerms: true, termsVersion: SERVICE_TERMS_VERSION },
+      { birthDate: '1985-01-20', acceptTerms: true, termsVersion: SERVICE_TERMS_VERSION, extra: 1 },
+    ];
+    for (const body of bodies) {
+      const response = await send(body);
+      expect(response.status, JSON.stringify(body)).toBe(400);
+      expect(JSON.stringify(response.body)).not.toContain('2015');
+    }
+    expect(await t.db.select().from(users).where(eq(users.id, userId))).toHaveLength(1);
+    const [row] = await t.db.select().from(users).where(eq(users.id, userId));
+    expect(row?.dataReviewRequiredAt).not.toBeNull();
+  });
 });
