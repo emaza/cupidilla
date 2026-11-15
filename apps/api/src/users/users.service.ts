@@ -10,7 +10,7 @@ import { ConsentsService } from '../consents/consents.service.js';
 import { DB, type Database, type Executor, type Tx } from '../database/database.types.js';
 import { lockEmail } from '../database/email-lock.js';
 import { isUniqueViolation } from '../database/pg-errors.js';
-import { emailOutbox, emailTokens, identities, users } from '../database/schema/index.js';
+import { emailOutbox, emailTokens, identities, sessions, users } from '../database/schema/index.js';
 import { IdentitiesService, providerEmailIs } from '../oauth/identities.service.js';
 import { PasswordService } from './password.service.js';
 import { unverifiedDeletionAt } from './unverified-deletion.js';
@@ -335,7 +335,7 @@ export class UsersService {
    * sin `MailModule`, en la misma sentencia.
    */
   async deleteAccount(
-    session: Pick<ActiveSession, 'userId'>,
+    session: Pick<ActiveSession, 'userId' | 'tokenHash'>,
     password: string | undefined,
   ): Promise<void> {
     const userId = session.userId;
@@ -348,8 +348,7 @@ export class UsersService {
     if (row.passwordHash === null) {
       // Sin contraseña (§9.2, decisión 20): no hay nada que pedir. La palabra «ELIMINAR» la valida
       // la web: es una confirmación de intención, no de identidad.
-      await this.deleteUserAndMail(userId);
-      this.logger.log({ event: 'account_deleted' });
+      await this.deleteUserAndMail(session, null);
       return;
     }
     if (password === undefined) {
@@ -364,20 +363,46 @@ export class UsersService {
     if (!(await this.passwords.verify(row.passwordHash, password))) {
       throw new ApiException('PASSWORD_INCORRECT', 403, undefined, 'Password does not match');
     }
-    await this.deleteUserAndMail(userId);
-    this.logger.log({ event: 'account_deleted' });
+    await this.deleteUserAndMail(session, row.passwordHash);
   }
 
   /**
    * Una sola sentencia, atómica y sin transacción explícita: si se pierde su respuesta, el
-   * resultado es incierto como en H0 (OUTCOME_UNKNOWN), nunca a medias. Los correos pendientes
-   * solo se borran si la fila del usuario se ha borrado de verdad (el correo sale del `RETURNING`).
+   * resultado es incierto como en H0 (OUTCOME_UNKNOWN), nunca a medias. Solo borra si el estado
+   * que se verificó sigue vigente: el hash leído (también `null`, sin contraseña) y la sesión de
+   * la petición. Un restablecimiento que haya hecho COMMIT durante el argon2 cambia el hash y
+   * revoca las sesiones, y entonces no se borra la cuenta recuperada. Los correos pendientes solo
+   * se borran si la fila del usuario se ha borrado de verdad (el correo sale del `RETURNING`).
+   * Sin borrado: 401 si la sesión ya no existe, 403 si cambió la contraseña; nunca 204.
    */
-  private async deleteUserAndMail(userId: string): Promise<void> {
-    await this.db.execute(sql`
+  private async deleteUserAndMail(
+    session: Pick<ActiveSession, 'userId' | 'tokenHash'>,
+    verifiedHash: string | null,
+  ): Promise<void> {
+    const result = await this.db.execute<{ id: string }>(sql`
       with deleted as (
-        delete from ${users} where ${users.id} = ${userId} returning ${users.email}
+        delete from ${users}
+        where ${users.id} = ${session.userId}
+          and ${users.passwordHash} is not distinct from ${verifiedHash}
+          and exists (
+            select 1 from ${sessions}
+            where ${sessions.tokenHash} = ${session.tokenHash} and ${sessions.userId} = ${session.userId}
+          )
+        returning ${users.id}, ${users.email}
+      ), deleted_mail as (
+        delete from ${emailOutbox} where ${emailOutbox.toEmail} in (select email from deleted)
       )
-      delete from ${emailOutbox} where ${emailOutbox.toEmail} in (select email from deleted)`);
+      select id from deleted`);
+    if (result.rows.length > 0) {
+      this.logger.log({ event: 'account_deleted' });
+      return;
+    }
+    const [stillThere] = await this.db
+      .select({ id: sessions.tokenHash })
+      .from(sessions)
+      .where(and(eq(sessions.tokenHash, session.tokenHash), eq(sessions.userId, session.userId)))
+      .limit(1);
+    if (!stillThere) throw new ApiException('UNAUTHENTICATED', 401);
+    throw new ApiException('PASSWORD_INCORRECT', 403, undefined, 'Password does not match');
   }
 }
