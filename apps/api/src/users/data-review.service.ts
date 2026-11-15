@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   checkBirthDate,
+  dataReviewAcceptanceSchema,
   referenceToday,
   SERVICE_TERMS_VERSION,
   type DataReviewRequest,
@@ -32,7 +33,11 @@ export class DataReviewService {
     private readonly config: ConfigService<Env, true>,
   ) {}
 
-  /** POST /users/me/data-review, en el orden del alta (H0 §8.5). */
+  /**
+   * POST /users/me/data-review (correo §5.11): forma → edad (futura, 400; menor, se borra la cuenta
+   * y 422) → aceptación de las condiciones → versión → revisión pendiente. La edad va antes que la
+   * casilla: con un menor no se mira nada más, y nunca se registra una aceptación que no se marcó.
+   */
   async complete(userId: string, request: DataReviewRequest): Promise<void> {
     // Antes de leer nada, con la regla y el MIN_AGE vigentes del alta: es una declaración nueva.
     const check = checkBirthDate(
@@ -56,6 +61,15 @@ export class DataReviewService {
         this.logger.log({ event: 'account_deleted', reason: 'underage_review' });
       }
       throw new ApiException('UNDERAGE', 422, undefined, 'Minimum age not reached');
+    }
+    // Solo un adulto llega aquí: sin la casilla marcada no se cambia nada.
+    if (!dataReviewAcceptanceSchema.safeParse(request).success) {
+      throw new ApiException(
+        'VALIDATION_FAILED',
+        400,
+        [{ path: 'acceptTerms', issue: 'required' }],
+        'Request validation failed',
+      );
     }
     if (request.termsVersion !== SERVICE_TERMS_VERSION) {
       throw new ApiException('TERMS_VERSION_OUTDATED', 409, undefined, 'Terms version outdated');

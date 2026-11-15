@@ -133,6 +133,32 @@ describe('C.3: revisión de datos', () => {
     ).toBe(401);
   });
 
+  it('menor con la casilla sin marcar (o ausente): la cuenta se borra y no se registra ningún consentimiento', async () => {
+    for (const acceptTerms of [false, undefined]) {
+      await truncateAll(t.db);
+      resetRateLimits(t.app);
+      inbox(t.app).clear();
+      const { userId, token } = await pendingBeto(t);
+      const response = await review(token, { birthDate: '2015-03-04', acceptTerms });
+      expect(response.status, String(acceptTerms)).toBe(422);
+      expect(response.body.error.code).toBe('UNDERAGE');
+      expect(await userRow(userId)).toBeUndefined();
+      expect(await consentsOf(userId)).toEqual([]);
+    }
+  });
+
+  it('adulto con la casilla sin marcar → 400 acceptTerms: required, sin consentimiento nuevo y con la revisión pendiente', async () => {
+    const { userId, token } = await pendingBeto(t);
+    const before = { user: await userRow(userId), consents: await consentsOf(userId) };
+    for (const acceptTerms of [false, undefined]) {
+      const response = await review(token, { acceptTerms });
+      expect(response.status, String(acceptTerms)).toBe(400);
+      expect(response.body.error.fields).toEqual([{ path: 'acceptTerms', issue: 'required' }]);
+    }
+    expect(await userRow(userId)).toEqual(before.user);
+    expect(await consentsOf(userId)).toEqual(before.consents);
+  });
+
   it('C3-5: fecha futura → 400 in_future; versión antigua → 409; no cambia nada', async () => {
     const { userId, token } = await pendingBeto(t);
     const before = { user: await userRow(userId), consents: await consentsOf(userId) };

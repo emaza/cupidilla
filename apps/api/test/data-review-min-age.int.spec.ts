@@ -32,11 +32,11 @@ describe('C3-4b: revisión de datos con MIN_AGE=21', () => {
     t.clock.set(TEST_NOW);
   });
 
-  const review = (token: string, birthDate: string) =>
+  const review = (token: string, birthDate: string, acceptTerms: boolean | undefined = true) =>
     api(t.app)
       .post('/users/me/data-review')
       .set('Authorization', `Bearer ${token}`)
-      .send({ birthDate, acceptTerms: true, termsVersion: SERVICE_TERMS_VERSION });
+      .send({ birthDate, acceptTerms, termsVersion: SERVICE_TERMS_VERSION });
 
   /** Ana, creada antes de subir MIN_AGE, con 20 años y el correo verificado. */
   async function seedAna(): Promise<void> {
@@ -54,6 +54,25 @@ describe('C3-4b: revisión de datos con MIN_AGE=21', () => {
   it('2005-11-11 (cumple 21 hoy) → 204', async () => {
     const { token } = await pendingBeto(t);
     expect((await review(token, '2005-11-11')).status).toBe(204);
+  });
+
+  it('QA: la web (con MIN_AGE 18 en caché) envía la casilla sin marcar para alguien de 20 años: la API lo trata como menor, borra la cuenta y no registra ningún consentimiento', async () => {
+    const { userId, token } = await pendingBeto(t);
+    const response = await review(token, '2006-01-01', false);
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('UNDERAGE');
+    expect(await t.db.select().from(users).where(eq(users.id, userId))).toEqual([]);
+    expect(await rowsReferencingUser(t, userId)).toBe(0);
+  });
+
+  it('QA: alguien de 22 años con la casilla sin marcar → 400 acceptTerms: required y nada cambia', async () => {
+    const { userId, token } = await pendingBeto(t);
+    const response = await review(token, '2004-01-01', false);
+    expect(response.status).toBe(400);
+    expect(response.body.error.fields).toEqual([{ path: 'acceptTerms', issue: 'required' }]);
+    const [row] = await t.db.select().from(users).where(eq(users.id, userId));
+    expect(row?.dataReviewRequiredAt).not.toBeNull();
+    expect(row?.birthDate).toBe('1990-05-05');
   });
 
   it('2005-11-12 (cumple 21 mañana) → 422 y la cuenta se borra; Ana, que no pasa por la revisión, sigue entrando', async () => {

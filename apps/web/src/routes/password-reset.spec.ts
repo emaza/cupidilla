@@ -362,11 +362,12 @@ describe('/account/review (C3-1b, C4-5)', () => {
     });
   });
 
-  it('C4-5: un menor (aunque falte la casilla) llama a la API, borra la cookie y pinta el cierre sin valores', async () => {
+  it('C4-5: con una fecha de menor (aunque falte la casilla) llama a la API, borra la cookie y pinta el cierre sin valores', async () => {
     api.completeDataReview.mockResolvedValue(apiFailure(422, 'UNDERAGE'));
     const { result } = await submit({ ...minorParts(), acceptTerms: '', termsVersion: '' });
     expect(api.completeDataReview).toHaveBeenCalledOnce();
-    expect(api.completeDataReview.mock.calls[0]?.[2]).toMatchObject({ acceptTerms: true });
+    // La casilla viaja tal como está: la API decide que es menor y borra la cuenta.
+    expect(api.completeDataReview.mock.calls[0]?.[2]).not.toHaveProperty('acceptTerms');
     expect(cookie.clear).toHaveBeenCalledOnce();
     expect(result).toEqual({ status: 422, data: { underage: true } });
   });
@@ -382,6 +383,35 @@ describe('/account/review (C3-1b, C4-5)', () => {
       },
     });
     expect(cookie.clear).not.toHaveBeenCalled();
+  });
+
+  it('adulto sin la casilla: la API responde acceptTerms required y vuelve el error con los valores', async () => {
+    api.completeDataReview.mockResolvedValue(
+      apiFailure(400, 'VALIDATION_FAILED', [{ path: 'acceptTerms', issue: 'required' }]),
+    );
+    const { result } = await submit({ ...form, acceptTerms: '' });
+    expect(api.completeDataReview.mock.calls[0]?.[2]).toEqual({
+      birthDate: '1990-05-05',
+      termsVersion: SERVICE_TERMS_VERSION,
+    });
+    expect(result).toMatchObject({
+      status: 400,
+      data: {
+        values: { day: '5', month: '5', year: '1990', acceptTerms: false },
+        errors: { fields: { acceptTerms: 'registro.error.condiciones' } },
+      },
+    });
+    expect(cookie.clear).not.toHaveBeenCalled();
+  });
+
+  it('QA: MIN_AGE distinto en la web (18 en caché) y en la API: la API decide menor y la web pinta el cierre', async () => {
+    api.completeDataReview.mockResolvedValue(apiFailure(422, 'UNDERAGE'));
+    // 20 años: adulto para la caché de la web, menor para una API con MIN_AGE 21.
+    const year = String(new Date().getUTCFullYear() - 20);
+    const { result } = await submit({ ...form, year, acceptTerms: '' });
+    expect(api.completeDataReview.mock.calls[0]?.[2]).not.toHaveProperty('acceptTerms');
+    expect(result).toEqual({ status: 422, data: { underage: true } });
+    expect(cookie.clear).toHaveBeenCalledOnce();
   });
 
   it('errores de forma: no llama a la API y conserva día, mes, año y casilla', async () => {

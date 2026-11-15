@@ -1,9 +1,8 @@
-import { referenceToday } from '@cupidilla/contracts';
+import { checkBirthDate, referenceToday } from '@cupidilla/contracts';
 import { error, fail, redirect } from '@sveltejs/kit';
 import { errorMessages } from '#lib/errors/messages.ts';
 import {
   dataReviewErrorsFromIssues,
-  dataReviewValues,
   parseDataReviewForm,
   type DataReviewErrors,
 } from '#lib/forms/data-review.ts';
@@ -54,15 +53,8 @@ export const actions = {
     if (!locals.user.dataReviewRequired) redirect(303, '/account');
 
     const data = await event.request.formData();
-    // Sin la edad mínima no se puede validar: igual que con la API caída (la API decide).
-    const minAge = await currentMinAge(event);
-    if (minAge === null) {
-      return fail(503, {
-        values: dataReviewValues(data),
-        errors: onlyGeneral(errorMessages.review.API_UNAVAILABLE),
-      });
-    }
-    const parsed = parseDataReviewForm(data, referenceToday(new Date()), minAge);
+    const today = referenceToday(new Date());
+    const parsed = parseDataReviewForm(data, today);
     if (parsed.kind === 'invalid') {
       return fail(400, { values: parsed.values, errors: parsed.errors });
     }
@@ -78,8 +70,15 @@ export const actions = {
       locals.sessionToken = null;
       return fail(422, { underage: true as const });
     }
-    // Con un menor no vuelve ningún valor, ni siquiera si la API ha fallado.
-    const values = parsed.kind === 'underage' ? undefined : dataReviewValues(data);
+    // Quién es menor lo decide la API. Con un 400 o un 409 ya ha visto un adulto: los valores
+    // vuelven. Si ha fallado sin decidir, la caché de la web solo sirve para no devolver la fecha
+    // de quien parece menor (acuerdo A3); sin la edad mínima, tampoco.
+    const adultConfirmed = code === 'VALIDATION_FAILED' || code === 'TERMS_VERSION_OUTDATED';
+    const minAge = adultConfirmed ? null : await currentMinAge(event);
+    const looksMinor =
+      !adultConfirmed &&
+      (minAge === null || !checkBirthDate(parsed.request.birthDate, today, minAge).ok);
+    const values = looksMinor ? undefined : parsed.values;
     switch (code) {
       case 'UNAUTHENTICATED':
         clearSessionCookie(cookies);

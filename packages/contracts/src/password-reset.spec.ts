@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { passwordResetSchema, publicUserSchema } from './auth.js';
 import { SERVICE_TERMS_VERSION } from './consents.js';
 import { ERROR_CODES } from './errors.js';
-import { dataReviewRequestSchema } from './users.js';
+import { dataReviewAcceptanceSchema, dataReviewRequestSchema } from './users.js';
 
 const TOKEN = 'a'.repeat(42) + '_';
 
@@ -42,10 +42,20 @@ describe('dataReviewRequestSchema (C1-2)', () => {
     expect(dataReviewRequestSchema.parse(valid)).toEqual(valid);
   });
 
-  it('acceptTerms falso da acceptTerms: required', () => {
-    expect(issues(dataReviewRequestSchema.safeParse({ ...valid, acceptTerms: false }))).toEqual([
+  it('la entrada admite la casilla sin marcar (la edad se comprueba antes), pero no otro tipo', () => {
+    expect(dataReviewRequestSchema.safeParse({ ...valid, acceptTerms: false }).success).toBe(true);
+    const withoutTerms = { birthDate: valid.birthDate, termsVersion: valid.termsVersion };
+    expect(dataReviewRequestSchema.safeParse(withoutTerms).success).toBe(true);
+    expect(issues(dataReviewRequestSchema.safeParse({ ...valid, acceptTerms: 'on' }))).toEqual([
       'acceptTerms: required',
     ]);
+  });
+
+  it('acceptTerms falso da acceptTerms: required en la revisión de un adulto', () => {
+    expect(issues(dataReviewAcceptanceSchema.safeParse({ ...valid, acceptTerms: false }))).toEqual([
+      'acceptTerms: required',
+    ]);
+    expect(dataReviewAcceptanceSchema.parse(valid)).toEqual(valid);
   });
 
   it('un campo desconocido da unrecognized', () => {

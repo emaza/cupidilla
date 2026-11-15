@@ -10,30 +10,47 @@ const form = (fields: Record<string, string>): FormData => {
 };
 const base = { day: '5', month: '5', year: '1990', termsVersion: SERVICE_TERMS_VERSION };
 
-/** QA fase C, desviación 2: acceptTerms: true solo viaja con una fecha de menor. */
+/**
+ * QA fase C, desviación 2 (corregida por el CTO): la web no decide quién es menor ni fuerza la
+ * casilla. Con una fecha real y no futura, la petición sale siempre con la casilla tal como está.
+ */
 describe('parseDataReviewForm: consentimiento', () => {
-  it('adulto con la casilla desmarcada o con valor raro: invalid, nunca una petición', () => {
+  it('casilla desmarcada o con un valor raro: la petición sale sin acceptTerms, nunca con true', () => {
     for (const acceptTerms of [undefined, '', 'off', 'true', '1']) {
       const fields: Record<string, string> = { ...base };
       if (acceptTerms !== undefined) fields.acceptTerms = acceptTerms;
-      const parsed = parseDataReviewForm(form(fields), TODAY, 18);
-      expect(parsed.kind, String(acceptTerms)).toBe('invalid');
+      const parsed = parseDataReviewForm(form(fields), TODAY);
+      expect(parsed.kind, String(acceptTerms)).toBe('valid');
+      if (parsed.kind === 'valid') expect(parsed.request.acceptTerms).toBeUndefined();
     }
   });
 
-  it('adulto con la casilla marcada: valid con acceptTerms true', () => {
-    const parsed = parseDataReviewForm(form({ ...base, acceptTerms: 'on' }), TODAY, 18);
+  it('casilla marcada: acceptTerms true', () => {
+    const parsed = parseDataReviewForm(form({ ...base, acceptTerms: 'on' }), TODAY);
     expect(parsed).toMatchObject({ kind: 'valid', request: { acceptTerms: true } });
   });
 
-  it('menor con la casilla desmarcada: underage (la API borra antes de mirar la casilla)', () => {
-    const parsed = parseDataReviewForm(form({ ...base, year: '2015' }), TODAY, 18);
-    expect(parsed.kind).toBe('underage');
+  it('una fecha de menor con la casilla desmarcada también llega a la API, sin aceptación', () => {
+    const parsed = parseDataReviewForm(form({ ...base, year: '2015' }), TODAY);
+    expect(parsed).toMatchObject({ kind: 'valid', request: { birthDate: '2015-05-05' } });
+    if (parsed.kind === 'valid') expect(parsed.request.acceptTerms).toBeUndefined();
   });
 
-  it('con MIN_AGE 21 un 19 años es menor; con 18, adulto sin casilla es invalid', () => {
-    const nineteen = { ...base, year: '2007' };
-    expect(parseDataReviewForm(form(nineteen), TODAY, 21).kind).toBe('underage');
-    expect(parseDataReviewForm(form(nineteen), TODAY, 18).kind).toBe('invalid');
+  it('sin una fecha válida no hay petición: errores de la fecha y de la casilla', () => {
+    const parsed = parseDataReviewForm(form({ ...base, day: '31', month: '2' }), TODAY);
+    expect(parsed).toMatchObject({
+      kind: 'invalid',
+      errors: {
+        fields: {
+          birthDate: 'registro.error.fecha_inexistente',
+          acceptTerms: 'registro.error.condiciones',
+        },
+      },
+    });
+    const future = parseDataReviewForm(form({ ...base, year: '2027', acceptTerms: 'on' }), TODAY);
+    expect(future).toMatchObject({
+      kind: 'invalid',
+      errors: { fields: { birthDate: 'registro.error.fecha_futura' } },
+    });
   });
 });

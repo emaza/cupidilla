@@ -1,14 +1,8 @@
-import {
-  checkBirthDate,
-  dataReviewRequestSchema,
-  SERVICE_TERMS_VERSION,
-  type DataReviewRequest,
-  type FieldIssue,
-} from '@cupidilla/contracts';
+import type { DataReviewRequest, FieldIssue } from '@cupidilla/contracts';
 import { fieldMessages } from '#lib/errors/messages.ts';
 import type { TextKey } from '#lib/texts.ts';
 import { parseBirthDateParts, type BirthDateProblem, type DatePart } from './birth-date.ts';
-import { firstIssueByField, textField, type FormErrors } from './form-data.ts';
+import { textField, type FormErrors } from './form-data.ts';
 
 export type DataReviewField = 'birthDate' | 'acceptTerms';
 
@@ -25,9 +19,8 @@ export interface DataReviewErrors extends FormErrors<DataReviewField> {
 }
 
 export type DataReviewParse =
-  | { kind: 'underage'; request: DataReviewRequest }
   | { kind: 'invalid'; values: DataReviewValues; errors: DataReviewErrors }
-  | { kind: 'valid'; request: DataReviewRequest };
+  | { kind: 'valid'; values: DataReviewValues; request: DataReviewRequest };
 
 const DATE_PROBLEM_TEXT: Record<BirthDateProblem, TextKey> = {
   empty: 'registro.error.fecha_vacia',
@@ -64,46 +57,30 @@ export function dataReviewErrorsFromIssues(issues: Map<string, FieldIssue>): Dat
 }
 
 /**
- * Convierte el formulario de /account/review al contrato, en el orden de H0 §1.2: forma de los
- * campos → menor → versión → casilla. Si la fecha es real y de un menor, el resultado es
- * `underage` aunque haya otros errores: la API tiene que borrar la cuenta y no vuelve ningún valor.
+ * Convierte el formulario de /account/review al contrato. La web solo comprueba la forma de la
+ * fecha: si es una fecha real y no futura, la petición sale **siempre**, con la casilla tal como
+ * está. Quién es menor lo decide solo la API (con su `MIN_AGE`, que puede no coincidir con el de
+ * la caché de la web): con un menor borra la cuenta aunque falte la casilla, y a un adulto sin la
+ * casilla le responde `acceptTerms: required` (correo §5.11, UX §9 escenario 51).
  */
-export function parseDataReviewForm(
-  data: FormData,
-  today: string,
-  minAge: number,
-): DataReviewParse {
+export function parseDataReviewForm(data: FormData, today: string): DataReviewParse {
   const values = dataReviewValues(data);
   const date = parseBirthDateParts(values.day, values.month, values.year);
-  const dateCheck = date.ok ? checkBirthDate(date.date, today, minAge) : null;
-  if (date.ok && dateCheck && !dateCheck.ok && dateCheck.reason === 'UNDERAGE') {
-    // La API comprueba la edad antes que nada y, con un menor, borra la cuenta sin guardar ninguna
-    // aceptación; el cuerpo solo tiene que pasar su esquema aunque la casilla falte.
+  if (date.ok && date.date <= today) {
     return {
-      kind: 'underage',
-      request: { birthDate: date.date, acceptTerms: true, termsVersion: SERVICE_TERMS_VERSION },
+      kind: 'valid',
+      values,
+      request: {
+        birthDate: date.date,
+        ...(values.acceptTerms ? { acceptTerms: true } : {}),
+        termsVersion: textField(data, 'termsVersion'),
+      },
     };
   }
-
-  const parsed = dataReviewRequestSchema.safeParse({
-    birthDate: date.ok ? date.date : undefined,
-    acceptTerms: values.acceptTerms,
-    termsVersion: textField(data, 'termsVersion'),
-  });
-  const issues = parsed.success
-    ? new Map<string, FieldIssue>()
-    : firstIssueByField(parsed.error.issues);
-  // La fecha se valida por partes; el esquema solo se usa para el resto de campos.
-  issues.delete('birthDate');
-  const errors = dataReviewErrorsFromIssues(issues);
-  if (!date.ok) {
-    errors.fields.birthDate = DATE_PROBLEM_TEXT[date.problem];
-    errors.dateParts = date.invalidParts;
-  } else if (dateCheck && !dateCheck.ok) {
-    errors.fields.birthDate = 'registro.error.fecha_futura';
-    errors.dateParts = ['day', 'month', 'year'];
-  }
-  const hasErrors = Object.keys(errors.fields).length > 0;
-  if (hasErrors || !parsed.success) return { kind: 'invalid', values, errors };
-  return { kind: 'valid', request: parsed.data };
+  // Sin una fecha que enviar, los errores de la fecha y de la casilla se pintan sin llamar a la API.
+  const errors: DataReviewErrors = date.ok
+    ? { fields: { birthDate: 'registro.error.fecha_futura' }, dateParts: ['day', 'month', 'year'] }
+    : { fields: { birthDate: DATE_PROBLEM_TEXT[date.problem] }, dateParts: date.invalidParts };
+  if (!values.acceptTerms) errors.fields.acceptTerms = messages.acceptTerms.required;
+  return { kind: 'invalid', values, errors };
 }
