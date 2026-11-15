@@ -36,9 +36,21 @@ export const load: PageServerLoad = async (event) => {
   }
   if (url.searchParams.get('error') === 'token-invalid') return { state: 'invalid' as const };
 
+  // Sin JS, tras una acción que ha fallado el `load` vuelve a ejecutarse con la misma petición
+  // POST. Si la acción dejó un resultado incierto (`OUTCOME_UNKNOWN`), el token pudo gastarse: que
+  // la comprobación ya no lo vea válido no debe tapar el aviso de la acción con «enlace no válido».
+  // Si la acción hubiera visto el enlace rechazado, habría redirigido y no se llegaría aquí.
+  const afterAction = event.request.method === 'POST';
   const token = getEmailToken(cookies);
-  if (!token) linkGone(cookies);
+  if (!token) {
+    if (afterAction)
+      return { state: 'form' as const, emailHint: null, signedIn: locals.user !== null };
+    linkGone(cookies);
+  }
   const result = await api.inspectEmailToken(event, { token, purpose: 'reset_password' });
+  if (afterAction && !result.ok) {
+    return { state: 'form' as const, emailHint: null, signedIn: locals.user !== null };
+  }
   if (result.ok) {
     return {
       state: 'form' as const,

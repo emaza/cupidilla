@@ -183,9 +183,20 @@ describe('QA fase C', () => {
     expect(await t.db.select().from(users).where(eq(users.id, userId))).toEqual([]);
   });
 
-  it('HALLAZGO: menor con termsVersion mal formada → 400 de forma, la cuenta no se borra', async () => {
+  it('menor con termsVersion mal formada: 422 y borrado (la edad va antes que la forma de otros campos)', async () => {
+    for (const termsVersion of ['', 'x'.repeat(65)]) {
+      const { userId, token } = await pendingBeto(t);
+      const response = await review(token, { birthDate: '2015-03-04', termsVersion });
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('UNDERAGE');
+      expect(await t.db.select().from(users).where(eq(users.id, userId))).toEqual([]);
+      await truncateAll(t.db);
+    }
+  });
+
+  it('adulto con termsVersion mal formada: 400 de forma y la cuenta se conserva', async () => {
     const { userId, token } = await pendingBeto(t);
-    const response = await review(token, { birthDate: '2015-03-04', termsVersion: '' });
+    const response = await review(token, { birthDate: '1985-01-20', termsVersion: '' });
     expect(response.status).toBe(400);
     expect(await t.db.select().from(users).where(eq(users.id, userId))).toHaveLength(1);
   });

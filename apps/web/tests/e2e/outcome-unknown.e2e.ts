@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { startApiProxy, type ApiProxy } from './helpers/api-proxy.ts';
 import { closeDb, revokeSessionsForEmail, rowsForEmail } from './helpers/db.ts';
 import { fillRegister, login, PASSWORD, registerAdult, uniqueEmail } from './helpers/forms.ts';
+import { pathIn, waitForMail } from './helpers/mailpit.ts';
 import { startStack, type Stack } from './helpers/stack.ts';
 
 // Criterios de UX 60 a 65: resultado incierto (OUTCOME_UNKNOWN) en registro y eliminación.
@@ -24,6 +25,7 @@ const LOGOUT_SERVER_ERROR =
 
 const REGISTER = 'POST /auth/register';
 const DELETION = 'POST /users/me/deletion';
+const RESET_PASSWORD = 'POST /auth/password-reset';
 
 let proxy: ApiProxy;
 let stack: Stack;
@@ -42,6 +44,7 @@ test.afterAll(async () => {
 test.afterEach(() => {
   proxy.setFault(REGISTER, null);
   proxy.setFault(DELETION, null);
+  proxy.setFault(RESET_PASSWORD, null);
   proxy.setFault('POST /auth/login', null);
   proxy.setFault('POST /auth/logout', null);
 });
@@ -365,7 +368,9 @@ test(
     proxy.setFault('POST /auth/logout', 'hang');
     await page.getByRole('button', { name: 'Cerrar sesión' }).click();
     await expect(page.getByRole('alert')).toContainText(LOGOUT_SERVER_ERROR, { timeout: 15_000 });
-    await expect(page.locator('main')).not.toContainText('No sabemos si');
+    await expect(page.locator('main')).not.toContainText(
+      'No sabemos si se ha guardado tu contraseña',
+    );
 
     proxy.setFault('POST /auth/logout', null);
     await page.getByRole('button', { name: 'Cerrar sesión' }).click();
@@ -375,8 +380,43 @@ test(
     await page.goto('/login');
     await login(page, email);
     await expect(page.getByText(LOGIN_SERVER_ERROR)).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator('main')).not.toContainText('No sabemos si');
+    await expect(page.locator('main')).not.toContainText(
+      'No sabemos si se ha guardado tu contraseña',
+    );
 
+    await context.close();
+  },
+);
+
+test(
+  'restablecer la contraseña se procesa pero la respuesta no llega: aviso de resultado incierto, no «enlace no válido»',
+  { tag: '@nojs' },
+  async ({ browser, javaScriptEnabled }) => {
+    const context = await browser.newContext({ baseURL: stack.webUrl, javaScriptEnabled });
+    const page = await context.newPage();
+    const email = await registerAdult(page);
+    await context.clearCookies();
+    await page.goto('/forgot-password');
+    await page.getByLabel('Correo electrónico').fill(email);
+    await page.getByRole('button', { name: 'Enviar enlace' }).click();
+    await expect(page).toHaveURL('/forgot-password/check-email');
+    const message = await waitForMail(email, { subject: 'Restablece tu contraseña' });
+    await page.goto(await pathIn(message, '/reset-password'));
+    await expect(page).toHaveURL('/reset-password');
+
+    proxy.setFault(RESET_PASSWORD, 'cut');
+    const status = await actionStatus(page, '/reset-password', async () => {
+      await page.getByLabel('Contraseña nueva', { exact: true }).fill('otra frase larga nueva');
+      await page.getByRole('button', { name: 'Guardar contraseña' }).click();
+    });
+    expect(status).toBe(503);
+    expect(proxy.count(RESET_PASSWORD)).toBe(1);
+
+    // La API sí lo procesó y el token ya está gastado: aun así, el aviso es el de la acción.
+    await expect(page.locator('main > .error-summary')).toContainText(
+      'No sabemos si se ha guardado tu contraseña',
+    );
+    await expect(page.getByRole('heading', { name: 'Crea tu contraseña nueva' })).toBeVisible();
     await context.close();
   },
 );

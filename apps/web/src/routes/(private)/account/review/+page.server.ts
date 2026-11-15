@@ -70,10 +70,13 @@ export const actions = {
       locals.sessionToken = null;
       return fail(422, { underage: true as const });
     }
-    // Quién es menor lo decide la API. Con un 400 o un 409 ya ha visto un adulto: los valores
-    // vuelven. Si ha fallado sin decidir, la caché de la web solo sirve para no devolver la fecha
-    // de quien parece menor (acuerdo A3); sin la edad mínima, tampoco.
-    const adultConfirmed = code === 'VALIDATION_FAILED' || code === 'TERMS_VERSION_OUTDATED';
+    // Quién es menor lo decide la API. Solo prueban que ha visto a un adulto las respuestas que
+    // emite tras la edad: 409 TERMS_VERSION_OUTDATED y el 400 `acceptTerms` (técnico §5.11). Otro
+    // 400 de forma no lo prueba. Si ha fallado sin decidir, la caché de la web solo sirve para no
+    // devolver la fecha de quien parece menor (acuerdo A3); sin la edad mínima, tampoco.
+    const adultConfirmed =
+      code === 'TERMS_VERSION_OUTDATED' ||
+      (code === 'VALIDATION_FAILED' && (fields ?? []).some((f) => f.path === 'acceptTerms'));
     const minAge = adultConfirmed ? null : await currentMinAge(event);
     const looksMinor =
       !adultConfirmed &&

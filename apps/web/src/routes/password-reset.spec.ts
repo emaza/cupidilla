@@ -236,6 +236,16 @@ describe('/reset-password (C4-1, C4-4)', () => {
     expect(withSession.result).toMatchObject({ signedIn: true });
   });
 
+  it('sin JS, el load posterior a una acción con el token ya inservible conserva el formulario (no «enlace no válido»)', async () => {
+    cookies = fakeCookies({ cupidilla_email_token: TOKEN });
+    api.inspectEmailToken.mockResolvedValue(apiFailure(400, 'TOKEN_INVALID_OR_EXPIRED'));
+    const event = formEvent({}, {}, 'http://localhost/reset-password');
+    (event as unknown as { request: { method: string } }).request.method = 'POST';
+    const outcome = await run(() => resetPage.load(event as never) as Promise<unknown>);
+    expect(outcome.result).toEqual({ state: 'form', emailHint: null, signedIn: false });
+    expect(cookies.jar.has('cupidilla_email_token')).toBe(true);
+  });
+
   it.each([
     [true, '/account/review?notice=password-reset'],
     [false, '/account?notice=password-reset'],
@@ -402,6 +412,14 @@ describe('/account/review (C3-1b, C4-5)', () => {
       },
     });
     expect(cookie.clear).not.toHaveBeenCalled();
+  });
+
+  it('un 400 de forma que no sea acceptTerms no prueba que la API vio a un adulto: sin valores si la fecha parece de menor', async () => {
+    api.completeDataReview.mockResolvedValue(
+      apiFailure(400, 'VALIDATION_FAILED', [{ path: 'termsVersion', issue: 'required' }]),
+    );
+    const { result } = await submit({ ...form, ...minorParts() });
+    expect(result).toMatchObject({ status: 400, data: { values: undefined } });
   });
 
   it('QA: MIN_AGE distinto en la web (18 en caché) y en la API: la API decide menor y la web pinta el cierre', async () => {

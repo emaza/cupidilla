@@ -118,6 +118,28 @@ describe('B.5: UnverifiedAccountsSweeper', () => {
     expect(await t.db.select().from(users)).toEqual([]);
   });
 
+  it('B5-5b: 17 000 cuentas en la ventana del recordatorio (más parámetros que el máximo de PostgreSQL en un solo INSERT) se recuerdan por lotes', async () => {
+    const createdAt = new Date('2026-11-06T10:00:00Z'); // 5 días y 1 hora antes de TEST_NOW + 5 d
+    const total = 17_000;
+    for (let from = 0; from < total; from += 2000) {
+      await t.db.insert(users).values(
+        Array.from({ length: Math.min(2000, total - from) }, (_, i) => ({
+          email: `recuerdo${from + i}@example.com`,
+          passwordHash: '$argon2id$v=19$m=65536,t=3,p=4$prueba',
+          birthDate: '1990-05-05',
+          createdAt,
+          updatedAt: createdAt,
+        })),
+      );
+    }
+    t.clock.set('2026-11-11T12:00:00Z');
+    expect(await sweeper.sweep()).toEqual({ deleted: 0, reminded: total });
+    const queued = await t.db.execute<{ count: string }>(
+      sql`select count(*)::text as count from ${emailOutbox} where ${emailOutbox.kind} = 'verify_reminder'`,
+    );
+    expect(Number(queued.rows[0]?.count)).toBe(total);
+  }, 120_000);
+
   it('B5-6: en orden, borrar y después confirmar da 400; confirmar y después barrer conserva la cuenta', async () => {
     const first = await registerBeto(t.app, t.db);
     t.clock.set('2026-11-18T10:00:00Z');

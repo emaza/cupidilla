@@ -1,5 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { emailOutbox } from '../src/database/schema/index.js';
+import { UsersService } from '../src/users/users.service.js';
 import { OutboxService } from '../src/mail/outbox.service.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -153,6 +154,18 @@ describe('Eliminación de la cuenta', () => {
     expect((await deleteAccount(user.token, user.password)).status).toBe(204);
     expect(await outboxTo(user.email)).toBe(0);
     expect(await outboxTo('otra@example.com')).toBe(1);
+  });
+
+  it('§3.5: si la fila del usuario ya no existe (carrera), el borrado no toca el outbox de ese correo', async () => {
+    const user = await registerUser(t.app);
+    await seedOutbox(user.email);
+    const service = t.app.get(UsersService) as unknown as {
+      deleteUserAndMail(userId: string): Promise<void>;
+    };
+    // Un id que no existe: el DELETE del usuario no devuelve nada y los correos se quedan.
+    await service.deleteUserAndMail('00000000-0000-4000-8000-000000000000');
+    expect(await outboxTo(user.email)).toBe(3);
+    expect(await countRows(t.db, 'users')).toBe(1);
   });
 
   it('valida el cuerpo y exige sesión', async () => {

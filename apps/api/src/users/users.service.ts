@@ -185,7 +185,7 @@ export class UsersService {
       .select({ id: users.id })
       .from(users)
       .where(and(eq(users.id, userId), eq(users.passwordHash, verifiedHash)))
-      .for('share');
+      .for('update');
     return locked.length > 0;
   }
 
@@ -340,7 +340,7 @@ export class UsersService {
   ): Promise<void> {
     const userId = session.userId;
     const [row] = await this.db
-      .select({ passwordHash: users.passwordHash, email: users.email })
+      .select({ passwordHash: users.passwordHash })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
@@ -348,7 +348,7 @@ export class UsersService {
     if (row.passwordHash === null) {
       // Sin contraseña (§9.2, decisión 20): no hay nada que pedir. La palabra «ELIMINAR» la valida
       // la web: es una confirmación de intención, no de identidad.
-      await this.deleteUserAndMail(userId, row.email);
+      await this.deleteUserAndMail(userId);
       this.logger.log({ event: 'account_deleted' });
       return;
     }
@@ -364,17 +364,20 @@ export class UsersService {
     if (!(await this.passwords.verify(row.passwordHash, password))) {
       throw new ApiException('PASSWORD_INCORRECT', 403, undefined, 'Password does not match');
     }
-    await this.deleteUserAndMail(userId, row.email);
+    await this.deleteUserAndMail(userId);
     this.logger.log({ event: 'account_deleted' });
   }
 
   /**
    * Una sola sentencia, atómica y sin transacción explícita: si se pierde su respuesta, el
-   * resultado es incierto como en H0 (OUTCOME_UNKNOWN), nunca a medias.
+   * resultado es incierto como en H0 (OUTCOME_UNKNOWN), nunca a medias. Los correos pendientes
+   * solo se borran si la fila del usuario se ha borrado de verdad (el correo sale del `RETURNING`).
    */
-  private async deleteUserAndMail(userId: string, email: string): Promise<void> {
+  private async deleteUserAndMail(userId: string): Promise<void> {
     await this.db.execute(sql`
-      with deleted_mail as (delete from ${emailOutbox} where ${emailOutbox.toEmail} = ${email})
-      delete from ${users} where ${users.id} = ${userId}`);
+      with deleted as (
+        delete from ${users} where ${users.id} = ${userId} returning ${users.email}
+      )
+      delete from ${emailOutbox} where ${emailOutbox.toEmail} in (select email from deleted)`);
   }
 }

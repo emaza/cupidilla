@@ -53,6 +53,29 @@ describe('classifySmtpError (correo §4.1)', () => {
     expect(classifySmtpError(error)).toMatchObject({ permanent: false, code });
   });
 
+  it('EAUTH/ETLS no son permanentes aunque nodemailer ponga permanent: true', () => {
+    expect(classifySmtpError({ code: 'EAUTH', responseCode: 535, permanent: true })).toMatchObject({
+      permanent: false,
+      code: 'smtp_535',
+    });
+    expect(classifySmtpError({ code: 'ETLS', permanent: true })).toMatchObject({
+      permanent: false,
+      code: 'ETLS',
+    });
+  });
+
+  it('EENVELOPE respeta permanent: false (450); sin clasificación SMTP es permanente', () => {
+    expect(
+      classifySmtpError({ code: 'EENVELOPE', responseCode: 450, permanent: false }),
+    ).toMatchObject({ permanent: false, code: 'smtp_450' });
+    expect(
+      classifySmtpError({ code: 'EENVELOPE', responseCode: 550, permanent: true }),
+    ).toMatchObject({
+      permanent: true,
+    });
+    expect(classifySmtpError({ code: 'EENVELOPE' })).toMatchObject({ permanent: true });
+  });
+
   it('nunca copia el mensaje del error', () => {
     const error = Object.assign(new Error('550 5.1.1 <beto@example.com>: no existe'), {
       code: 'EMESSAGE',
