@@ -137,10 +137,9 @@ describe('Programación del worker con un SMTP (correo §4.3)', () => {
 
   it('sin filas pendientes, el siguiente drain() es a los 30 s (el tope)', async () => {
     await worker.drain();
-    await until(
-      () => worker.nextDrainAt?.getTime() === new Date(TEST_NOW).getTime() + OUTBOX_INTERVAL_MS,
-      2000,
-    );
+    const expected = new Date(TEST_NOW).getTime() + OUTBOX_INTERVAL_MS;
+    await until(() => worker.nextDrainAt?.getTime() === expected, 2000);
+    expect(worker.nextDrainAt?.getTime()).toBe(expected);
   });
 
   it('un kick() durante un drain() bloqueado en el envío hace que el nuevo correo salga al terminar', async () => {

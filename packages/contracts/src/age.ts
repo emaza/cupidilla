@@ -12,7 +12,7 @@ interface CivilDate {
 
 function parseCivilDate(value: string): CivilDate {
   const [year, month, day] = value.split('-').map(Number);
-  return { year: year ?? NaN, month: month ?? NaN, day: day ?? NaN };
+  return { year: year ?? Number.NaN, month: month ?? Number.NaN, day: day ?? Number.NaN };
 }
 
 function formatCivilDate({ year, month, day }: CivilDate): string {
