@@ -90,7 +90,7 @@ Los scripts de `docker/postgres/init` solo se ejecutan con el volumen vacío: si
 
 ## Calidad de código
 
-Análisis con SonarQube, con la cobertura de vitest (`npm run test:coverage` genera `apps/api/coverage/lcov.info` y `apps/web/coverage/lcov.info`). La configuración compartida está en `sonar-project.properties`.
+Análisis con SonarQube, con la cobertura de vitest (`npm run test:coverage` genera un `coverage/lcov.info` en cada app y paquete). La configuración compartida está en `sonar-project.properties`.
 
 **SonarQube Cloud (CI)**: el paso final de `.github/workflows/ci.yml` analiza cada push y PR. Se salta si no existe el secreto `SONAR_TOKEN` (p. ej., PRs desde forks). Pasos manuales, una sola vez:
 
