@@ -59,6 +59,14 @@ export default defineConfig({
   ],
   test: {
     expect: { requireAssertions: true },
+    // Solo `src`: los e2e de Playwright (tests/e2e) quedan fuera. El lcov lo lee SonarQube.
+    coverage: {
+      provider: 'v8',
+      reporter: ['text-summary', ['lcov', { projectRoot: '../..' }]],
+      reportsDirectory: 'coverage',
+      include: ['src/**/*.{js,ts,svelte}'],
+      exclude: ['src/**/*.{test,spec}.{js,ts}', 'src/**/*.d.ts'],
+    },
     projects: [
       {
         test: {

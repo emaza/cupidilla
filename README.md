@@ -88,6 +88,26 @@ Los e2e (`npm run test:e2e`) arrancan su propio proveedor falso en el puerto 440
 
 Los scripts de `docker/postgres/init` solo se ejecutan con el volumen vacío: si cambian, `npm run db:reset` (borra los datos locales).
 
+## Calidad de código
+
+Análisis con SonarQube, con la cobertura de vitest (`npm run test:coverage` genera `apps/api/coverage/lcov.info` y `apps/web/coverage/lcov.info`). La configuración compartida está en `sonar-project.properties`.
+
+**SonarQube Cloud (CI)**: el paso final de `.github/workflows/ci.yml` analiza cada push y PR. Se salta si no existe el secreto `SONAR_TOKEN` (p. ej., PRs desde forks). Pasos manuales, una sola vez:
+
+1. En sonarcloud.io, entrar con GitHub e importar `emaza/cupidilla`.
+2. Desactivar *Automatic Analysis* (choca con el análisis de CI).
+3. Generar un token y guardarlo como secreto `SONAR_TOKEN` del repositorio.
+4. Descomentar `sonar.organization` y `sonar.projectKey` en `sonar-project.properties` con los valores reales.
+
+**SonarQube local (bajo demanda)**: necesita `vm.max_map_count >= 524288` (`sudo sysctl -w vm.max_map_count=524288`).
+
+```sh
+npm run sonar:up      # SonarQube en http://localhost:9000 (la primera vez, admin/admin y cambio de contraseña)
+# crear un token en Mi cuenta > Seguridad y ponerlo en .env como SONAR_LOCAL_TOKEN
+npm run sonar:scan    # tests con cobertura + análisis (proyecto «cupidilla»); necesita db:up
+npm run sonar:down    # lo para; los datos se conservan en volúmenes
+```
+
 ## Documentos
 
 | Documento | Para qué sirve |
