@@ -246,10 +246,25 @@ main:focus {
   min-height: var(--tactil-minimo);
 }
 
+/* Enlaces del pie (contacto UX §5): apilados en móvil, en fila desde 48em. */
+.site-footer ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 @media (min-width: 48em) {
   .site-footer {
     flex-direction: row;
     align-items: center;
+    gap: var(--espacio-6);
+  }
+
+  .site-footer ul {
+    flex-direction: row;
     gap: var(--espacio-6);
   }
 }
@@ -356,7 +371,9 @@ main:focus {
 
 input[type='email'],
 input[type='password'],
-input[type='text'] {
+input[type='tel'],
+input[type='text'],
+textarea {
   width: 100%;
   min-height: var(--alto-control);
   padding: var(--espacio-2) var(--espacio-3);
@@ -368,8 +385,41 @@ input[type='text'] {
   border-radius: var(--radio-s);
 }
 
-input[aria-invalid='true'] {
+input[aria-invalid='true'],
+textarea[aria-invalid='true'],
+textarea[data-over='true'] {
   border: var(--borde-grueso) solid var(--color-error);
+}
+
+/* Mensaje de contacto (contacto UX §7): 8 filas, crece en vertical y parte el texto sin espacios. */
+textarea {
+  display: block;
+  resize: vertical;
+  overflow-wrap: anywhere;
+}
+
+.counter {
+  margin: var(--espacio-1) 0 0;
+  color: var(--color-texto-suave);
+}
+
+.counter-over {
+  color: var(--color-error);
+}
+
+@media (min-width: 48em) {
+  .counter {
+    text-align: right;
+  }
+}
+
+/* Campo trampa antispam: fuera de la pantalla, no con display:none (contacto UX §2.1.3). */
+.trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
 }
 
 .password-control {
@@ -770,4 +820,77 @@ input[aria-invalid='true'] {
 .confirm-panel {
   border-top: var(--borde-fino) solid var(--color-borde-suave);
   padding-top: var(--espacio-4);
+}
+
+/* Comprobación antibots (UX de captcha §2.2). Las variables --altcha-* se mapean a los tokens. */
+.captcha-field {
+  margin: 0 0 var(--espacio-6);
+  scroll-margin: var(--espacio-12);
+  --altcha-border-color: var(--color-borde);
+  --altcha-border-width: var(--borde-fino);
+  --altcha-border-radius: var(--radio-s);
+  --altcha-color-base: var(--color-fondo);
+  --altcha-color-base-content: var(--color-texto);
+  --altcha-color-error: var(--color-error);
+  --altcha-color-error-content: var(--color-fondo);
+  --altcha-checkbox-size: var(--casilla);
+  --altcha-checkbox-border-color: var(--color-borde);
+  --altcha-checkbox-outline: var(--foco-anillo) solid var(--color-foco);
+  --altcha-checkbox-outline-offset: var(--foco-margen, 2px);
+  --altcha-max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Reserva la altura del widget solo con JavaScript: sin él no queda un hueco (UX §2.1). */
+@media (scripting: enabled) {
+  .captcha-field:not(.captcha-button) {
+    min-height: var(--alto-control);
+  }
+}
+
+.captcha-field altcha-widget {
+  display: block;
+  font-family: var(--fuente-base);
+}
+
+.captcha-field .altcha-main {
+  min-height: var(--tactil-minimo);
+}
+
+/* La ayuda sobra cuando ya está comprobado (UX §2.2). */
+.captcha-help-done {
+  display: none;
+}
+
+/* Aviso del tope de espera (UX §3.4): la región existe siempre; vacía no ocupa sitio. */
+.captcha-alert {
+  margin: 0;
+}
+
+.captcha-alert:not(:empty) {
+  margin-top: var(--espacio-2);
+  font-weight: var(--peso-fuerte);
+}
+
+/*
+ * Reenvíos (UX §2.4): sin caja ni parada de tabulador salvo en fallo. Va sobre el `data-state` del
+ * propio widget, que cambia a la vez que aparece su aviso de error.
+ */
+.captcha-field.captcha-button {
+  margin-bottom: var(--espacio-2);
+}
+
+.captcha-button:not(.captcha-retry) .altcha:not([data-state='error']) {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .captcha-field .altcha-spinner {
+    animation: none;
+  }
+}
+
+/* Aviso sin JavaScript de los formularios con comprobación (UX de captcha §6). */
+.captcha-noscript a {
+  overflow-wrap: anywhere;
 }

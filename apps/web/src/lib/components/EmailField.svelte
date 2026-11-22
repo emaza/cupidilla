@@ -14,9 +14,24 @@
     errorContent?: Snippet;
     /** Texto de ayuda bajo la etiqueta. */
     help?: string;
+    /**
+     * `username` (por defecto) en las pantallas de cuenta, para que el gestor de contraseñas lo
+     * asocie; `email` donde el correo no es de una cuenta (/contact).
+     */
+    autocomplete?: 'username' | 'email';
+    /** Marca el campo como obligatorio para los lectores de pantalla (`aria-required`). */
+    required?: boolean;
   }
 
-  let { label, value, error, errorContent, help }: Props = $props();
+  let {
+    label,
+    value,
+    error,
+    errorContent,
+    help,
+    autocomplete = 'username',
+    required = false,
+  }: Props = $props();
 
   const describedBy = $derived(
     [help ? 'email-help' : '', error ? 'email-error' : ''].filter(Boolean).join(' ') || undefined,
@@ -35,12 +50,13 @@
     id="email"
     name="email"
     type="email"
-    autocomplete="username"
+    {autocomplete}
     inputmode="email"
     autocapitalize="none"
     spellcheck="false"
     defaultValue={value}
     aria-describedby={describedBy}
     aria-invalid={error ? 'true' : undefined}
+    aria-required={required ? 'true' : undefined}
   />
 </div>

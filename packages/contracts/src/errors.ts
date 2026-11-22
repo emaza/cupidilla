@@ -13,6 +13,7 @@ export const ERROR_CODES = [
   'NOT_FOUND', // 404
   'EMAIL_TAKEN', // 409
   'TERMS_VERSION_OUTDATED', // 409
+  'PRIVACY_VERSION_OUTDATED', // 409  la versión de la política de privacidad enviada no es la vigente
   'ACCOUNT_USES_OTHER_PROVIDER', // 409  alta con proveedor contra una cuenta sin contraseña
   'LAST_SIGN_IN_METHOD', // 409  quitar la última forma de entrar
   'PASSWORD_ALREADY_SET', // 409  crear una contraseña cuando ya hay una
@@ -24,6 +25,8 @@ export const ERROR_CODES = [
   'EMAIL_NOT_VERIFIED', // 403  la ruta exige el correo verificado
   'DATA_REVIEW_REQUIRED', // 403  la cuenta tiene pendiente revisar sus datos (correo §5.11)
   'OUTCOME_UNKNOWN', // 503  se perdió la conexión con la BD durante una escritura: pudo hacerse o no
+  'CAPTCHA_REQUIRED', // 400  falta la comprobación antibots (X-Captcha) en una ruta que la exige
+  'CAPTCHA_INVALID', // 400  comprobación mal formada, con la firma o la solución incorrectas, caducada o ya usada
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

@@ -93,6 +93,10 @@ export async function startStack(options: StackOptions = {}): Promise<Stack> {
         API_PORT: String(apiPort),
         RATE_LIMIT_FACTOR: String(rateLimitFactor),
         LOG_FORMAT: 'json',
+        // Como la suite principal: sin comprobación antibots, aunque el .env la active.
+        CAPTCHA_ENABLED: 'false',
+        CAPTCHA_HMAC_KEY: '',
+        CAPTCHA_DIFFICULTY: '',
       },
       stdio: 'ignore',
     });

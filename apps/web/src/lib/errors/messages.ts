@@ -23,7 +23,8 @@ export type FormName =
   | 'verify'
   | 'forgot'
   | 'reset'
-  | 'review';
+  | 'review'
+  | 'contact';
 
 function byCode(
   fallback: TextKey,
@@ -50,6 +51,9 @@ export const errorMessages: Record<FormName, Record<WebErrorCode, TextKey>> = {
     TERMS_VERSION_OUTDATED: 'registro.error.condiciones_version',
     RATE_LIMITED: 'comun.error.limite',
     OUTCOME_UNKNOWN: 'registro.error.resultado_incierto',
+    // Comprobación antibots (técnico de captcha §8.4): van en el campo `captcha`.
+    CAPTCHA_REQUIRED: 'captcha.error.requerido',
+    CAPTCHA_INVALID: 'captcha.error.invalido',
   }),
   login: byCode('entrar.error.servidor', {
     // Un correo mal formado se trata como unas credenciales incorrectas (acuerdo A10).
@@ -91,6 +95,8 @@ export const errorMessages: Record<FormName, Record<WebErrorCode, TextKey>> = {
   // /forgot-password (correo UX §3.3): un correo con formato válido siempre da éxito.
   forgot: byCode('olvido.error.servidor', {
     RATE_LIMITED: 'comun.error.limite',
+    CAPTCHA_REQUIRED: 'captcha.error.requerido',
+    CAPTCHA_INVALID: 'captcha.error.invalido',
   }),
   // /reset-password (correo UX §3.5). Un enlace que no sirve es una pantalla entera.
   reset: byCode('restablecer.error.servidor', {
@@ -105,6 +111,14 @@ export const errorMessages: Record<FormName, Record<WebErrorCode, TextKey>> = {
     TERMS_VERSION_OUTDATED: 'registro.error.condiciones_version',
     RATE_LIMITED: 'comun.error.limite',
     OUTCOME_UNKNOWN: 'revision.error.resultado_incierto',
+  }),
+  // /contact (contacto UX §2.1.4, §3.4). PRIVACY_VERSION_OUTDATED se pinta en la casilla.
+  contact: byCode('contacto.error.servidor', {
+    PRIVACY_VERSION_OUTDATED: 'contacto.error.privacidad_version',
+    RATE_LIMITED: 'contacto.error.limite',
+    OUTCOME_UNKNOWN: 'contacto.error.resultado_incierto',
+    CAPTCHA_REQUIRED: 'captcha.error.requerido',
+    CAPTCHA_INVALID: 'captcha.error.invalido',
   }),
 };
 
@@ -139,4 +153,34 @@ export const fieldMessages = {
   link: {
     password: byIssue('union.error.contrasena', { required: 'union.error.contrasena_vacia' }),
   },
+  // /contact (contacto UX §3.3). Los textos con {min}, {max} y {n} los completa la página.
+  contact: {
+    name: byIssue('contacto.error.nombre_formato', {
+      required: 'contacto.error.nombre_vacio',
+      too_long: 'contacto.error.nombre_largo',
+    }),
+    email: byIssue('registro.error.correo_formato', {
+      required: 'registro.error.correo_vacio',
+      too_long: 'registro.error.correo_largo',
+    }),
+    phone: byIssue('contacto.error.telefono_formato', {}),
+    subject: byIssue('contacto.error.asunto_formato', {
+      required: 'contacto.error.asunto_vacio',
+      too_short: 'contacto.error.asunto_corto',
+      too_long: 'contacto.error.asunto_largo',
+    }),
+    message: byIssue('contacto.error.mensaje_formato', {
+      required: 'contacto.error.mensaje_vacio',
+      too_short: 'contacto.error.mensaje_corto',
+      too_long: 'contacto.error.mensaje_largo',
+    }),
+    acceptPrivacy: byIssue('contacto.error.privacidad', {}),
+    privacyPolicyVersion: byIssue('contacto.error.privacidad_version', {}),
+  },
 } as const satisfies Record<string, Record<string, Record<FieldIssue, TextKey>>>;
+
+/** ¿Es un error de la comprobación antibots? Esos van en el campo `captcha` (técnico de captcha §8.4). */
+export const isCaptchaError = (
+  code: WebErrorCode,
+): code is 'CAPTCHA_REQUIRED' | 'CAPTCHA_INVALID' =>
+  code === 'CAPTCHA_REQUIRED' || code === 'CAPTCHA_INVALID';

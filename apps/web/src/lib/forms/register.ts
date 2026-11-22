@@ -9,7 +9,8 @@ import type { TextKey } from '#lib/texts.ts';
 import { parseBirthDateParts, type BirthDateProblem, type DatePart } from './birth-date.ts';
 import { firstIssueByField, textField, type FormErrors } from './form-data.ts';
 
-export type RegisterField = 'email' | 'password' | 'birthDate' | 'acceptTerms';
+/** `captcha`: el error de la comprobación antibots (técnico de captcha §6.1). */
+export type RegisterField = 'email' | 'password' | 'birthDate' | 'acceptTerms' | 'captcha';
 
 /** Lo que vuelve a la página tras un error. Nunca la contraseña (acuerdo A5). */
 export interface RegisterValues {

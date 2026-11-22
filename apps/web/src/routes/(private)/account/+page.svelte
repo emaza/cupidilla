@@ -6,8 +6,11 @@
   import ErrorSummary from '#lib/components/ErrorSummary.svelte';
   import FieldError from '#lib/components/FieldError.svelte';
   import ProviderButtons from '#lib/components/ProviderButtons.svelte';
+  import CaptchaField from '#lib/components/CaptchaField.svelte';
+  import CaptchaNoscript from '#lib/components/CaptchaNoscript.svelte';
   import SubmitButton from '#lib/components/SubmitButton.svelte';
   import UrlMessage from '#lib/components/UrlMessage.svelte';
+  import { createCaptcha } from '#lib/captcha/captcha.svelte.ts';
   import { createSubmission } from '#lib/forms/submission.svelte.ts';
   import { fill, pageTitle, t } from '#lib/texts.ts';
   import type { PageProps } from './$types';
@@ -15,7 +18,8 @@
   let { data, form }: PageProps = $props();
 
   const submission = createSubmission();
-  const resend = createSubmission();
+  const resendCaptcha = createCaptcha();
+  const resend = createSubmission({ captcha: resendCaptcha });
   const NAMES: Record<OAuthProvider, string> = { google: 'Google', facebook: 'Facebook' };
 
   /** Errores que vuelven de una acción (no de la URL). */
@@ -75,12 +79,20 @@
     {#if section.reminder}
       <p class="help">{t('correo.texto.recordatorio')}</p>
     {/if}
-    <form method="POST" action="?/resendVerification" use:enhance={resend.submit}>
+    {#if data.captcha}
+      <CaptchaNoscript form="reenvio" supportEmail={data.supportEmail} />
+    {/if}
+    <form method="POST" action="?/resendVerification" novalidate use:enhance={resend.submit}>
+      {#if data.captcha}
+        <CaptchaField captcha={resendCaptcha} auto="onload" variant="button" />
+      {/if}
       <div class="actions">
         <SubmitButton
           label={t('correo.boton.reenviar')}
           sendingLabel={t('correo.boton.reenviando')}
-          statusText={t('correo.estado.reenviando')}
+          statusText={resend.checking
+            ? t('captcha.estado.enviando')
+            : t('correo.estado.reenviando')}
           sending={resend.sending}
         />
       </div>

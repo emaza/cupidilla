@@ -1,7 +1,8 @@
 import { MIN_AGE_RANGE, referenceToday } from '@cupidilla/contracts';
 import { fail, redirect } from '@sveltejs/kit';
-import { errorMessages } from '#lib/errors/messages.ts';
-import { firstApiIssueByField } from '#lib/forms/form-data.ts';
+import { errorMessages, isCaptchaError } from '#lib/errors/messages.ts';
+import { captchaFailure, captchaFailuresFrom } from '#lib/forms/captcha.ts';
+import { captchaFromForm, firstApiIssueByField } from '#lib/forms/form-data.ts';
 import {
   hasErrors,
   parseRegisterForm,
@@ -37,20 +38,21 @@ export const actions = {
 
     // Con un menor no vuelve ningún valor y no se llama a la API (acuerdos A3 y A4).
     if (parsed.kind === 'underage') return fail(422, { underage: true as const });
+    const captchaFailures = captchaFailuresFrom(data);
     if (knownMinAge === null) {
       const errors: RegisterErrors = {
         fields: {},
         dateParts: [],
         general: errorMessages.register.API_UNAVAILABLE,
       };
-      return fail(503, { values: registerValues(data), errors });
+      return fail(503, { values: registerValues(data), errors, captchaFailures });
     }
     if (parsed.kind === 'invalid') {
-      return fail(400, { values: parsed.values, errors: parsed.errors });
+      return fail(400, { values: parsed.values, errors: parsed.errors, captchaFailures });
     }
 
     const { values } = parsed;
-    const result = await api.register(event, parsed.request);
+    const result = await api.register(event, parsed.request, captchaFromForm(data));
     if (result.ok) {
       // Registro uniforme (correo §5.1): sin sesión y sin el correo en la URL. La cookie se pone
       // igual exista o no la cuenta.
@@ -59,6 +61,15 @@ export const actions = {
     }
 
     const { code, fields } = result.error;
+    if (isCaptchaError(code)) {
+      // En el campo de la comprobación, con los valores conservados (técnico de captcha §6, paso 7).
+      const failure = captchaFailure(code, data);
+      return fail(400, {
+        values,
+        errors: onlyField({ captcha: failure.key }),
+        captchaFailures: failure.failures,
+      });
+    }
     switch (code) {
       case 'UNDERAGE':
         return fail(422, { underage: true as const });
@@ -67,10 +78,11 @@ export const actions = {
         return fail(409, {
           values: { ...values, acceptTerms: false },
           errors: onlyField({ acceptTerms: 'registro.error.condiciones_version' }),
+          captchaFailures,
         });
       case 'VALIDATION_FAILED': {
         const errors = registerErrorsFromIssues(firstApiIssueByField(fields));
-        if (hasErrors(errors)) return fail(400, { values, errors });
+        if (hasErrors(errors)) return fail(400, { values, errors, captchaFailures });
         break;
       }
     }
@@ -79,6 +91,6 @@ export const actions = {
       dateParts: [],
       general: errorMessages.register[code],
     };
-    return fail(result.status, { values, errors });
+    return fail(result.status, { values, errors, captchaFailures });
   },
 } satisfies Actions;

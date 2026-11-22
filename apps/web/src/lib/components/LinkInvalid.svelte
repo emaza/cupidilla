@@ -1,5 +1,12 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { enhance } from '$app/forms';
+  import { page } from '$app/state';
+  import { createCaptcha } from '#lib/captcha/captcha.svelte.ts';
+  import { createSubmission } from '#lib/forms/submission.svelte.ts';
+  import CaptchaField from './CaptchaField.svelte';
+  import CaptchaNoscript from './CaptchaNoscript.svelte';
+  import SubmitButton from './SubmitButton.svelte';
   import { withSuffix } from '#lib/paths.ts';
   import { t } from '#lib/texts.ts';
 
@@ -17,6 +24,12 @@
   }
 
   let { kind, emailVerified, purpose = 'verify' }: Props = $props();
+
+  // «Enviar otro mensaje» llama a una ruta con comprobación antibots (decisión 1 del CTO).
+  const captchaEnabled = $derived(page.data.captcha === true);
+  const supportEmail = $derived((page.data.supportEmail as string | null | undefined) ?? null);
+  const captcha = createCaptcha();
+  const resend = createSubmission({ captcha });
 
   let heading: HTMLHeadingElement | undefined = $state();
   $effect(() => {
@@ -46,9 +59,27 @@
       </div>
     {:else if emailVerified === false}
       <p>{t('enlace.verificar.sesion_sin_confirmar')}</p>
-      <form method="POST" action="/account?/resendVerification">
+      {#if captchaEnabled}
+        <CaptchaNoscript form="reenvio" {supportEmail} />
+      {/if}
+      <form
+        method="POST"
+        action="/account?/resendVerification"
+        novalidate
+        use:enhance={resend.submit}
+      >
+        {#if captchaEnabled}
+          <CaptchaField {captcha} auto="onload" variant="button" />
+        {/if}
         <div class="actions">
-          <button type="submit" class="button button-primary">{t('correo.boton.reenviar')}</button>
+          <SubmitButton
+            label={t('correo.boton.reenviar')}
+            sendingLabel={t('correo.boton.reenviando')}
+            statusText={resend.checking
+              ? t('captcha.estado.enviando')
+              : t('correo.estado.reenviando')}
+            sending={resend.sending}
+          />
         </div>
       </form>
     {:else if emailVerified === true}

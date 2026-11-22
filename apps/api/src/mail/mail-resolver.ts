@@ -8,12 +8,14 @@ import {
 import { eq } from 'drizzle-orm';
 import type { Env } from '../config/env.schema.js';
 import type { Tx } from '../database/database.types.js';
-import { users } from '../database/schema/index.js';
+import { contactMessages, users } from '../database/schema/index.js';
 import { IdentitiesService } from '../oauth/identities.service.js';
 import { unverifiedDeletionAt } from '../users/unverified-deletion.js';
 import { EmailTokensService } from './email-tokens.service.js';
 import type { MailMessage } from './mailer.js';
-import type { MailKind } from './outbox.service.js';
+import type { AccountMailKind, ContactMailKind, MailKind } from './outbox.service.js';
+import { renderContactAck } from './templates/contact-ack.js';
+import { renderContactMessage } from './templates/contact-message.js';
 import type { MailContext, RenderedMail } from './templates/layout.js';
 import { renderPasswordChanged } from './templates/password-changed.js';
 import { renderResetPassword } from './templates/reset-password.js';
@@ -31,9 +33,19 @@ const TOKEN_PATHS: Record<EmailTokenPurpose, string> = {
 
 type UserRow = Pick<typeof users.$inferSelect, 'id' | 'email' | 'emailVerifiedAt' | 'createdAt'>;
 
+/** Una fila reclamada del *outbox*, tal como la resuelve `MailResolver`. */
+export interface OutboxRowToResolve {
+  kind: MailKind;
+  toEmail: string;
+  /** Solo en los tipos de contacto. */
+  contactMessageId: string | null;
+}
+
 /**
  * Decide, al enviar y siempre por `to_email`, a quién va un correo, qué variante toca y, si lleva
- * enlace, emite su token (correo §4.3). `null`: no hay a quién enviar y la fila se descarta.
+ * enlace, emite su token (correo §4.3). Los correos de contacto se montan con su fila de
+ * `contact_messages` y no miran `users` (técnico de contacto §4.2). `null`: no hay a quién enviar
+ * y la fila se descarta.
  */
 @Injectable()
 export class MailResolver {
@@ -50,15 +62,47 @@ export class MailResolver {
     };
   }
 
-  async resolve(tx: Tx, kind: MailKind, toEmail: string): Promise<MailMessage | null> {
+  async resolve(tx: Tx, row: OutboxRowToResolve): Promise<MailMessage | null> {
+    const { kind, toEmail } = row;
+    if (kind === 'contact_message' || kind === 'contact_ack') {
+      return this.resolveContact(tx, kind, toEmail, row.contactMessageId);
+    }
     const user = await this.findUser(tx, toEmail);
     const rendered = await this.render(tx, kind, toEmail, user);
     return rendered ? { to: toEmail, ...rendered } : null;
   }
 
+  /**
+   * Correo interno (al `to_email` que había al encolar, con `Reply-To` a quien escribe) o acuse.
+   * Si el mensaje ya no existe (retención o borrado a petición), se descarta.
+   */
+  private async resolveContact(
+    tx: Tx,
+    kind: ContactMailKind,
+    toEmail: string,
+    contactMessageId: string | null,
+  ): Promise<MailMessage | null> {
+    if (contactMessageId === null) return null;
+    const [message] = await tx
+      .select()
+      .from(contactMessages)
+      .where(eq(contactMessages.id, contactMessageId))
+      .limit(1);
+    if (!message) return null;
+    if (kind === 'contact_ack') {
+      return { to: toEmail, ...renderContactAck(this.context, { id: message.id, email: toEmail }) };
+    }
+    // Lo que se decidió al recibir el mensaje, no lo que diga CONTACT_ACK_EMAIL al enviarlo.
+    const rendered = renderContactMessage(this.context, {
+      ...message,
+      ackSent: message.ackRequested,
+    });
+    return { to: toEmail, replyTo: message.email, ...rendered };
+  }
+
   private async render(
     tx: Tx,
-    kind: MailKind,
+    kind: AccountMailKind,
     email: string,
     user: UserRow | undefined,
   ): Promise<RenderedMail | null> {

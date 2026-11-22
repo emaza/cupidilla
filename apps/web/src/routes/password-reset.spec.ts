@@ -105,7 +105,7 @@ describe('/forgot-password (C4-2)', () => {
         status: 303,
         location: '/forgot-password/check-email',
       });
-      expect(api.requestPasswordReset).toHaveBeenCalledWith(expect.anything(), email);
+      expect(api.requestPasswordReset).toHaveBeenCalledWith(expect.anything(), email, undefined);
       expect(cookies.jar.get('cupidilla_pending_email')).toEqual({
         value: `reset:${email}`,
         options: expect.objectContaining({ path: '/', httpOnly: true, sameSite: 'lax' }),
@@ -167,7 +167,11 @@ describe('/forgot-password/check-email', () => {
       status: 303,
       location: '/forgot-password/check-email?notice=resent',
     });
-    expect(api.requestPasswordReset).toHaveBeenCalledWith(expect.anything(), 'ana@example.com');
+    expect(api.requestPasswordReset).toHaveBeenCalledWith(
+      expect.anything(),
+      'ana@example.com',
+      undefined,
+    );
     api.requestPasswordReset.mockResolvedValue(apiFailure(429, 'RATE_LIMITED'));
     expect((await resend()).redirect).toEqual({
       status: 303,

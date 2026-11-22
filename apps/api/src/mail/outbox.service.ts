@@ -5,6 +5,10 @@ import { emailOutbox } from '../database/schema/index.js';
 import { OutboxWorker } from './outbox.worker.js';
 
 export type MailKind = (typeof emailOutbox.kind.enumValues)[number];
+/** Correos del formulario de contacto: llevan `contact_message_id` (técnico de contacto §4.1). */
+export type ContactMailKind = Extract<MailKind, 'contact_message' | 'contact_ack'>;
+/** Correos de cuenta: van por dirección, sin referencia. */
+export type AccountMailKind = Exclude<MailKind, ContactMailKind>;
 
 /**
  * Encolar correos (correo §4.2). Quien envía llama a `enqueue` dentro de su transacción y, tras
@@ -22,11 +26,28 @@ export class OutboxService {
    * Una fila «manda este tipo de correo a esta dirección», sin secretos ni `user_id`. Si ya hay
    * una pendiente del mismo tipo para la misma dirección, no hace nada (`email_outbox_pending_unique`).
    */
-  async enqueue(db: Executor, kind: MailKind, toEmail: string): Promise<void> {
+  async enqueue(db: Executor, kind: AccountMailKind, toEmail: string): Promise<void> {
     const now = this.clock.now();
     await db
       .insert(emailOutbox)
       .values({ kind, toEmail, nextAttemptAt: now, createdAt: now })
+      .onConflictDoNothing();
+  }
+
+  /**
+   * Un correo de un mensaje de contacto. Se deduplica por mensaje y tipo, no por dirección
+   * (`email_outbox_contact_pending_unique`): diez mensajes al mismo buzón son diez correos.
+   */
+  async enqueueContact(
+    db: Executor,
+    kind: ContactMailKind,
+    toEmail: string,
+    contactMessageId: string,
+  ): Promise<void> {
+    const now = this.clock.now();
+    await db
+      .insert(emailOutbox)
+      .values({ kind, toEmail, contactMessageId, nextAttemptAt: now, createdAt: now })
       .onConflictDoNothing();
   }
 

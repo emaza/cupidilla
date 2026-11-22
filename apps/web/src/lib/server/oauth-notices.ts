@@ -73,6 +73,8 @@ const LISTS: Record<MessagePage, { notice: Record<string, Entry>; error: Record<
       },
       error: {
         'verification-failed': { key: 'correo.error.servidor' },
+        'captcha-required': { key: 'captcha.error.requerido' },
+        'captcha-invalid': { key: 'captcha.error.invalido' },
         'email-not-verified': { key: 'cuenta.error.correo_no_confirmado', needsProvider: true },
         'provider-failed': { key: 'cuenta.error.proveedor_fallo' },
         'identity-in-use': { key: 'cuenta.error.proveedor_en_uso' },
@@ -109,6 +111,8 @@ const LISTS: Record<MessagePage, { notice: Record<string, Entry>; error: Record<
       error: {
         'rate-limited': { key: 'comun.error.limite' },
         'resend-failed': { key: 'correo.error.servidor' },
+        'captcha-required': { key: 'captcha.error.requerido' },
+        'captcha-invalid': { key: 'captcha.error.invalido' },
       },
     },
     // /forgot-password/check-email (correo UX §6.10)
@@ -117,6 +121,8 @@ const LISTS: Record<MessagePage, { notice: Record<string, Entry>; error: Record<
       error: {
         'rate-limited': { key: 'comun.error.limite' },
         'resend-failed': { key: 'correo.error.servidor' },
+        'captcha-required': { key: 'captcha.error.requerido' },
+        'captcha-invalid': { key: 'captcha.error.invalido' },
       },
     },
     // /account/review (correo UX §6.10)

@@ -7,7 +7,14 @@ export const MIN_AGE_TTL_MS = 60_000;
 /** Tras un fallo, los textos de las páginas no vuelven a preguntar a la API durante este tiempo. */
 export const MIN_AGE_RETRY_MS = 5_000;
 
-let cached: { value: number; mail: ConfigResponse['mail']; at: number } | null = null;
+let cached: {
+  value: number;
+  mail: ConfigResponse['mail'];
+  contact: ConfigResponse['contact'];
+  captcha: ConfigResponse['captcha'];
+  support: ConfigResponse['support'];
+  at: number;
+} | null = null;
 let failedAt: number | null = null;
 let inFlight: Promise<number | null> | null = null;
 
@@ -24,7 +31,14 @@ async function refresh(event: RequestEvent): Promise<number | null> {
   if (result.ok) {
     // `mail` es obligatorio en el contrato: web y API se despliegan juntas desde este monorepo,
     // así que no hay un caso de API anterior que contemplar.
-    cached = { value: result.data.minAge, mail: result.data.mail, at: now };
+    cached = {
+      value: result.data.minAge,
+      mail: result.data.mail,
+      contact: result.data.contact,
+      captcha: result.data.captcha,
+      support: result.data.support,
+      at: now,
+    };
     failedAt = null;
     return result.data.minAge;
   }
@@ -68,4 +82,33 @@ export async function displayMinAge(event: RequestEvent): Promise<number> {
 export async function displayMailConfig(event: RequestEvent): Promise<ConfigResponse['mail']> {
   await currentMinAge(event, { respectBackoff: true }).catch(() => null);
   return cached?.mail ?? { unverifiedReminder: false, passwordChangedNotice: false };
+}
+
+/**
+ * Acuse del formulario de contacto (`CONTACT_ACK_EMAIL`), de la misma caché. Si no se sabe, falso:
+ * /contact/sent no promete un correo que quizá no llegue (contacto UX principio 4).
+ */
+export async function displayContactConfig(
+  event: RequestEvent,
+): Promise<ConfigResponse['contact']> {
+  await currentMinAge(event, { respectBackoff: true }).catch(() => null);
+  return cached?.contact ?? { ackEmail: false };
+}
+
+/**
+ * Comprobación antibots (técnico de captcha §5.2), de la misma caché. Si nunca se ha sabido,
+ * desactivada: la página no pinta el widget y, si la API la exige, responde `CAPTCHA_REQUIRED`.
+ * La API sigue decidiendo.
+ */
+export async function displayCaptchaConfig(
+  event: RequestEvent,
+): Promise<ConfigResponse['captcha']> {
+  await currentMinAge(event, { respectBackoff: true }).catch(() => null);
+  return cached?.captcha ?? { enabled: false };
+}
+
+/** Dirección de soporte (`MAIL_SUPPORT_ADDRESS`, técnico de captcha §7.2), o `null` si no se sabe. */
+export async function displaySupportEmail(event: RequestEvent): Promise<string | null> {
+  await currentMinAge(event, { respectBackoff: true }).catch(() => null);
+  return cached?.support.email ?? null;
 }

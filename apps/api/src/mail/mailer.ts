@@ -4,6 +4,8 @@ export interface MailMessage {
   subject: string;
   text: string;
   html: string;
+  /** Dirección sola, sin nombre (técnico de contacto A7). Solo el correo interno de contacto. */
+  replyTo?: string;
 }
 
 /**

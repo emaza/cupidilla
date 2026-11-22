@@ -5,6 +5,8 @@ import { envSchema } from './env.schema.js';
 const base = {
   DATABASE_URL: 'postgres://u:p@127.0.0.1:5432/cupidilla',
   INTERNAL_API_KEY: 'k'.repeat(32),
+  // La comprobación antibots tiene su propio archivo (env.schema.captcha.spec.ts).
+  CAPTCHA_ENABLED: 'false',
   PUBLIC_WEB_URL: 'http://localhost:5173',
 };
 const production = {
@@ -12,6 +14,8 @@ const production = {
   NODE_ENV: 'production',
   PUBLIC_WEB_URL: 'https://cupidilla.es',
   SMTP_URL: 'smtps://usuario:clave@smtp.proveedor.eu',
+  // Obligatoria en producción desde el formulario de contacto (técnico de contacto §7.1).
+  CONTACT_TO_ADDRESS: 'contacto@cupidilla.es',
 };
 
 function parse(env: Record<string, string | undefined>) {

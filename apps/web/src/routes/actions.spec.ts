@@ -243,6 +243,7 @@ describe('registro: respuestas de la API (criterios 31 y 32)', () => {
     expect(api.register).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ termsVersion: 'inventada', acceptTerms: true }),
+      undefined,
     );
   });
 
@@ -401,6 +402,7 @@ describe('/account: reenviar la verificación (B7-7)', () => {
     expect(api.requestEmailVerification).toHaveBeenCalledWith(
       expect.anything(),
       'beto@example.com',
+      undefined,
     );
 
     api.requestEmailVerification.mockResolvedValue(apiFailure(429, 'RATE_LIMITED'));

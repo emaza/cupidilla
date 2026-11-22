@@ -1,6 +1,8 @@
 import {
   accountResponseSchema,
   apiErrorSchema,
+  CAPTCHA_HEADER,
+  captchaChallengeSchema,
   authResponseSchema,
   configResponseSchema,
   emailTokenInspectionResponseSchema,
@@ -13,7 +15,9 @@ import {
   sessionResponseSchema,
   type AccountResponse,
   type AuthResponse,
+  type CaptchaChallenge,
   type ConfigResponse,
+  type ContactRequest,
   type DataReviewRequest,
   type DeleteAccountRequest,
   type EmailTokenInspectionRequest,
@@ -46,6 +50,10 @@ import type { WebErrorCode } from '#lib/errors/messages.ts';
 import { DATA_REVIEW_PATH } from './data-review.ts';
 
 const TIMEOUT_MS = 5000;
+
+/** Cabecera `X-Captcha` (técnico de captcha A3), solo si hay solución. */
+const captchaHeaders = (captcha: string | undefined): Record<string, string> | undefined =>
+  captcha ? { [CAPTCHA_HEADER]: captcha } : undefined;
 
 export interface WebApiError {
   code: WebErrorCode;
@@ -210,11 +218,23 @@ export const api = {
       timeoutMs: CONFIG_TIMEOUT_MS,
     }),
 
-  /** Registro uniforme (correo §5.1): `202` sin cuerpo y sin sesión, exista o no el correo. */
-  register: (event: RequestEvent, body: RegisterRequest): Promise<ApiResult<void>> =>
+  /** Reto antibots (técnico de captcha §6.4). Sin sesión: no hace falta. */
+  captchaChallenge: (event: RequestEvent): Promise<ApiResult<CaptchaChallenge>> =>
+    request(event, { method: 'GET', path: '/captcha/challenge', schema: captchaChallengeSchema }),
+
+  /**
+   * Registro uniforme (correo §5.1): `202` sin cuerpo y sin sesión, exista o no el correo.
+   * `captcha`: la solución del widget, que va en `X-Captcha` (también en los demás envíos).
+   */
+  register: (
+    event: RequestEvent,
+    body: RegisterRequest,
+    captcha?: string,
+  ): Promise<ApiResult<void>> =>
     request(event, {
       method: 'POST',
       path: '/auth/register',
+      headers: captchaHeaders(captcha),
       body,
       nonIdempotent: true,
       expectStatus: 202, // auth.controller.ts: @HttpCode(202)
@@ -222,10 +242,15 @@ export const api = {
 
   // Verificación del correo (correo §9.1).
 
-  requestEmailVerification: (event: RequestEvent, email: string): Promise<ApiResult<void>> =>
+  requestEmailVerification: (
+    event: RequestEvent,
+    email: string,
+    captcha?: string,
+  ): Promise<ApiResult<void>> =>
     request(event, {
       method: 'POST',
       path: '/auth/email-verification/request',
+      headers: captchaHeaders(captcha),
       body: { email },
       expectStatus: 202,
     }),
@@ -262,10 +287,15 @@ export const api = {
   // Recuperación de la contraseña (correo §9.1).
 
   /** Siempre `202`, exista o no la cuenta (correo §5.5). Pedir otro enlace es pedirlo otra vez. */
-  requestPasswordReset: (event: RequestEvent, email: string): Promise<ApiResult<void>> =>
+  requestPasswordReset: (
+    event: RequestEvent,
+    email: string,
+    captcha?: string,
+  ): Promise<ApiResult<void>> =>
     request(event, {
       method: 'POST',
       path: '/auth/password-reset/request',
+      headers: captchaHeaders(captcha),
       body: { email },
       expectStatus: 202,
     }),
@@ -296,6 +326,24 @@ export const api = {
       body,
       nonIdempotent: true,
       expectStatus: 204, // users.controller.ts: @HttpCode(204)
+    }),
+
+  /**
+   * Formulario de contacto (técnico de contacto §8.1): siempre `202` si es válido, también ante el
+   * campo trampa. No idempotente: un corte da OUTCOME_UNKNOWN.
+   */
+  sendContactMessage: (
+    event: RequestEvent,
+    body: ContactRequest,
+    captcha?: string,
+  ): Promise<ApiResult<void>> =>
+    request(event, {
+      method: 'POST',
+      path: '/contact',
+      headers: captchaHeaders(captcha),
+      body,
+      nonIdempotent: true,
+      expectStatus: 202, // contact.controller.ts: @HttpCode(202)
     }),
 
   login: (event: RequestEvent, body: LoginRequest): Promise<ApiResult<AuthResponse>> =>

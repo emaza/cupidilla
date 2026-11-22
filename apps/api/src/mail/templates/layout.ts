@@ -28,7 +28,17 @@ export type MailBlock =
    * Enlace de acción: en HTML, un botón y debajo la URL en texto visible; en texto plano, la URL
    * sola en su línea. `secondary`: botón con borde en vez de fondo.
    */
-  | { type: 'action'; label: string; url: string; secondary?: boolean };
+  | { type: 'action'; label: string; url: string; secondary?: boolean }
+  /**
+   * Lista de datos «Etiqueta: valor», una por línea en texto plano y una lista de definición en
+   * HTML (técnico de contacto §4.4).
+   */
+  | { type: 'fields'; rows: readonly (readonly [label: string, value: string])[] }
+  /**
+   * Texto escrito por otra persona (el mensaje de contacto), tras su etiqueta. En HTML conserva
+   * los saltos de línea con `white-space:pre-wrap`, sin convertirlo en HTML.
+   */
+  | { type: 'quote'; label: string; text: string };
 
 const BRAND = '#6b2d5c';
 
@@ -46,7 +56,16 @@ export const footerText = (context: MailContext): string =>
   `Cupidilla. Este mensaje es automático; no hace falta que lo respondas. Si necesitas ayuda, escribe a ${context.supportAddress}.`;
 
 function blockText(block: MailBlock): string {
-  return block.type === 'action' ? block.url : block.text;
+  switch (block.type) {
+    case 'action':
+      return block.url;
+    case 'fields':
+      return block.rows.map(([label, value]) => `${label}: ${value}`).join('\n');
+    case 'quote':
+      return `${block.label}\n${block.text}`;
+    default:
+      return block.text;
+  }
 }
 
 function blockHtml(block: MailBlock): string {
@@ -66,15 +85,36 @@ function blockHtml(block: MailBlock): string {
         `<span style="word-break:break-all">${url}</span></p>`
       );
     }
+    case 'fields': {
+      const rows = block.rows
+        .map(
+          ([label, value]) =>
+            `<dt style="font-weight:bold">${escapeHtml(label)}</dt>` +
+            `<dd style="margin:0 0 8px;overflow-wrap:anywhere">${escapeHtml(value)}</dd>`,
+        )
+        .join('');
+      return `<dl style="margin:0 0 16px">${rows}</dl>`;
+    }
+    case 'quote':
+      return (
+        `<p style="margin:0 0 8px;font-weight:bold">${escapeHtml(block.label)}</p>` +
+        `<div style="margin:0 0 16px;white-space:pre-wrap;overflow-wrap:anywhere;border-left:4px solid ${BRAND};padding-left:12px">${escapeHtml(block.text)}</div>`
+      );
   }
 }
 
 /** Monta el correo completo: asunto, titular, bloques y pie, en texto plano y en HTML. */
 export function renderMail(
   context: MailContext,
-  mail: { subject: string; heading: string; blocks: MailBlock[] },
+  mail: {
+    subject: string;
+    heading: string;
+    blocks: MailBlock[];
+    /** Pie propio, en lugar del común (el correo interno de contacto, técnico de contacto §4.4). */
+    footer?: string;
+  },
 ): RenderedMail {
-  const footer = footerText(context);
+  const footer = mail.footer ?? footerText(context);
   const text = [mail.heading, ...mail.blocks.map(blockText), footer].join('\n\n') + '\n';
   const html = `<!doctype html>
 <html lang="es">

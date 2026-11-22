@@ -1,9 +1,10 @@
 /**
  * Textos de interfaz, copiados palabra por palabra de la tabla de §5 del diseño UX de H0, de la
- * del diseño UX de la entrada con terceros y de la §6 del diseño UX de correo (con los cambios de
- * su §7).
+ * del diseño UX de la entrada con terceros, de la §6 del diseño UX de correo (con los cambios de
+ * su §7) y de las §3 y §4 del diseño UX de contacto.
  * Las claves son las de esa tabla. `{x}` es un valor variable (ver `fill`).
- * El texto de /legal/terms (§5.9) vive en `legal/terms-2026-11-borrador.svelte`.
+ * El texto de /legal/terms (§5.9) vive en `legal/terms-2026-11-borrador.svelte`, y el de
+ * /legal/privacy (contacto UX §2.3), en `legal/privacy-2026-11-borrador.svelte`.
  */
 export const texts = {
   // 5.1 Comunes
@@ -16,6 +17,10 @@ export const texts = {
   'comun.nav.registro': 'Crear cuenta',
   'comun.nav.cuenta': 'Mi cuenta',
   'comun.pie.condiciones': 'Condiciones de uso',
+  // Contacto UX §3.1
+  'comun.pie.etiqueta': 'Información y contacto',
+  'comun.pie.privacidad': 'Política de privacidad',
+  'comun.pie.contacto': 'Contacto',
   'comun.pie.edad': 'Solo para mayores de {edad} años',
   'comun.error.prefijo_oculto': 'Error:',
   'comun.error.resumen_titulo': 'Revisa esto antes de seguir',
@@ -468,6 +473,127 @@ export const texts = {
   'revision.menor.titulo': 'No podemos mantener tu cuenta',
   'revision.menor.texto1':
     'Cupidilla es solo para personas de {edad} años o más, así que hemos eliminado esta cuenta y los datos que tenía.',
+
+  // Contacto UX §3.2 Formulario (/contact)
+  'contacto.meta.titulo': 'Contacto',
+  'contacto.titulo': 'Escríbenos',
+  'contacto.texto.intro':
+    'Cuéntanos tu duda, sugerencia o problema y te responderemos por correo electrónico.',
+  'contacto.texto.obligatorios': 'Todos los campos son obligatorios salvo el teléfono.',
+  'contacto.campo.nombre': 'Nombre',
+  'contacto.ayuda.nombre': 'Cómo quieres que te llamemos al responderte.',
+  'contacto.campo.correo': 'Correo electrónico',
+  'contacto.ayuda.correo': 'Te responderemos a esta dirección.',
+  'contacto.campo.telefono': 'Teléfono (opcional)',
+  'contacto.ayuda.telefono':
+    'Solo si quieres que podamos llamarte. Por ejemplo: 600 123 456 o +34 600 123 456.',
+  'contacto.campo.asunto': 'Asunto',
+  'contacto.ayuda.asunto':
+    'De qué trata, en pocas palabras. Hasta {max} caracteres. Por ejemplo: Duda sobre mi cuenta.',
+  'contacto.campo.mensaje': 'Mensaje',
+  'contacto.ayuda.mensaje':
+    'Cuéntanos qué necesitas con todo el detalle que puedas. No escribas tu contraseña ni datos que no sean necesarios para tu consulta. Máximo {max} caracteres.',
+  'contacto.contador': '{n} de {max} caracteres',
+  'contacto.contador.exceso': '{n} de {max} caracteres: te sobran {sobran}',
+  'contacto.contador.aviso_quedan': 'Te quedan {quedan} caracteres.',
+  'contacto.contador.aviso_exceso':
+    'Te has pasado por {sobran} caracteres. Acorta el mensaje para poder enviarlo.',
+  'contacto.campo.privacidad': 'He leído y acepto la política de privacidad.',
+  'contacto.enlace.privacidad': 'Leer la política de privacidad',
+  'contacto.ayuda.privacidad':
+    'Usaremos tus datos solo para atender tu mensaje. Es un texto provisional, pendiente de revisión jurídica.',
+  'contacto.boton.enviar': 'Enviar mensaje',
+  'contacto.boton.enviando': 'Enviando…',
+  'contacto.estado.enviando': 'Enviando tu mensaje…',
+  // Contacto UX §3.3 Errores por campo (los del correo son los del registro)
+  'contacto.error.nombre_vacio': 'Escribe tu nombre.',
+  'contacto.error.nombre_largo': 'El nombre es demasiado largo. Usa {max} caracteres como máximo.',
+  'contacto.error.telefono_formato':
+    'Ese teléfono no parece válido. Escribe entre 7 y 15 cifras; puedes usar espacios y el prefijo del país, por ejemplo +34 600 123 456. O déjalo vacío.',
+  'contacto.error.asunto_vacio': 'Escribe un asunto.',
+  'contacto.error.asunto_corto': 'El asunto es demasiado corto. Escribe al menos {min} caracteres.',
+  'contacto.error.asunto_largo': 'El asunto es demasiado largo. Usa {max} caracteres como máximo.',
+  'contacto.error.mensaje_vacio': 'Escribe tu mensaje.',
+  'contacto.error.mensaje_corto':
+    'El mensaje es muy corto. Escribe al menos {min} caracteres para que podamos ayudarte.',
+  'contacto.error.mensaje_largo':
+    'El mensaje es demasiado largo: tiene {n} caracteres y el máximo es {max}. Acórtalo o envíanos el resto en otro mensaje.',
+  'contacto.error.privacidad':
+    'Para enviar el mensaje tienes que aceptar la política de privacidad.',
+  'contacto.error.privacidad_version':
+    'La política de privacidad ha cambiado mientras rellenabas el formulario. Léela de nuevo y vuelve a marcar la casilla.',
+  // Caracteres de control o bidireccionales (técnico de contacto §8.4): el UX no los contempla.
+  'contacto.error.nombre_formato': 'El nombre solo puede tener una línea de texto normal.',
+  'contacto.error.asunto_formato': 'El asunto solo puede tener una línea de texto normal.',
+  'contacto.error.mensaje_formato': 'El mensaje tiene caracteres que no podemos guardar.',
+  // Etiqueta del campo trampa, por si lo alcanza un lector o un navegador sin CSS (técnico §8.4).
+  'contacto.campo.trampa': 'No rellenes este campo',
+  // Contacto UX §3.4 Errores generales
+  'contacto.error.limite':
+    'Has enviado varios mensajes seguidos. Espera unos minutos e inténtalo de nuevo. Tu mensaje sigue en el formulario.',
+  'contacto.error.servidor':
+    'Algo ha fallado por nuestra parte y no hemos podido enviar tu mensaje. No se ha enviado nada. Inténtalo de nuevo en unos minutos: tu mensaje sigue en el formulario.',
+  'contacto.error.resultado_incierto':
+    'No sabemos si tu mensaje se ha enviado: se ha perdido la conexión antes de recibir la respuesta. Puedes volver a enviarlo; si el primero sí había llegado, es posible que lo recibamos dos veces. Tu mensaje sigue en el formulario.',
+  // Contacto UX §3.5 Confirmación (/contact/sent)
+  'contacto.enviado.meta.titulo': 'Mensaje enviado',
+  'contacto.enviado.titulo': 'Mensaje enviado',
+  'contacto.enviado.texto1': 'Hemos recibido tu mensaje.',
+  'contacto.enviado.texto2': 'Lo leeremos y te responderemos a {correo}.',
+  'contacto.enviado.texto_acuse':
+    'Te enviaremos un correo breve para confirmar la recepción. Si no lo ves en unos minutos, mira en la carpeta de correo no deseado.',
+  'contacto.enviado.enlace_otro': 'Enviar otro mensaje',
+  // Contacto UX §4 Cláusula informativa de protección de datos
+  'contacto.info.titulo': 'Información básica sobre protección de datos',
+  'contacto.info.responsable.etiqueta': 'Responsable',
+  'contacto.info.responsable.texto':
+    '[PENDIENTE: nombre o razón social y correo del responsable del tratamiento.]',
+  'contacto.info.finalidad.etiqueta': 'Finalidad',
+  'contacto.info.finalidad.texto':
+    'Atender tu mensaje y responderte. Si lo activamos, también enviarte un correo de confirmación de recepción.',
+  'contacto.info.base.etiqueta': 'Base jurídica',
+  'contacto.info.base.texto': 'Tu consentimiento, que das al marcar la casilla de arriba.',
+  'contacto.info.destinatarios.etiqueta': 'Destinatarios',
+  'contacto.info.destinatarios.texto':
+    'No cedemos tus datos a terceros salvo obligación legal. Usamos proveedores, como el de envío de correo, que los tratan por nuestra cuenta.',
+  'contacto.info.derechos.etiqueta': 'Derechos',
+  'contacto.info.derechos.texto':
+    'Puedes acceder a tus datos, rectificarlos, suprimirlos, limitar su tratamiento, oponerte a él y retirar tu consentimiento escribiéndonos a [PENDIENTE: correo]. También puedes reclamar ante la Agencia Española de Protección de Datos.',
+  'contacto.info.mas.texto': 'Más información en la política de privacidad.',
+
+  // Protección antibots (captcha-diseno-ux.md §5)
+  'captcha.widget.etiqueta': 'Comprobación automática contra robots',
+  'captcha.ayuda':
+    'Se hace sola cuando empiezas a rellenar el formulario. No tienes que resolver nada.',
+  'captcha.widget.comprobando': 'Comprobando que no eres un robot…',
+  'captcha.widget.comprobado': 'Comprobado',
+  'captcha.widget.error':
+    'No hemos podido hacer la comprobación. Marca la casilla para intentarlo otra vez.',
+  'captcha.widget.caducado': 'La comprobación ha caducado. Se repetirá sola al enviar.',
+  'captcha.widget.requerida': 'Falta la comprobación. Marca la casilla o pulsa Enviar.',
+  'captcha.estado.enviando': 'Comprobando y enviando…',
+  'captcha.error.requerido':
+    'Falta la comprobación automática. Vuelve a enviar el formulario: se hará sola. Si no funciona, activa JavaScript en tu navegador.',
+  'captcha.error.invalido':
+    'La comprobación automática ha caducado o no es válida. Vuelve a enviar el formulario: se repetirá sola.',
+  'captcha.error.invalido_repetido':
+    'No conseguimos completar la comprobación automática. Prueba a recargar la página o a usar otro navegador.',
+  'captcha.error.tiempo':
+    'La comprobación está tardando demasiado. Marca la casilla para intentarlo otra vez.',
+  'captcha.frase.soporte': 'Si sigue fallando, escríbenos a {soporte}.',
+  'captcha.sin_js.titulo': 'Este formulario necesita JavaScript',
+  'captcha.sin_js.registro':
+    'Para frenar los registros automáticos hacemos una comprobación en tu navegador y necesita JavaScript. Actívalo para crear tu cuenta.',
+  'captcha.sin_js.olvido':
+    'Para frenar los envíos automáticos hacemos una comprobación en tu navegador y necesita JavaScript. Actívalo para recibir el enlace.',
+  'captcha.sin_js.contacto':
+    'Para frenar el spam hacemos una comprobación en tu navegador y necesita JavaScript. Actívalo para enviar tu mensaje.',
+  'captcha.sin_js.reenvio':
+    'Para reenviar el mensaje hacemos una comprobación en tu navegador y necesita JavaScript. Actívalo y vuelve a intentarlo.',
+  'captcha.sin_js.oauth': 'También puedes entrar con {proveedores}.',
+  'captcha.sin_js.soporte': 'O escríbenos a {soporte}.',
+  'captcha.sin_js.conservado':
+    'Si lo envías sin activarlo, no se enviará nada y tendrás que volver a escribir las contraseñas; el resto se conserva.',
 
   // 5.8 Textos para lectores de pantalla
   'a11y.error.prefijo': 'Error:',

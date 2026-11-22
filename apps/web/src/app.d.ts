@@ -1,3 +1,6 @@
+// Tipos del widget antibots (técnico de captcha §8.2): <altcha-widget> en Svelte y `$altcha`.
+import 'altcha/types/svelte';
+
 // Tipos globales de la app: https://svelte.dev/docs/kit/types#app.d.ts
 declare global {
   namespace App {

@@ -19,7 +19,14 @@ export interface E2eServer {
   env: Record<string, string>;
 }
 
-export function e2eServers(): E2eServer[] {
+/** Clave fija de la suite con la comprobación activada (solo pruebas). */
+export const E2E_CAPTCHA_HMAC_KEY = 'e2e-captcha-hmac-key-0123456789abcdef';
+
+/**
+ * `captcha`: con `false` (la suite principal) la comprobación antibots va desactivada; con `true`
+ * (`npm run test:e2e:captcha`), activada con la dificultad mínima (técnico de captcha §5.4).
+ */
+export function e2eServers({ captcha = false }: { captcha?: boolean } = {}): E2eServer[] {
   return [
     {
       name: 'api',
@@ -40,6 +47,16 @@ export function e2eServers(): E2eServer[] {
         ...OAUTH_E2E_ENV,
         // El worker envía de verdad a Mailpit, y kick() al momento (correo §11.2).
         SMTP_URL: mailpitSmtpUrl(),
+        // El valor por defecto, aunque el .env de desarrollo active el acuse (los e2e de contacto
+        // lo esperan desactivado).
+        CONTACT_ACK_EMAIL: 'false',
+        ...(captcha
+          ? {
+              CAPTCHA_ENABLED: 'true',
+              CAPTCHA_HMAC_KEY: E2E_CAPTCHA_HMAC_KEY,
+              CAPTCHA_DIFFICULTY: 'minimal',
+            }
+          : { CAPTCHA_ENABLED: 'false', CAPTCHA_HMAC_KEY: '', CAPTCHA_DIFFICULTY: '' }),
       },
     },
     {

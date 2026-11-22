@@ -1,0 +1,1 @@
+ALTER TABLE "contact_messages" ADD COLUMN "ack_requested" boolean DEFAULT false NOT NULL;

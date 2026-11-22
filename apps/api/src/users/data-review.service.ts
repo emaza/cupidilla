@@ -121,7 +121,9 @@ export class DataReviewService {
         where ${users.id} = ${userId} and ${users.dataReviewRequiredAt} is not null
         returning ${users.email}
       ), deleted_mail as (
+        -- Los correos de contacto no son de la cuenta (técnico de contacto §9).
         delete from ${emailOutbox} where ${emailOutbox.toEmail} in (select email from deleted)
+          and ${emailOutbox.contactMessageId} is null
       )
       select 1 as id from deleted`);
     return result.rows.length > 0;

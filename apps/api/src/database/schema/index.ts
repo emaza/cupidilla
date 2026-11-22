@@ -1,4 +1,5 @@
 export * from './consents.js';
+export * from './contact-messages.js';
 export * from './email-outbox.js';
 export * from './email-tokens.js';
 export * from './identities.js';

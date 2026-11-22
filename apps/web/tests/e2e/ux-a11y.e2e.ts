@@ -202,7 +202,10 @@ test(
       'Leer las condiciones (se abre en una pestaña nueva)',
       'Crear cuenta',
       '¿Ya tienes cuenta? Entra',
+      // Pie (contacto UX §5).
       'Condiciones de uso',
+      'Política de privacidad',
+      'Contacto',
     ];
     expect(order).toEqual(expected);
 
@@ -273,7 +276,10 @@ test(
       'Continuar con Facebook',
       'Cerrar sesión',
       'Eliminar mi cuenta',
+      // Pie (contacto UX §5).
       'Condiciones de uso',
+      'Política de privacidad',
+      'Contacto',
     ]);
 
     await page.getByRole('link', { name: 'Eliminar mi cuenta' }).focus();

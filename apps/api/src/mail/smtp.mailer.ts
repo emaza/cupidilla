@@ -75,17 +75,36 @@ function isPermanent(fields: { code?: unknown; permanent?: unknown }): boolean {
   return fields.code === 'EENVELOPE';
 }
 
+/** Caracteres de control (incluidos `\r` y `\n`), separadores de línea y controles bidi. */
+const HEADER_UNSAFE = /[\p{Cc}\u2028\u2029\u202a-\u202e\u2066-\u2069]/u;
+
+/**
+ * Segunda capa contra la inyección de cabeceras (técnico de contacto §4.3): si `to`, `subject` o
+ * `replyTo` llevan un carácter de control, el correo no sale. Es permanente: reintentar no lo
+ * arregla. La primera capa es el esquema del formulario; la última, nodemailer.
+ */
+export function assertHeaderSafe(message: MailMessage): void {
+  const values = [message.to, message.subject, message.replyTo ?? ''];
+  if (values.some((value) => HEADER_UNSAFE.test(value))) {
+    throw new MailDeliveryError(true, 'header_unsafe');
+  }
+}
+
 /**
  * Campos de nodemailer de un mensaje: `From` = `MAIL_FROM`, texto y HTML (multipart/alternative)
  * y `Auto-Submitted: auto-generated`, que evita las respuestas automáticas (fuera de la oficina…).
+ * `Reply-To` va como objeto de dirección y nunca como cadena: una cadena la lee como una lista, y
+ * `a@x.com, b@y.com` serían dos destinatarios.
  */
 export function mailOptions(from: string, message: MailMessage): SendMailOptions {
+  assertHeaderSafe(message);
   return {
     from,
     to: message.to,
     subject: message.subject,
     text: message.text,
     html: message.html,
+    ...(message.replyTo ? { replyTo: { name: '', address: message.replyTo } } : {}),
     headers: { 'Auto-Submitted': 'auto-generated' },
   };
 }
@@ -103,8 +122,10 @@ export class SmtpMailer extends Mailer {
   }
 
   async send(message: MailMessage): Promise<void> {
+    // Fuera del try: un MailDeliveryError de las cabeceras no pasa por classifySmtpError.
+    const options = mailOptions(this.from, message);
     try {
-      await this.transport.sendMail(mailOptions(this.from, message));
+      await this.transport.sendMail(options);
     } catch (error) {
       throw classifySmtpError(error);
     }
