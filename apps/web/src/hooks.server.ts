@@ -74,10 +74,11 @@ const guardRoutes: Handle = async ({ event, resolve }) => {
 
 /** Páginas con el token de un enlace de correo (técnico de correo §9.1). */
 const TOKEN_ROUTES = new Set(['/verify-email', '/reset-password']);
-/** «Revisa tu correo»: muestran el correo escrito. */
+/** «Revisa tu correo» y «Mensaje enviado»: muestran el correo escrito. */
 const CHECK_EMAIL_ROUTES = new Set([
   '/(guest)/register/check-email',
   '/forgot-password/check-email',
+  '/contact/sent',
 ]);
 
 const securityHeaders: Handle = async ({ event, resolve }) => {

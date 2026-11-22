@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { MailDeliveryError, Mailer, type MailMessage } from './mailer.js';
+import { assertHeaderSafe } from './smtp.mailer.js';
 
 /**
  * Bandeja en memoria para los tests (correo §4.1, §11.1). Vive en `src/` porque `MailModule` la
@@ -11,6 +12,12 @@ export class MemoryMailer extends Mailer {
   private failures: { permanent: boolean }[] = [];
 
   send(message: MailMessage): Promise<void> {
+    // Las mismas cabeceras que rechaza SmtpMailer (técnico de contacto §4.3).
+    try {
+      assertHeaderSafe(message);
+    } catch (error) {
+      return Promise.reject(error as Error);
+    }
     const failure = this.failures.shift();
     if (failure) {
       return Promise.reject(

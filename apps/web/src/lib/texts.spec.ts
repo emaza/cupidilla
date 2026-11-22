@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { SERVICE_TERMS_VERSION } from '@cupidilla/contracts';
+import {
+  CONTACT_MESSAGE_RETENTION_DAYS,
+  PRIVACY_POLICY_VERSION,
+  SERVICE_TERMS_VERSION,
+} from '@cupidilla/contracts';
 import { texts } from './texts.ts';
 
 /**
@@ -12,6 +16,7 @@ const REPO_ROOT = resolve(import.meta.dirname, '../../../..');
 const uxDoc = readFileSync(resolve(REPO_ROOT, 'docs/h0-diseno-ux.md'), 'utf8');
 const oauthUxDoc = readFileSync(resolve(REPO_ROOT, 'docs/login-terceros-diseno-ux.md'), 'utf8');
 const mailUxDoc = readFileSync(resolve(REPO_ROOT, 'docs/correo-diseno-ux.md'), 'utf8');
+const contactUxDoc = readFileSync(resolve(REPO_ROOT, 'docs/contacto-diseno-ux.md'), 'utf8');
 
 /** Filas `| `clave` | texto |` de la sección 5. Un texto entre acentos graves se toma literal (con sus espacios). */
 function tableOfSection5(
@@ -59,6 +64,30 @@ const mailChanges = new Map([
 ]);
 const mailRemoved = new Set(['registro.error.correo_existente', 'union.ayuda.olvido']);
 
+/** Tabla del diseño UX de contacto: sus §3 (pie, formulario, errores, confirmación) y §4 (cláusula). */
+const contactTable = tableOfSection5(
+  contactUxDoc,
+  '## 5. Dónde enlazar',
+  '## 3. Textos de interfaz',
+);
+/** Texto de /legal/privacy (contacto UX §2.3). Vive en el archivo del texto legal, no en texts.ts. */
+const privacyTable = tableOfSection5(
+  contactUxDoc,
+  '## 3. Textos de interfaz',
+  '### 2.3 `/legal/privacy` (borrador)',
+);
+/**
+ * Textos del formulario de contacto que el diseño UX no contempla: los errores de formato
+ * (caracteres de control o bidireccionales) y la etiqueta del campo trampa. Son los textos
+ * provisionales de la §8.4 del diseño técnico de contacto.
+ */
+const contactExtras = new Map([
+  ['contacto.campo.trampa', 'No rellenes este campo'],
+  ['contacto.error.nombre_formato', 'El nombre solo puede tener una línea de texto normal.'],
+  ['contacto.error.asunto_formato', 'El asunto solo puede tener una línea de texto normal.'],
+  ['contacto.error.mensaje_formato', 'El mensaje tiene caracteres que no podemos guardar.'],
+]);
+
 describe('Textos de interfaz = tabla de UX §5 (criterio 49)', () => {
   it('se ha leído la tabla entera (no pasa por no encontrar nada)', () => {
     expect(table.size).toBeGreaterThan(100);
@@ -68,6 +97,10 @@ describe('Textos de interfaz = tabla de UX §5 (criterio 49)', () => {
     expect(mailTable.size).toBeGreaterThan(100);
     expect(mailTable.get('confirmar.boton')).toBe('Confirmar mi correo');
     expect(mailChanges.get('registro.error.resultado_incierto')).toContain('acceso limitado');
+    expect(contactTable.size).toBeGreaterThan(50);
+    expect(contactTable.get('contacto.boton.enviar')).toBe('Enviar mensaje');
+    expect(contactTable.get('contacto.info.base.etiqueta')).toBe('Base jurídica');
+    expect(privacyTable.get('privacidad.s11.titulo')).toBe('11. Cambios');
   });
 
   it('las dos tablas no se contradicen: una clave repetida tiene el mismo texto', () => {
@@ -88,7 +121,9 @@ describe('Textos de interfaz = tabla de UX §5 (criterio 49)', () => {
         mailChanges.get(key) ??
         mailTable.get(key) ??
         table.get(key) ??
-        oauthTable.get(key)
+        oauthTable.get(key) ??
+        contactTable.get(key) ??
+        contactExtras.get(key)
       )?.replaceAll('{edad}', '18');
       if (expected === undefined) different.push(`${key}: no está en ninguna tabla de UX §5`);
       else if (expected !== text) different.push(`${key}: «${text}» ≠ «${expected}»`);
@@ -97,7 +132,7 @@ describe('Textos de interfaz = tabla de UX §5 (criterio 49)', () => {
   });
 
   it('cada clave de las dos tablas (salvo /legal/terms) está en texts.ts: no falta ningún texto', () => {
-    const missing = [...table.keys(), ...oauthTable.keys()].filter(
+    const missing = [...table.keys(), ...oauthTable.keys(), ...contactTable.keys()].filter(
       (key) => !key.startsWith('condiciones.') && !mailRemoved.has(key) && !(key in texts),
     );
     expect(missing).toEqual([]);
@@ -182,6 +217,44 @@ describe.each(versions)('Condiciones de uso: $file = UX §5.9', ({ file, rows })
   it('el <title> es el de condiciones.meta.titulo con el sufijo de marca', () => {
     const title = /<title>([^<]*)<\/title>/.exec(terms)?.[1];
     expect(title).toBe(`${rows.get('condiciones.meta.titulo')}${texts['comun.meta.sufijo']}`);
+  });
+});
+
+describe('Política de privacidad: privacy-2026-11-borrador.svelte = contacto UX §2.3', () => {
+  const file = `privacy-${PRIVACY_POLICY_VERSION}.svelte`;
+  const policy = legal(file);
+  // La edad mínima es configurable: la tabla de UX describe el valor por defecto con {edad}.
+  // El plazo de los mensajes de contacto sale de la constante que usa el barrido de la API.
+  const page = flat(policy)
+    .replaceAll('{minAge}', '18')
+    .replaceAll('{CONTACT_MESSAGE_RETENTION_DAYS}', String(CONTACT_MESSAGE_RETENTION_DAYS));
+  const keys = [...privacyTable.keys()].filter(
+    (key) => !['privacidad.meta.titulo', 'privacidad.enlace.volver'].includes(key),
+  );
+
+  it('hay textos de §2.3 que comprobar: aviso, título, versión y 11 secciones', () => {
+    expect(keys.length).toBe(25);
+  });
+
+  it.each(keys)('%s aparece tal cual en el texto legal', (key) => {
+    expect(page).toContain(flat((privacyTable.get(key) ?? '«falta»').replaceAll('{edad}', '18')));
+  });
+
+  it('el <title> es el de privacidad.meta.titulo con el sufijo de marca', () => {
+    const title = /<title>([^<]*)<\/title>/.exec(policy)?.[1];
+    expect(title).toBe(
+      `${privacyTable.get('privacidad.meta.titulo')}${texts['comun.meta.sufijo']}`,
+    );
+  });
+
+  it('/legal/privacy importa el archivo de PRIVACY_POLICY_VERSION y «Volver al inicio» es el común', () => {
+    const route = readFileSync(
+      resolve(REPO_ROOT, 'apps/web/src/routes/legal/privacy/+page.svelte'),
+      'utf8',
+    );
+    expect(route).toContain(file);
+    expect(page).toContain(`Versión ${PRIVACY_POLICY_VERSION}`);
+    expect(privacyTable.get('privacidad.enlace.volver')).toBe(texts['comun.boton.volver_inicio']);
   });
 });
 

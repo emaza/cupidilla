@@ -390,7 +390,9 @@ export class UsersService {
           )
         returning ${users.id}, ${users.email}
       ), deleted_mail as (
+        -- Los correos de contacto no son de la cuenta (técnico de contacto §9).
         delete from ${emailOutbox} where ${emailOutbox.toEmail} in (select email from deleted)
+          and ${emailOutbox.contactMessageId} is null
       )
       select id from deleted`);
     if (result.rows.length > 0) {

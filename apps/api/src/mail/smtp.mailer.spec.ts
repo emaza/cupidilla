@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { describe, expect, it } from 'vitest';
 import { emailHint } from './email-tokens.service.js';
+import { MailDeliveryError } from './mailer.js';
 import { classifySmtpError, mailOptions, smtpTransportOptions } from './smtp.mailer.js';
 import { escapeHtml } from './templates/layout.js';
 
@@ -103,6 +104,51 @@ describe('formato del mensaje (correo §4.1, §4.5)', () => {
     expect(raw).toMatch(/^Content-Type: multipart\/alternative;/m);
 
     expect(escapeHtml('<b>&"')).toBe('&lt;b&gt;&amp;&quot;');
+  });
+
+  it('T4: Reply-To sale como una sola dirección, sin nombre', async () => {
+    const transport = nodemailer.createTransport({ streamTransport: true, buffer: true });
+    const info = await transport.sendMail(
+      mailOptions('Cupidilla <no-reply@example.com>', {
+        to: 'contacto@example.com',
+        subject: '[Contacto Cupidilla] Duda',
+        text: 'Hola',
+        html: '<p>Hola</p>',
+        replyTo: 'ana@example.com',
+      }),
+    );
+    const raw = info.message.toString();
+    expect(raw).toMatch(/^Reply-To: ana@example\.com\r?$/m);
+    expect(info.envelope.to).toEqual(['contacto@example.com']);
+    // Sin replyTo, no hay cabecera.
+    expect(
+      mailOptions('no-reply@example.com', {
+        to: 'a@example.com',
+        subject: 's',
+        text: '',
+        html: '',
+      }),
+    ).not.toHaveProperty('replyTo');
+  });
+
+  it('T4: un subject, un to o un replyTo con saltos o controles lanzan header_unsafe permanente', () => {
+    const base = { to: 'contacto@example.com', subject: 'Hola', text: '', html: '' };
+    const bad = [
+      { ...base, subject: 'Hola\r\nBcc: victima@example.net' },
+      { ...base, subject: `Hola${String.fromCodePoint(0x2028)}Bcc` },
+      { ...base, to: 'contacto@example.com\nBcc: victima@example.net' },
+      { ...base, replyTo: 'ana@example.com\nBcc: victima@example.net' },
+    ];
+    for (const message of bad) {
+      let thrown: unknown;
+      try {
+        mailOptions('no-reply@example.com', message);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(MailDeliveryError);
+      expect(thrown).toMatchObject({ permanent: true, code: 'header_unsafe' });
+    }
   });
 
   it('A4-14: emailHint enmascara el correo', () => {

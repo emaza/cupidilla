@@ -6,7 +6,7 @@ import type { Env } from '../src/config/env.schema.js';
 import { hashOpaqueToken } from '../src/common/crypto/opaque-token.js';
 import { emailOutbox, emailTokens } from '../src/database/schema/index.js';
 import { Transactions } from '../src/database/transactions.js';
-import { OutboxService, type MailKind } from '../src/mail/outbox.service.js';
+import { OutboxService, type AccountMailKind } from '../src/mail/outbox.service.js';
 import { OUTBOX_RETRY_DELAYS_MS } from '../src/mail/outbox.worker.js';
 import { mailOptions } from '../src/mail/smtp.mailer.js';
 import {
@@ -46,7 +46,7 @@ describe('A.4: outbox y worker de correo (§4)', () => {
     t.clock.set(TEST_NOW);
   });
 
-  const enqueue = (kind: MailKind, email: string) => outbox.enqueue(t.db, kind, email);
+  const enqueue = (kind: AccountMailKind, email: string) => outbox.enqueue(t.db, kind, email);
   const outboxRows = () => t.db.select().from(emailOutbox);
   const tokensOf = (userId: string) =>
     t.db.select().from(emailTokens).where(eq(emailTokens.userId, userId));

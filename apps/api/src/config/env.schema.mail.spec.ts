@@ -12,6 +12,8 @@ const production = {
   NODE_ENV: 'production',
   PUBLIC_WEB_URL: 'https://cupidilla.es',
   SMTP_URL: 'smtps://usuario:clave@smtp.proveedor.eu',
+  // Obligatoria en producción desde el formulario de contacto (técnico de contacto §7.1).
+  CONTACT_TO_ADDRESS: 'contacto@cupidilla.es',
 };
 
 function parse(env: Record<string, string | undefined>) {

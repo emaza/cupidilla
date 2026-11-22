@@ -19,6 +19,8 @@ export class ConfigController {
         unverifiedReminder: this.config.get('EMAIL_UNVERIFIED_REMINDER', { infer: true }),
         passwordChangedNotice: this.config.get('EMAIL_PASSWORD_CHANGED_NOTICE', { infer: true }),
       },
+      // Acuse del formulario de contacto: /contact/sent solo lo promete si está activado.
+      contact: { ackEmail: this.config.get('CONTACT_ACK_EMAIL', { infer: true }) },
     };
   }
 }

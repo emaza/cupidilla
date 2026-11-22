@@ -19,6 +19,7 @@ describe('GET /config (edad mínima por defecto)', () => {
     expect(configResponseSchema.parse(response.body)).toEqual({
       minAge: 18,
       mail: { unverifiedReminder: true, passwordChangedNotice: true },
+      contact: { ackEmail: false },
     });
   });
 

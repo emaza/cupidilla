@@ -6,5 +6,7 @@ export const configResponseSchema = z.object({
   minAge: z.number().int().min(MIN_AGE_RANGE.min).max(MIN_AGE_RANGE.max),
   /** Correos opcionales (UX §6.9): la web decide con ellos qué textos pinta. */
   mail: z.object({ unverifiedReminder: z.boolean(), passwordChangedNotice: z.boolean() }),
+  /** Acuse al remitente del formulario de contacto (`CONTACT_ACK_EMAIL`). */
+  contact: z.object({ ackEmail: z.boolean() }),
 });
 export type ConfigResponse = z.infer<typeof configResponseSchema>;

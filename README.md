@@ -12,6 +12,8 @@ Hito **H0 — base mínima** implementado (11 de noviembre de 2026): registro, e
 
 **Correo** (decisión 22, 14 de noviembre de 2026): registro con respuesta uniforme, confirmación del correo, recuperación de la contraseña y revisión de datos tras recuperar una cuenta sin confirmar, con envío por SMTP (Mailpit en local). Falta elegir el proveedor SMTP de producción. El diseño está en [Diseño técnico](docs/correo-diseno-tecnico.md) y [Diseño UX](docs/correo-diseno-ux.md).
 
+**Contacto** (22 de noviembre de 2026): página pública `/contact` que guarda cada mensaje y lo envía por correo al buzón `CONTACT_TO_ADDRESS` (con acuse opcional a quien escribe, `CONTACT_ACK_EMAIL`, desactivado por defecto), y borrador de la política de privacidad en `/legal/privacy`. Los mensajes se borran a los 180 días (propuesta pendiente de revisión jurídica). El diseño está en [Diseño técnico](docs/contacto-diseno-tecnico.md) y [Diseño UX](docs/contacto-diseno-ux.md).
+
 **Falta para producción**: el proveedor SMTP y el dominio remitente, probar la entrada con Google y Facebook reales (con Facebook, comprobar que el correo que devuelve está de verdad confirmado: D9) y, si va a haber más de una instancia de la API, resolver el riesgo R-M17 del envío de correos ([diseño de correo](docs/correo-diseno-tecnico.md)). Lo siguiente es H1, la [entrevista con Cupidilla](docs/entrevista-cupidilla.md).
 
 El código es un monorepo con npm workspaces:
@@ -126,6 +128,8 @@ npm run sonar:down    # lo para; los datos se conservan en volúmenes
 | [Entrada con terceros — Diseño UX](docs/login-terceros-diseno-ux.md) | Botones, alta, unión, «Formas de entrar», textos y criterios de aceptación |
 | [Correo — Diseño técnico](docs/correo-diseno-tecnico.md) | Verificación, recuperación, registro uniforme y revisión de datos: datos, envío, API, web, seguridad y pruebas |
 | [Correo — Diseño UX](docs/correo-diseno-ux.md) | Pantallas, los cinco correos, textos y criterios de aceptación del hito de correo |
+| [Contacto — Diseño técnico](docs/contacto-diseno-tecnico.md) | Formulario de contacto y borrador de la política de privacidad: datos, *outbox*, API, web, retención y pruebas |
+| [Contacto — Diseño UX](docs/contacto-diseno-ux.md) | `/contact`, `/contact/sent`, `/legal/privacy`, el pie, los dos correos, textos y criterios de aceptación |
 
 ## Decisiones clave
 

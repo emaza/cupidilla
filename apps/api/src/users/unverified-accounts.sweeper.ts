@@ -113,6 +113,8 @@ export class UnverifiedAccountsSweeper implements OnModuleInit, OnModuleDestroy 
         deleted_mail as (
           delete from ${emailOutbox}
           where ${emailOutbox.toEmail} in (select email from deleted)
+            -- Los correos de contacto no son de la cuenta (técnico de contacto §9).
+            and ${emailOutbox.contactMessageId} is null
         )
         select count(*)::text as count from deleted`);
       const count = Number(result.rows[0]?.count ?? 0);

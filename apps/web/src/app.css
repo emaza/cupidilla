@@ -246,10 +246,25 @@ main:focus {
   min-height: var(--tactil-minimo);
 }
 
+/* Enlaces del pie (contacto UX §5): apilados en móvil, en fila desde 48em. */
+.site-footer ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 @media (min-width: 48em) {
   .site-footer {
     flex-direction: row;
     align-items: center;
+    gap: var(--espacio-6);
+  }
+
+  .site-footer ul {
+    flex-direction: row;
     gap: var(--espacio-6);
   }
 }
@@ -356,7 +371,9 @@ main:focus {
 
 input[type='email'],
 input[type='password'],
-input[type='text'] {
+input[type='tel'],
+input[type='text'],
+textarea {
   width: 100%;
   min-height: var(--alto-control);
   padding: var(--espacio-2) var(--espacio-3);
@@ -368,8 +385,41 @@ input[type='text'] {
   border-radius: var(--radio-s);
 }
 
-input[aria-invalid='true'] {
+input[aria-invalid='true'],
+textarea[aria-invalid='true'],
+textarea[data-over='true'] {
   border: var(--borde-grueso) solid var(--color-error);
+}
+
+/* Mensaje de contacto (contacto UX §7): 8 filas, crece en vertical y parte el texto sin espacios. */
+textarea {
+  display: block;
+  resize: vertical;
+  overflow-wrap: anywhere;
+}
+
+.counter {
+  margin: var(--espacio-1) 0 0;
+  color: var(--color-texto-suave);
+}
+
+.counter-over {
+  color: var(--color-error);
+}
+
+@media (min-width: 48em) {
+  .counter {
+    text-align: right;
+  }
+}
+
+/* Campo trampa antispam: fuera de la pantalla, no con display:none (contacto UX §2.1.3). */
+.trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
 }
 
 .password-control {

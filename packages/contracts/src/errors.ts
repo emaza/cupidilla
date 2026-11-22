@@ -13,6 +13,7 @@ export const ERROR_CODES = [
   'NOT_FOUND', // 404
   'EMAIL_TAKEN', // 409
   'TERMS_VERSION_OUTDATED', // 409
+  'PRIVACY_VERSION_OUTDATED', // 409  la versión de la política de privacidad enviada no es la vigente
   'ACCOUNT_USES_OTHER_PROVIDER', // 409  alta con proveedor contra una cuenta sin contraseña
   'LAST_SIGN_IN_METHOD', // 409  quitar la última forma de entrar
   'PASSWORD_ALREADY_SET', // 409  crear una contraseña cuando ya hay una

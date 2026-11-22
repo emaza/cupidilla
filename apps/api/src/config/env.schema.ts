@@ -39,7 +39,7 @@ const optional = <T extends z.ZodType>(schema: T) =>
 const withDefault = (schema: z.ZodString | z.ZodEmail, fallback: string) =>
   z.preprocess((value) => (value === '' ? undefined : value), schema.default(fallback));
 
-/** Valores de `EMAIL_*`: solo `true` o `false` (como `API_URL_ALLOW_HTTP` en la web). */
+/** Interruptores (`EMAIL_*`, `CONTACT_ACK_EMAIL`): solo `true` o `false` (como `API_URL_ALLOW_HTTP` en la web). */
 const booleanFlag = (name: string, fallback: boolean) =>
   z.preprocess(
     (value) => (value === '' ? undefined : value),
@@ -155,6 +155,24 @@ function checkMail(env: Record<string, unknown>, ctx: z.RefinementCtx): void {
       'MAIL_SUPPORT_ADDRESS necesita un dominio real con NODE_ENV=production.',
     );
   }
+
+  // Buzón del formulario de contacto (técnico de contacto §7.1): obligatorio en producción, porque
+  // el valor por defecto es de example.com.
+  const contact = env.CONTACT_TO_ADDRESS;
+  if (typeof contact === 'string') {
+    if (production && isReservedMailDomain(contact)) {
+      issue(
+        'CONTACT_TO_ADDRESS',
+        'CONTACT_TO_ADDRESS necesita un dominio real con NODE_ENV=production.',
+      );
+    }
+    if (from !== undefined && from.toLowerCase() === contact) {
+      issue(
+        'CONTACT_TO_ADDRESS',
+        'CONTACT_TO_ADDRESS no puede ser la dirección de MAIL_FROM: los mensajes irían a un buzón que nadie lee.',
+      );
+    }
+  }
 }
 
 /** Variables de entorno de la API. Si alguna no es válida, la API no arranca. */
@@ -208,6 +226,16 @@ export const envSchema = z
     ),
     EMAIL_UNVERIFIED_REMINDER: booleanFlag('EMAIL_UNVERIFIED_REMINDER', true),
     EMAIL_PASSWORD_CHANGED_NOTICE: booleanFlag('EMAIL_PASSWORD_CHANGED_NOTICE', true),
+    // Formulario de contacto (técnico de contacto §7.1). El buzón se normaliza (trim y
+    // minúsculas): email_outbox.to_email lo exige. El acuse está desactivado por defecto (C4).
+    CONTACT_TO_ADDRESS: z.preprocess(
+      (value) => (value === '' ? undefined : typeof value === 'string' ? value.trim() : value),
+      z
+        .email({ error: 'CONTACT_TO_ADDRESS tiene que ser una dirección de correo.' })
+        .default('contacto@example.com')
+        .transform((value) => value.toLowerCase()),
+    ),
+    CONTACT_ACK_EMAIL: booleanFlag('CONTACT_ACK_EMAIL', false),
     // Inicio de sesión con terceros (§10.4). Un proveedor solo se activa con su pareja completa.
     GOOGLE_CLIENT_ID: optional(z.string().min(1)),
     GOOGLE_CLIENT_SECRET: optional(z.string().min(1)),

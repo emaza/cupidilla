@@ -23,6 +23,7 @@ import { InternalKeyGuard } from './common/guards/internal-key.guard.js';
 import { AppConfigModule } from './config/app-config.module.js';
 import { envSchema } from './config/env.schema.js';
 import { ConsentsModule } from './consents/consents.module.js';
+import { ContactModule } from './contact/contact.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { MailModule } from './mail/mail.module.js';
@@ -68,6 +69,7 @@ import { UsersModule } from './users/users.module.js';
     MailModule,
     AuthModule,
     OAuthModule,
+    ContactModule,
     HealthModule,
     AppConfigModule,
   ],

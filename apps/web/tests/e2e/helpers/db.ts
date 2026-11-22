@@ -69,3 +69,12 @@ export async function emailVerifiedAt(email: string): Promise<Date | null | unde
   );
   return rows[0]?.email_verified_at;
 }
+
+/** Mensajes de contacto con ese asunto (ya normalizado). */
+export async function contactMessagesWithSubject(subject: string): Promise<number> {
+  const { rows } = await getPool().query<{ count: string }>(
+    'select count(*)::text as count from contact_messages where subject = $1',
+    [subject],
+  );
+  return Number(rows[0]?.count);
+}

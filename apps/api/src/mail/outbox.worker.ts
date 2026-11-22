@@ -8,7 +8,7 @@ import {
 import { and, eq, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { Clock } from '../common/clock.js';
 import { DB, type Database } from '../database/database.types.js';
-import { emailOutbox } from '../database/schema/index.js';
+import { contactMessages, emailOutbox } from '../database/schema/index.js';
 import { Transactions } from '../database/transactions.js';
 import { EmailTokensService } from './email-tokens.service.js';
 import { MailResolver } from './mail-resolver.js';
@@ -55,6 +55,8 @@ type ClaimedRow = {
   kind: MailKind;
   to_email: string;
   attempts: number;
+  /** Solo en los tipos de contacto (técnico de contacto §4.2). */
+  contact_message_id: string | null;
 };
 
 /**
@@ -226,7 +228,7 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
         limit ${OUTBOX_BATCH}
         for update skip locked
       )
-      returning id, kind, to_email, attempts`);
+      returning id, kind, to_email, attempts, contact_message_id`);
     return claimed.rows;
   }
 
@@ -248,7 +250,11 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
             .for('update');
           if (!pending) return null;
         }
-        const resolved = await this.resolver.resolve(tx, row.kind, row.to_email);
+        const resolved = await this.resolver.resolve(tx, {
+          kind: row.kind,
+          toEmail: row.to_email,
+          contactMessageId: row.contact_message_id,
+        });
         if (!resolved) await tx.delete(emailOutbox).where(eq(emailOutbox.id, row.id));
         return resolved;
       });
@@ -257,12 +263,31 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
         return 'skipped';
       }
       await this.mailer.send(message);
-      await this.db.delete(emailOutbox).where(eq(emailOutbox.id, row.id));
+      await this.markSent(row);
       this.logger.log({ event: 'mail_sent', kind: row.kind, attempt: row.attempts });
       return 'sent';
     } catch (error) {
       return this.recordFailure(row, error);
     }
+  }
+
+  /**
+   * Tras enviar: se borra la fila y, si es el correo interno de contacto, se marca `notified_at`
+   * (técnico de contacto §4.2). Si la API muere antes, la fila se reenvía al vencer su concesión.
+   */
+  private async markSent(row: ClaimedRow): Promise<void> {
+    const contactMessageId = row.contact_message_id;
+    if (row.kind !== 'contact_message' || contactMessageId === null) {
+      await this.db.delete(emailOutbox).where(eq(emailOutbox.id, row.id));
+      return;
+    }
+    await this.transactions.run(async (tx) => {
+      await tx.delete(emailOutbox).where(eq(emailOutbox.id, row.id));
+      await tx
+        .update(contactMessages)
+        .set({ notifiedAt: this.clock.now() })
+        .where(and(eq(contactMessages.id, contactMessageId), isNull(contactMessages.notifiedAt)));
+    });
   }
 
   private async recordFailure(row: ClaimedRow, error: unknown): Promise<keyof DrainResult> {

@@ -60,9 +60,39 @@ Desde el hito de correo (decisión 22, [diseño técnico](correo-diseno-tecnico.
 | Tokens de los enlaces (`email_tokens`, solo el hash) | Hasta usarse, caducar (24 h para confirmar, 1 h para restablecer) o borrarse la cuenta |
 | Cuenta sin confirmar el correo | 7 días desde su creación; después se borra con todos sus datos |
 
-Al borrar una cuenta se borran también, en la misma operación, las filas del *outbox* con su correo. El *outbox* guarda el correo de destino y el tipo de mensaje, nunca un token ni un enlace.
+Al borrar una cuenta se borran también, en la misma operación, las filas del *outbox* con su correo, salvo las del formulario de contacto (ver [Formulario de contacto](#formulario-de-contacto)). El *outbox* guarda el correo de destino y el tipo de mensaje, nunca un token ni un enlace. Los correos de contacto llevan además una referencia al mensaje, y su contenido se queda en `contact_messages`.
 
 **Proveedor SMTP**: el servicio que envíe los correos en producción será **encargado del tratamiento** (recibe el correo de cada persona y el contenido de los mensajes). **Pendiente de elegir** antes del despliegue, junto a «Marca y dominio» (ver [decisiones](decisiones.md#antes-de-la-beta)): tiene que tener servidores en la UE y un contrato de encargo, y el dominio remitente necesita SPF, DKIM y DMARC. En local y en las pruebas se usa Mailpit, que no sale de la máquina.
+
+## Formulario de contacto
+
+La página pública `/contact` ([diseño técnico](contacto-diseno-tecnico.md)) recoge el nombre, el correo, el teléfono si se da, el asunto y el mensaje, y la casilla «He leído y acepto la política de privacidad», que enlaza a un borrador en `/legal/privacy`. Cada mensaje se guarda en `contact_messages` con la versión de la política aceptada y se envía por correo al buzón `CONTACT_TO_ADDRESS`. Si se activa `CONTACT_ACK_EMAIL`, quien escribe recibe además un acuse sin nada de lo que escribió.
+
+- **Minimización**: no se guarda la IP, ni en claro ni con hash. Solo vive en el contador en memoria del límite de envíos. Tampoco se guarda el *user agent* ni se enlaza el mensaje con la cuenta aunque haya sesión.
+- **Logs**: nunca contienen el nombre, el correo, el teléfono, el asunto ni el mensaje.
+- **Base jurídica y texto de la política**: pendientes de la revisión jurídica. La aceptación se guarda como «ha leído y acepta», con su versión.
+
+**Retención** ([técnico §9](contacto-diseno-tecnico.md#9-retención-y-borrado)). El plazo de 180 días es una **propuesta**, pendiente de que la confirmen el CTO y la revisión jurídica:
+
+| Dato | Cuánto vive |
+|---|---|
+| Mensaje de contacto (`contact_messages`) | 180 días desde el envío; después lo borra un barrido horario |
+| Fila del *outbox* de un mensaje de contacto | Como las demás (se borra al enviarse; si falla, a los 7 días) y, en todo caso, cuando se borra su mensaje |
+| Mensajes de una persona que pide la supresión | Se borran en el momento, todos los de su dirección, junto con sus correos pendientes |
+| Copia en el buzón de `CONTACT_TO_ADDRESS` y las respuestas | Fuera de la aplicación: el mismo plazo de 180 días, con una regla del proveedor o a mano. **Pendiente** de configurar |
+| IP de quien escribe | No se guarda |
+
+Borrar una cuenta **no** borra los mensajes de contacto de esa dirección, porque no están enlazados con ella. Se borran por su plazo o a petición, y la política de privacidad lo tiene que decir. El proveedor SMTP también trata el contenido de estos mensajes como encargado (ver [Correo](#correo)).
+
+## Protección antibots (ALTCHA)
+
+Los formularios `/register`, `/forgot-password` y `/contact` llevan una comprobación antibots con ALTCHA ([diseño técnico](captcha-diseno-tecnico.md)). Es una prueba de trabajo: el navegador hace un cálculo breve y la API lo verifica. Se controla con `CAPTCHA_ENABLED`, que está activada por defecto. El login y OAuth no la llevan.
+
+- **Sin terceros**: ALTCHA está alojado en nuestros servidores. No se usa ALTCHA Sentinel ni su nube, y el widget no enlaza a altcha.org. El navegador solo habla con nuestra web.
+- **Sin cookies ni seguimiento**: el widget no pone cookies ni guarda nada en el navegador. La firma de interacción humana (cómo se usan el teclado y el puntero) está desactivada.
+- **Minimización**: el reto no contiene ningún dato de la persona. La API solo recuerda en memoria el identificador aleatorio (`nonce`) de cada reto usado, hasta que caduca (10 minutos) o hasta que se reinicia. La IP solo vive en el contador en memoria del límite de intentos, como en el resto de rutas. En los logs nunca aparecen el reto, la solución ni la IP.
+- **Accesibilidad**: no hay puzles ni pruebas cognitivas (WCAG 3.3.8). Sin JavaScript, estos formularios no se pueden enviar mientras la comprobación esté activada: se avisa antes de empezar y se ofrece otra vía.
+- **Política de privacidad**: tiene que decir que estos formularios hacen una comprobación automática en el navegador, sin cookies ni terceros. **Para la revisión jurídica**: si este cálculo entra en el artículo 5.3 de la Directiva ePrivacy. En principio es estrictamente necesario y no lee ni guarda nada que identifique a la persona.
 
 ## La IA
 
@@ -85,7 +115,10 @@ Regla de diseño desde el primer día: enviar al modelo lo mínimo necesario par
 - [ ] Revisión jurídica especializada: bases legales, obligaciones aplicables y transferencias de datos.
 - [ ] Determinar si procede una evaluación de impacto relativa a la protección de datos.
 - [ ] Política de privacidad y términos de uso.
-- [ ] Política de retención y borrado.
+- [ ] Política de retención y borrado (incluye confirmar los 180 días de los mensajes de contacto).
+- [ ] Política de privacidad definitiva en `/legal/privacy` (hoy es un borrador, versión `2026-11-borrador`).
+- [ ] La política de privacidad explica la comprobación antibots y la revisión jurídica confirma el encaje con ePrivacy (ver [Protección antibots](#protección-antibots-altcha)).
+- [ ] Buzón de `CONTACT_TO_ADDRESS` elegido, con acceso restringido y la retención configurada (ver [Formulario de contacto](#formulario-de-contacto)).
 - [ ] Mecanismo de verificación de edad (ver [decisiones](decisiones.md#abiertas)).
 - [ ] Procedimiento de denuncias, revisión y apelación.
 - [ ] Condiciones del proveedor del modelo revisadas.

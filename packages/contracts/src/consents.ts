@@ -18,3 +18,9 @@ export const consentSchema = z.object({
 });
 
 export type Consent = z.infer<typeof consentSchema>;
+
+/**
+ * Versión vigente del texto de /legal/privacy (técnico de contacto A9). La exige el formulario de
+ * contacto; una versión nueva del texto es un archivo nuevo y otro valor de esta constante.
+ */
+export const PRIVACY_POLICY_VERSION = '2026-11-borrador';

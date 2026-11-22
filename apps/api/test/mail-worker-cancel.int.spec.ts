@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emailOutbox } from '../src/database/schema/index.js';
-import { OutboxService, type MailKind } from '../src/mail/outbox.service.js';
+import { OutboxService, type AccountMailKind } from '../src/mail/outbox.service.js';
 import { OutboxWorker } from '../src/mail/outbox.worker.js';
 import { ANA, BETO, inbox, seedAna, seedBeto } from './helpers/mail.js';
 import {
@@ -45,7 +45,7 @@ describe('worker: cancelación de una fila ya reclamada', () => {
     });
   }
 
-  it.each<[MailKind, string]>([
+  it.each<[AccountMailKind, string]>([
     ['reset_password', ANA],
     ['verify_email', BETO],
     ['verify_reminder', BETO],

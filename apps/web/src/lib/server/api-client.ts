@@ -14,6 +14,7 @@ import {
   type AccountResponse,
   type AuthResponse,
   type ConfigResponse,
+  type ContactRequest,
   type DataReviewRequest,
   type DeleteAccountRequest,
   type EmailTokenInspectionRequest,
@@ -296,6 +297,19 @@ export const api = {
       body,
       nonIdempotent: true,
       expectStatus: 204, // users.controller.ts: @HttpCode(204)
+    }),
+
+  /**
+   * Formulario de contacto (técnico de contacto §8.1): siempre `202` si es válido, también ante el
+   * campo trampa. No idempotente: un corte da OUTCOME_UNKNOWN.
+   */
+  sendContactMessage: (event: RequestEvent, body: ContactRequest): Promise<ApiResult<void>> =>
+    request(event, {
+      method: 'POST',
+      path: '/contact',
+      body,
+      nonIdempotent: true,
+      expectStatus: 202, // contact.controller.ts: @HttpCode(202)
     }),
 
   login: (event: RequestEvent, body: LoginRequest): Promise<ApiResult<AuthResponse>> =>
