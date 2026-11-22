@@ -9,7 +9,7 @@ Este documento es para el programador y para QA. No hay diseño UX de esta pági
 - **Qué**: una página pública `/contact` con nombre, correo, teléfono (opcional), asunto, mensaje y la casilla «He leído y acepto la política de privacidad» (obligatoria y enlazada a un borrador nuevo, `/legal/privacy`). Cada envío se guarda en la tabla `contact_messages` y se manda por correo al buzón `CONTACT_TO_ADDRESS`, con `Reply-To` a quien escribe. Si `CONTACT_ACK_EMAIL=true`, quien escribe recibe además un acuse breve.
 - **Cómo**: se usa lo que ya existe. La web llama a la API con la clave interna (`POST /contact`, `202` sin cuerpo). La API guarda el mensaje y encola los correos **en la misma transacción** en `email_outbox`, y el *worker* actual los envía con sus reintentos.
 - **Cambio en el *outbox***: una columna nueva, `contact_message_id`, que es una referencia a `contact_messages` y que solo llevan los dos tipos nuevos (`contact_message` y `contact_ack`). Esos tipos se deduplican por mensaje y no por dirección, así que diez mensajes seguidos a `CONTACT_TO_ADDRESS` dan diez correos. El *outbox* sigue sin guardar el contenido: el *worker* lo lee de `contact_messages` al enviar.
-- **Antispam**: límites estrictos por IP y por correo, y un campo trampa (*honeypot*). Si el campo trampa viene relleno, la API responde exactamente lo mismo que a una persona (`202`), pero no guarda ni envía nada.
+- **Antispam**: la comprobación antibots ALTCHA ([diseño técnico](captcha-diseno-tecnico.md)), límites estrictos por IP y por correo, y un campo trampa (*honeypot*). Si el campo trampa viene relleno, la API responde exactamente lo mismo que a una persona (`202`), pero no guarda ni envía nada.
 - **Privacidad**: no se guarda la IP, ni en claro ni con hash, y en los logs no aparece ningún dato del formulario. Los mensajes se borran **a los 180 días** (es una propuesta) con un barrido automático, o antes si la persona lo pide.
 - **Por qué así**: es la arquitectura mínima que respeta los principios del *outbox* (nada se envía si la transacción se deshace, y la respuesta HTTP no depende del SMTP) sin una cola ni una tabla nuevas para el envío.
 
@@ -19,7 +19,7 @@ Este documento es para el programador y para QA. No hay diseño UX de esta pági
 
 **Dentro**: la página `/contact` con su página de confirmación, el borrador `/legal/privacy`, el *endpoint* `POST /contact`, la tabla `contact_messages`, los cambios del *outbox*, el *worker* y las plantillas, dos variables de entorno, el barrido de retención y los enlaces en el pie.
 
-**Fuera**: un panel para leer los mensajes (se leen en el buzón), responder desde la aplicación, adjuntos, captcha, enlazar la política de privacidad desde el registro (ver Preguntas) y la versión definitiva de la política, que depende de la revisión jurídica.
+**Fuera**: un panel para leer los mensajes (se leen en el buzón), responder desde la aplicación, adjuntos, enlazar la política de privacidad desde el registro (ver Preguntas) y la versión definitiva de la política, que depende de la revisión jurídica.
 
 ### 1.1 Decisiones del cliente (cerradas)
 
@@ -134,6 +134,7 @@ apps/web/src/
 | `privacy_policy_version` | `text` | `NOT NULL`. `CHECK (char_length(privacy_policy_version) BETWEEN 1 AND 64)`. La versión que se aceptó; el instante es `created_at` |
 | `created_at` | `timestamptz` | `NOT NULL` (del `Clock`, no `defaultNow()`, para poder usar `FakeClock`) |
 | `notified_at` | `timestamptz` | `NULL`. Cuándo aceptó el SMTP el correo interno. `NULL` y con más de unas horas quiere decir que el buzón no lo ha recibido (R-C7). `CHECK (notified_at IS NULL OR notified_at >= created_at)` |
+| `ack_requested` | `boolean` | `NOT NULL DEFAULT false` (migración `0002_contact_ack`). Si al recibir el mensaje se encoló el acuse. La línea «Acuse enviado al remitente» del correo interno sale de aquí y no de `CONTACT_ACK_EMAIL` al enviar: la fila de `contact_ack` del *outbox* ya puede haberse borrado (corrección de QA) |
 
 - Índice `contact_messages_created_at_idx ON (created_at)` para el barrido de retención. No hay índice por `email`: el borrado a petición es raro y la tabla es pequeña.
 - **No hay IP, ni *user agent*, ni `user_id`** (A3, A8).
@@ -308,7 +309,8 @@ export type ContactRequest = z.infer<typeof contactRequestSchema>;
 |---|---|
 | Ruta | `POST /contact` (`@Controller('contact')`) |
 | Acceso | `@Public()`. Exige `X-Internal-Api-Key`, como todas las rutas. Si viene un `Bearer`, no se mira |
-| Entrada | `ContactRequest` (`@Body({ schema: contactRequestSchema })`) |
+| Entrada | `ContactRequest`. El controlador recibe el cuerpo sin validar (`@Body()`) y `ContactService` mira el campo trampa **antes** de validarlo con `contactRequestSchema`, con el mismo 400 `VALIDATION_FAILED` que el pipe global (corrección de QA) |
+| Comprobación antibots | `@RequiresCaptcha()`: sin `X-Captcha` válida, 400 `CAPTCHA_REQUIRED` o `CAPTCHA_INVALID` antes que el límite, el campo trampa y el esquema ([técnico de captcha §4.7](captcha-diseno-tecnico.md)) |
 | Éxito | **`202` sin cuerpo** (`@HttpCode(202)`), tanto para una persona como para un bot |
 | Límites | `@Throttle({ [IP_THROTTLER]: { limit: 3, ttl: THROTTLE_TTL.hour }, [EMAIL_THROTTLER]: { limit: 3, ttl: THROTTLE_TTL.day } })`, multiplicados por `RATE_LIMIT_FACTOR` |
 
@@ -324,12 +326,14 @@ export type ContactRequest = z.infer<typeof contactRequestSchema>;
 
 ### 5.3 `ContactService.submit(body)`
 
+`body` llega sin validar.
+
 1. **Campo trampa**: si `body.website?.trim()` no está vacío, registra `{ event: 'contact_honeypot_triggered' }` y termina: `202`, sin escribir nada. Va antes que la versión, así que un bot nunca ve el 409.
 2. **Versión**: si no es la vigente, 409 `PRIVACY_VERSION_OUTDATED`.
 3. `Transactions.run(tx)`:
    1. `INSERT INTO contact_messages (… , created_at = clock.now()) RETURNING id`. `phone` es `NULL` si falta.
    2. `outbox.enqueueContact(tx, 'contact_message', CONTACT_TO_ADDRESS, id)`.
-   3. Si `CONTACT_ACK_EMAIL`: `outbox.enqueueContact(tx, 'contact_ack', body.email, id)`.
+   3. Si `CONTACT_ACK_EMAIL`: `outbox.enqueueContact(tx, 'contact_ack', body.email, id)`. La decisión se guarda en `ack_requested`.
 4. `outbox.kick()`, el log `{ event: 'contact_message_received', ack: boolean }` y `202`.
 
 ### 5.4 Antispam
@@ -340,9 +344,10 @@ export type ContactRequest = z.infer<typeof contactRequestSchema>;
 | Límite por correo | 3 cada 24 h por el correo del cuerpo, en un cubo propio de esta ruta (`EMAIL_THROTTLER`, el mismo conjunto que en el registro). También acota los acuses a una misma dirección |
 | Campo trampa | `website`, un campo de texto que una persona no ve (§8.3). Si llega con algo, la respuesta es `202` y no se guarda ni se envía nada (A4, A5). Solo queda el log, sin datos |
 | Acuse sin contenido | A6: el acuse no sirve para mandar texto a terceros |
-| Lo que **no** se hace | Captcha (es un tercero, mete datos en otro proveedor y obliga a cambiar la CSP), una trampa de tiempo (necesitaría firmar la hora con una clave nueva) y el tope global (A10). Se reconsideran si R-C4 se materializa |
+| Comprobación antibots | ALTCHA, alojado en nuestros servidores y sin terceros ni cookies ([técnico de captcha](captcha-diseno-tecnico.md)). Va antes que el campo trampa: con la comprobación activada, un envío sin ella recibe 400 `CAPTCHA_REQUIRED` |
+| Lo que **no** se hace | Un captcha de terceros (mete datos en otro proveedor y obliga a cambiar la CSP), una trampa de tiempo (necesitaría firmar la hora con una clave nueva) y el tope global (A10). Se reconsideran si R-C4 se materializa |
 
-Respuestas que ve un bot: `202` con el campo trampa; 400 si los demás campos no son válidos (la validación va antes que el servicio); 429 cuando pasa los límites. Con nada de eso sabe si su mensaje se ha guardado.
+Respuestas que ve un bot: 400 `CAPTCHA_REQUIRED` o `CAPTCHA_INVALID` sin una comprobación válida (si está activada); `202` con el campo trampa, aunque los demás campos no sean válidos (la trampa se mira antes que el esquema); 400 si los demás campos no son válidos; 429 cuando pasa los límites. Con nada de eso sabe si su mensaje se ha guardado.
 
 ---
 
@@ -527,7 +532,7 @@ Los errores de correo reutilizan `fieldMessages.register.email`, como `/forgot-p
 | R-C1 | **Inyección de cabeceras** (`Bcc:` en el asunto, varias direcciones en `Reply-To`) | Tres capas (§4.3). En la prueba de QA no puede salir ninguna cabecera nueva |
 | R-C2 | **HTML o *phishing* en el correo interno** | `escapeHtml` en todo, ningún enlace creado con lo que escribe la persona y un aviso antes del mensaje. **Residual**: el cliente de correo puede convertir en enlace una URL del texto plano; el aviso lo dice |
 | R-C3 | **Acuse como spam o *backscatter*** (con `CONTACT_ACK_EMAIL=true`) | Sin contenido del usuario (A6), 3 al día por dirección y desactivado por defecto. **Residual**: una red de bots con muchas IP puede hacer que Cupidilla escriba a muchas direcciones distintas, y eso perjudica la reputación del dominio. Si se activa, hay que vigilar `mail_sent` con `kind=contact_ack` |
-| R-C4 | **Inundación del buzón** con muchas IP | Límites por IP y por correo y campo trampa. Si pasa: un tope global en el *throttler* (A10), una trampa de tiempo firmada o un captcha |
+| R-C4 | **Inundación del buzón** con muchas IP | Límites por IP y por correo y campo trampa. Si pasa: un tope global en el *throttler* (A10), o una trampa de tiempo firmada. La comprobación antibots ALTCHA ya está ([técnico de captcha](captcha-diseno-tecnico.md)) |
 | R-C5 | **IP del cliente mal propagada** | El límite por IP depende de que `event.getClientAddress()` devuelva la IP real detrás del *proxy* de producción (`ADDRESS_HEADER`/`XFF_DEPTH` del adaptador). Si no, todo el mundo comparte un cubo de 3 por hora. Hay que comprobarlo al desplegar, igual que en el registro |
 | R-C6 | ***Throttler* en memoria** (R5 de H0) | Se pierde al reiniciar y no se comparte entre instancias |
 | R-C7 | **El correo interno no llega** (SMTP caído, buzón que rechaza) | El mensaje queda en la base de datos y nunca se pierde. Tras ~8 h, `mail_failed` con `kind=contact_message`, y `notified_at` sigue a `NULL`. La alerta sobre `mail_failed` que ya pide R-M7 cubre esto. Consulta de diagnóstico: `SELECT count(*) FROM contact_messages WHERE notified_at IS NULL AND created_at < now() - interval '9 hours'` |

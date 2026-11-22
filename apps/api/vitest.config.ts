@@ -31,6 +31,11 @@ const integrationOptions = {
     EMAIL_UNVERIFIED_REMINDER: '',
     EMAIL_PASSWORD_CHANGED_NOTICE: '',
     OAUTH_REDIRECT_BASE_URL: '',
+    // La comprobación antibots, desactivada: las pruebas de captcha la activan en su propia app
+    // (técnico de captcha §5.4). Vacías para que lo exportado en el shell no se cuele.
+    CAPTCHA_ENABLED: 'false',
+    CAPTCHA_HMAC_KEY: '',
+    CAPTCHA_DIFFICULTY: '',
     PUBLIC_WEB_URL,
     ...OAUTH_TEST_ENV,
   },

@@ -1,5 +1,6 @@
 import { PASSWORD_RESET_TTL_MINUTES } from '@cupidilla/contracts';
 import { redirect } from '@sveltejs/kit';
+import { captchaFromForm } from '#lib/forms/form-data.ts';
 import { api } from '#lib/server/api-client.ts';
 import { getPendingEmail } from '#lib/server/email-cookies.ts';
 import { urlMessage } from '#lib/server/oauth-notices.ts';
@@ -32,8 +33,11 @@ export const actions = {
   resend: async (event) => {
     const email = getPendingEmail(event.cookies, 'reset');
     if (!email) redirect(303, '/forgot-password');
-    const result = await api.requestPasswordReset(event, email);
+    const captcha = captchaFromForm(await event.request.formData());
+    const result = await api.requestPasswordReset(event, email, captcha);
     if (result.ok) redirect(303, `${PAGE}?notice=resent`);
+    if (result.error.code === 'CAPTCHA_REQUIRED') redirect(303, `${PAGE}?error=captcha-required`);
+    if (result.error.code === 'CAPTCHA_INVALID') redirect(303, `${PAGE}?error=captcha-invalid`);
     if (result.status === 429) redirect(303, `${PAGE}?error=rate-limited`);
     redirect(303, `${PAGE}?error=resend-failed`);
   },

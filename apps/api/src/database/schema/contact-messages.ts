@@ -8,7 +8,7 @@ import {
   CONTACT_SUBJECT_MIN,
 } from '@cupidilla/contracts';
 import { sql } from 'drizzle-orm';
-import { check, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 /**
  * Mensajes del formulario de contacto (técnico de contacto §3.1). Sin IP, *user agent* ni
@@ -32,6 +32,9 @@ export const contactMessages = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     // Cuándo aceptó el SMTP el correo interno. NULL durante horas = el buzón no lo ha recibido.
     notifiedAt: timestamp('notified_at', { withTimezone: true }),
+    // Si al recibirlo se encoló el acuse (CONTACT_ACK_EMAIL en ese momento). El correo interno lo
+    // dice así, aunque la variable cambie antes de enviarlo.
+    ackRequested: boolean('ack_requested').notNull().default(false),
   },
   (t) => [
     index('contact_messages_created_at_idx').on(t.createdAt),

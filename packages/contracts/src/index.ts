@@ -1,5 +1,6 @@
 export * from './age.js';
 export * from './auth.js';
+export * from './captcha.js';
 export * from './config.js';
 export * from './contact.js';
 export * from './consents.js';

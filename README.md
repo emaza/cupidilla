@@ -14,6 +14,8 @@ Hito **H0 — base mínima** implementado (11 de noviembre de 2026): registro, e
 
 **Contacto** (22 de noviembre de 2026): página pública `/contact` que guarda cada mensaje y lo envía por correo al buzón `CONTACT_TO_ADDRESS` (con acuse opcional a quien escribe, `CONTACT_ACK_EMAIL`, desactivado por defecto), y borrador de la política de privacidad en `/legal/privacy`. Los mensajes se borran a los 180 días (propuesta pendiente de revisión jurídica). El diseño está en [Diseño técnico](docs/contacto-diseno-tecnico.md) y [Diseño UX](docs/contacto-diseno-ux.md).
 
+**Protección antibots** (22 de noviembre de 2026): comprobación ALTCHA (prueba de trabajo, alojada en nuestros servidores, sin terceros ni cookies) en `/register`, `/forgot-password`, `/contact` y los reenvíos de los correos; el login y OAuth no la llevan. Se activa con `CAPTCHA_ENABLED` (activada por defecto) y la clave `CAPTCHA_HMAC_KEY`, obligatoria salvo en desarrollo: sin ella, `npm run dev` usa una clave aleatoria en cada arranque. Sin JavaScript estos formularios no se pueden enviar y avisan antes de escribir. Pruebas con la comprobación activada: `npm run test:e2e:captcha`. El diseño está en [Diseño técnico](docs/captcha-diseno-tecnico.md) y [Diseño UX](docs/captcha-diseno-ux.md).
+
 **Falta para producción**: el proveedor SMTP y el dominio remitente, probar la entrada con Google y Facebook reales (con Facebook, comprobar que el correo que devuelve está de verdad confirmado: D9) y, si va a haber más de una instancia de la API, resolver el riesgo R-M17 del envío de correos ([diseño de correo](docs/correo-diseno-tecnico.md)). Lo siguiente es H1, la [entrevista con Cupidilla](docs/entrevista-cupidilla.md).
 
 El código es un monorepo con npm workspaces:
@@ -88,7 +90,7 @@ Al pulsar «Continuar con Google» se abre su formulario: escribe un correo y pu
 
 Después pon en el `.env` `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET` con `PUBLIC_WEB_URL=http://localhost:5173`, **sin** `OAUTH_FAKE_PROVIDER_URL`, y reinicia `npm run dev`. Mientras las apps estén en modo de pruebas, solo entran las cuentas añadidas como probadoras. Cada proveedor necesita su pareja completa: con media pareja, la API no arranca. Los secretos solo los usa la API y nunca van al navegador.
 
-Los e2e (`npm run test:e2e`) arrancan su propio proveedor falso en el puerto 4400 y no necesitan nada de esto.
+Los e2e (`npm run test:e2e`) arrancan su propio proveedor falso en el puerto 4400 y no necesitan nada de esto. Van con la comprobación antibots desactivada; `npm run test:e2e:captcha` (después, nunca a la vez: comparten puertos y base) la prueba activada.
 
 Los scripts de `docker/postgres/init` solo se ejecutan con el volumen vacío: si cambian, `npm run db:reset` (borra los datos locales).
 
@@ -130,6 +132,8 @@ npm run sonar:down    # lo para; los datos se conservan en volúmenes
 | [Correo — Diseño UX](docs/correo-diseno-ux.md) | Pantallas, los cinco correos, textos y criterios de aceptación del hito de correo |
 | [Contacto — Diseño técnico](docs/contacto-diseno-tecnico.md) | Formulario de contacto y borrador de la política de privacidad: datos, *outbox*, API, web, retención y pruebas |
 | [Contacto — Diseño UX](docs/contacto-diseno-ux.md) | `/contact`, `/contact/sent`, `/legal/privacy`, el pie, los dos correos, textos y criterios de aceptación |
+| [Protección antibots (ALTCHA) — Diseño técnico](docs/captcha-diseno-tecnico.md) | Retos y verificación en la API, guard y cabecera `X-Captcha`, configuración, widget, CSP y pruebas |
+| [Protección antibots (ALTCHA) — Diseño UX](docs/captcha-diseno-ux.md) | El widget en cada formulario, estados, accesibilidad, sin JavaScript, textos y criterios de aceptación |
 
 ## Decisiones clave
 

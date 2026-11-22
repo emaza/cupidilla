@@ -11,6 +11,8 @@ if (existsSync(envFile)) process.loadEnvFile(envFile);
 export default defineConfig({
   testDir: 'tests/e2e',
   testMatch: '**/*.e2e.ts',
+  // Con la comprobación antibots activada: su propia suite (npm run test:e2e:captcha).
+  testIgnore: '**/*.captcha.e2e.ts',
   // Sin Mailpit no arranca (correo §11.2): «levanta Mailpit: npm run mail:up».
   globalSetup: './tests/e2e/global-setup.ts',
   forbidOnly: !!process.env.CI,

@@ -51,6 +51,9 @@ export const errorMessages: Record<FormName, Record<WebErrorCode, TextKey>> = {
     TERMS_VERSION_OUTDATED: 'registro.error.condiciones_version',
     RATE_LIMITED: 'comun.error.limite',
     OUTCOME_UNKNOWN: 'registro.error.resultado_incierto',
+    // Comprobación antibots (técnico de captcha §8.4): van en el campo `captcha`.
+    CAPTCHA_REQUIRED: 'captcha.error.requerido',
+    CAPTCHA_INVALID: 'captcha.error.invalido',
   }),
   login: byCode('entrar.error.servidor', {
     // Un correo mal formado se trata como unas credenciales incorrectas (acuerdo A10).
@@ -92,6 +95,8 @@ export const errorMessages: Record<FormName, Record<WebErrorCode, TextKey>> = {
   // /forgot-password (correo UX §3.3): un correo con formato válido siempre da éxito.
   forgot: byCode('olvido.error.servidor', {
     RATE_LIMITED: 'comun.error.limite',
+    CAPTCHA_REQUIRED: 'captcha.error.requerido',
+    CAPTCHA_INVALID: 'captcha.error.invalido',
   }),
   // /reset-password (correo UX §3.5). Un enlace que no sirve es una pantalla entera.
   reset: byCode('restablecer.error.servidor', {
@@ -112,6 +117,8 @@ export const errorMessages: Record<FormName, Record<WebErrorCode, TextKey>> = {
     PRIVACY_VERSION_OUTDATED: 'contacto.error.privacidad_version',
     RATE_LIMITED: 'contacto.error.limite',
     OUTCOME_UNKNOWN: 'contacto.error.resultado_incierto',
+    CAPTCHA_REQUIRED: 'captcha.error.requerido',
+    CAPTCHA_INVALID: 'captcha.error.invalido',
   }),
 };
 
@@ -171,3 +178,9 @@ export const fieldMessages = {
     privacyPolicyVersion: byIssue('contacto.error.privacidad_version', {}),
   },
 } as const satisfies Record<string, Record<string, Record<FieldIssue, TextKey>>>;
+
+/** ¿Es un error de la comprobación antibots? Esos van en el campo `captcha` (técnico de captcha §8.4). */
+export const isCaptchaError = (
+  code: WebErrorCode,
+): code is 'CAPTCHA_REQUIRED' | 'CAPTCHA_INVALID' =>
+  code === 'CAPTCHA_REQUIRED' || code === 'CAPTCHA_INVALID';

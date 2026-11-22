@@ -10,6 +10,8 @@ const DATA_REVIEW_ROUTES = new Set([
   '/forgot-password',
   '/forgot-password/check-email',
   '/reset-password',
+  // Reto antibots de /forgot-password (técnico de captcha §6.2).
+  '/captcha/challenge',
 ]);
 
 export const DATA_REVIEW_PATH = '/account/review';

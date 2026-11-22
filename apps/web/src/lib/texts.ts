@@ -561,6 +561,40 @@ export const texts = {
     'Puedes acceder a tus datos, rectificarlos, suprimirlos, limitar su tratamiento, oponerte a él y retirar tu consentimiento escribiéndonos a [PENDIENTE: correo]. También puedes reclamar ante la Agencia Española de Protección de Datos.',
   'contacto.info.mas.texto': 'Más información en la política de privacidad.',
 
+  // Protección antibots (captcha-diseno-ux.md §5)
+  'captcha.widget.etiqueta': 'Comprobación automática contra robots',
+  'captcha.ayuda':
+    'Se hace sola cuando empiezas a rellenar el formulario. No tienes que resolver nada.',
+  'captcha.widget.comprobando': 'Comprobando que no eres un robot…',
+  'captcha.widget.comprobado': 'Comprobado',
+  'captcha.widget.error':
+    'No hemos podido hacer la comprobación. Marca la casilla para intentarlo otra vez.',
+  'captcha.widget.caducado': 'La comprobación ha caducado. Se repetirá sola al enviar.',
+  'captcha.widget.requerida': 'Falta la comprobación. Marca la casilla o pulsa Enviar.',
+  'captcha.estado.enviando': 'Comprobando y enviando…',
+  'captcha.error.requerido':
+    'Falta la comprobación automática. Vuelve a enviar el formulario: se hará sola. Si no funciona, activa JavaScript en tu navegador.',
+  'captcha.error.invalido':
+    'La comprobación automática ha caducado o no es válida. Vuelve a enviar el formulario: se repetirá sola.',
+  'captcha.error.invalido_repetido':
+    'No conseguimos completar la comprobación automática. Prueba a recargar la página o a usar otro navegador.',
+  'captcha.error.tiempo':
+    'La comprobación está tardando demasiado. Marca la casilla para intentarlo otra vez.',
+  'captcha.frase.soporte': 'Si sigue fallando, escríbenos a {soporte}.',
+  'captcha.sin_js.titulo': 'Este formulario necesita JavaScript',
+  'captcha.sin_js.registro':
+    'Para frenar los registros automáticos hacemos una comprobación en tu navegador y necesita JavaScript. Actívalo para crear tu cuenta.',
+  'captcha.sin_js.olvido':
+    'Para frenar los envíos automáticos hacemos una comprobación en tu navegador y necesita JavaScript. Actívalo para recibir el enlace.',
+  'captcha.sin_js.contacto':
+    'Para frenar el spam hacemos una comprobación en tu navegador y necesita JavaScript. Actívalo para enviar tu mensaje.',
+  'captcha.sin_js.reenvio':
+    'Para reenviar el mensaje hacemos una comprobación en tu navegador y necesita JavaScript. Actívalo y vuelve a intentarlo.',
+  'captcha.sin_js.oauth': 'También puedes entrar con {proveedores}.',
+  'captcha.sin_js.soporte': 'O escríbenos a {soporte}.',
+  'captcha.sin_js.conservado':
+    'Si lo envías sin activarlo, no se enviará nada y tendrás que volver a escribir las contraseñas; el resto se conserva.',
+
   // 5.8 Textos para lectores de pantalla
   'a11y.error.prefijo': 'Error:',
   'a11y.nueva_pestana': '(se abre en una pestaña nueva)',

@@ -17,6 +17,7 @@ const uxDoc = readFileSync(resolve(REPO_ROOT, 'docs/h0-diseno-ux.md'), 'utf8');
 const oauthUxDoc = readFileSync(resolve(REPO_ROOT, 'docs/login-terceros-diseno-ux.md'), 'utf8');
 const mailUxDoc = readFileSync(resolve(REPO_ROOT, 'docs/correo-diseno-ux.md'), 'utf8');
 const contactUxDoc = readFileSync(resolve(REPO_ROOT, 'docs/contacto-diseno-ux.md'), 'utf8');
+const captchaUxDoc = readFileSync(resolve(REPO_ROOT, 'docs/captcha-diseno-ux.md'), 'utf8');
 
 /** Filas `| `clave` | texto |` de la sección 5. Un texto entre acentos graves se toma literal (con sus espacios). */
 function tableOfSection5(
@@ -77,6 +78,24 @@ const privacyTable = tableOfSection5(
   '### 2.3 `/legal/privacy` (borrador)',
 );
 /**
+ * Tabla del diseño UX de la protección antibots (su §5). Algunas filas tienen una tercera columna
+ * (la propiedad `i18n` del widget): el texto es solo la segunda.
+ */
+function captchaTable(): Map<string, string> {
+  const start = captchaUxDoc.indexOf('## 5. Textos de interfaz');
+  const end = captchaUxDoc.indexOf('## 6. Comportamiento sin JavaScript');
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  const rows = new Map<string, string>();
+  for (const line of captchaUxDoc.slice(start, end).split('\n')) {
+    const match = /^\| `(captcha\.[a-z0-9_.]+)` \| (.*?) \|(?: .* \|)?$/.exec(line);
+    if (match) rows.set(match[1] ?? '', match[2] ?? '');
+  }
+  return rows;
+}
+const captchaTexts = captchaTable();
+
+/**
  * Textos del formulario de contacto que el diseño UX no contempla: los errores de formato
  * (caracteres de control o bidireccionales) y la etiqueta del campo trampa. Son los textos
  * provisionales de la §8.4 del diseño técnico de contacto.
@@ -101,6 +120,8 @@ describe('Textos de interfaz = tabla de UX §5 (criterio 49)', () => {
     expect(contactTable.get('contacto.boton.enviar')).toBe('Enviar mensaje');
     expect(contactTable.get('contacto.info.base.etiqueta')).toBe('Base jurídica');
     expect(privacyTable.get('privacidad.s11.titulo')).toBe('11. Cambios');
+    expect(captchaTexts.size).toBe(21);
+    expect(captchaTexts.get('captcha.widget.comprobado')).toBe('Comprobado');
   });
 
   it('las dos tablas no se contradicen: una clave repetida tiene el mismo texto', () => {
@@ -123,7 +144,8 @@ describe('Textos de interfaz = tabla de UX §5 (criterio 49)', () => {
         table.get(key) ??
         oauthTable.get(key) ??
         contactTable.get(key) ??
-        contactExtras.get(key)
+        contactExtras.get(key) ??
+        captchaTexts.get(key)
       )?.replaceAll('{edad}', '18');
       if (expected === undefined) different.push(`${key}: no está en ninguna tabla de UX §5`);
       else if (expected !== text) different.push(`${key}: «${text}» ≠ «${expected}»`);
@@ -132,9 +154,12 @@ describe('Textos de interfaz = tabla de UX §5 (criterio 49)', () => {
   });
 
   it('cada clave de las dos tablas (salvo /legal/terms) está en texts.ts: no falta ningún texto', () => {
-    const missing = [...table.keys(), ...oauthTable.keys(), ...contactTable.keys()].filter(
-      (key) => !key.startsWith('condiciones.') && !mailRemoved.has(key) && !(key in texts),
-    );
+    const missing = [
+      ...table.keys(),
+      ...oauthTable.keys(),
+      ...contactTable.keys(),
+      ...captchaTexts.keys(),
+    ].filter((key) => !key.startsWith('condiciones.') && !mailRemoved.has(key) && !(key in texts));
     expect(missing).toEqual([]);
   });
 

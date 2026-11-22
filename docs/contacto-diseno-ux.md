@@ -1,13 +1,13 @@
 # Contacto y política de privacidad (borrador) — Diseño UX
 
-[← Índice](../README.md) · Complementa: [H0 — Diseño UX](h0-diseno-ux.md) y [Verificación de correo y recuperación — Diseño UX](correo-diseno-ux.md)
+[← Índice](../README.md) · Complementa: [H0 — Diseño UX](h0-diseno-ux.md), [Verificación de correo y recuperación — Diseño UX](correo-diseno-ux.md) y [Protección antibots, diseño UX](captcha-diseno-ux.md)
 
 Especificación de `/contact`, `/contact/sent`, `/legal/privacy` (borrador), el enlace «Contacto» en el pie y los dos correos nuevos (aviso interno y acuse al remitente). Fecha del documento: 22 de noviembre de 2026. Textos en español de España, con tuteo. Todo lo que no se redefine aquí se rige por H0: plantilla (§2.1), patrón de formulario y errores (§2.2), accesibilidad (§6) y tokens (§7); y por el documento de correo: reglas comunes de los correos (§5) y marcador `{soporte}`.
 
 ## 0. Alcance, usuarios y principios
 
-**Dentro**: `/contact` (formulario), `/contact/sent` (confirmación), `/legal/privacy` (borrador), «Contacto» y «Política de privacidad» en el pie, correo interno al equipo y acuse opcional al remitente.
-**Fuera**: adjuntos, chat, tickets con seguimiento, selector de categorías, captcha, respuesta desde la web, bandeja de administración.
+**Dentro**: `/contact` (formulario), `/contact/sent` (confirmación), `/legal/privacy` (borrador), «Contacto» y «Política de privacidad» en el pie, correo interno al equipo y acuse opcional al remitente, la comprobación antibots ALTCHA (ver [Protección antibots, diseño UX](captcha-diseno-ux.md)).
+**Fuera**: adjuntos, chat, tickets con seguimiento, selector de categorías, respuesta desde la web, bandeja de administración.
 
 **Usuarios y objetivo.** Cualquier persona, con o sin cuenta:
 1. *Visitante con una duda* antes de registrarse.
@@ -17,7 +17,7 @@ Especificación de `/contact`, `/contact/sent`, `/legal/privacy` (borrador), el 
 Objetivo: **escribir un mensaje en menos de un minuto, saber qué pasa con sus datos y tener la certeza de que se ha enviado.**
 
 Principios:
-1. **Pedir lo mínimo.** Cuatro datos obligatorios y uno opcional. Sin categorías, sin captcha, sin adjuntos.
+1. **Pedir lo mínimo.** Cuatro datos obligatorios y uno opcional. Sin categorías ni adjuntos, y sin pedir nada a la persona para la comprobación antibots (se hace sola, ver el diseño UX de la comprobación).
 2. **Nunca perder lo escrito.** Un mensaje largo cuesta escribirlo: tras cualquier error (validación, límite, servidor, conexión) el formulario vuelve con todo, incluido el mensaje.
 3. **Honestidad sobre los datos.** Se dice quién los trata, para qué y qué derechos hay, antes de pulsar «Enviar».
 4. **No prometer lo que no hay.** Ningún texto promete un plazo de respuesta ni un acuse que no vaya a existir (el acuse es configurable).
@@ -90,6 +90,9 @@ datos que no sean necesarios para tu consulta.
     Leer la política de privacidad (se abre en una pestaña nueva)
     Usaremos tus datos solo para atender tu mensaje. Es un texto provisional, pendiente de revisión jurídica.
 
+[ ] Comprobación automática contra robots                (captcha.widget.etiqueta)
+    Se hace sola cuando empiezas a rellenar el formulario. No tienes que resolver nada.   (captcha.ayuda)
+
 [ Enviar mensaje ]
 
 Información básica sobre protección de datos
@@ -110,6 +113,7 @@ Responsable: …  Finalidad: …  Derechos: …  (cláusula, §4)
 | Privacidad | `<input type="checkbox" id="acceptPrivacy" name="acceptPrivacy">` | Sí | — | desmarcada siempre, salvo recuperar el valor tras un error |
 | Versión | `<input type="hidden" name="privacyVersion">` | — | `PRIVACY_POLICY_VERSION` | como `termsVersion` en `TermsCheckbox` |
 | Trampa antispam | `<input type="text" name="hp_contact">` | — | debe llegar vacío | ver 2.1.3 |
+| Comprobación antibots | `<altcha-widget name="captcha">` | No (automático) | — | ver el [diseño UX de la comprobación](captcha-diseno-ux.md) |
 
 - Los obligatorios llevan `aria-required="true"`. No hay asteriscos: se dice una vez arriba (`contacto.texto.obligatorios`) y el teléfono se marca en su propia etiqueta con «(opcional)».
 - **Sin `maxlength`** (H0 §2.3: cortar en silencio es peor): el contador avisa y el servidor valida.
@@ -127,11 +131,11 @@ Responsable: …  Finalidad: …  Derechos: …  (cláusula, §4)
 
 #### 2.1.2 Resumen de errores
 
-Patrón de H0 §2.2: `ErrorSummary` antes de la `<h1>`, `<h2>` «Revisa esto antes de seguir», un enlace por error al control (`#name`, `#email`, `#phone`, `#subject`, `#message`, `#acceptPrivacy`) **en el orden visual de los campos**. Error de campo: `FieldError` bajo la ayuda y encima del control, con «Error:» oculto, icono ⚠ y `aria-describedby` + `aria-invalid="true"`. Errores sin campo (límite, servidor, conexión): bloque `role="alert"` sin lista. `<title>` con prefijo «Error: ». Con JavaScript, el foco pasa al resumen; sin él, es lo primero de `<main>`.
+Patrón de H0 §2.2: `ErrorSummary` antes de la `<h1>`, `<h2>` «Revisa esto antes de seguir», un enlace por error al control (`#name`, `#email`, `#phone`, `#subject`, `#message`, `#acceptPrivacy` y, el último, `#captcha`) **en el orden visual de los campos**. Error de campo: `FieldError` bajo la ayuda y encima del control, con «Error:» oculto, icono ⚠ y `aria-describedby` + `aria-invalid="true"`. Errores sin campo (límite, servidor, conexión): bloque `role="alert"` sin lista. `<title>` con prefijo «Error: ». Con JavaScript, el foco pasa al resumen; sin él, es lo primero de `<main>`.
 
-#### 2.1.3 Trampa antispam (sin captcha)
+#### 2.1.3 Trampa antispam
 
-Un campo oculto `hp_contact` que las personas no ven ni rellenan. Fuera de pantalla (no `display:none`), con `tabindex="-1"`, `aria-hidden="true"` y `autocomplete="off"`; nombre deliberadamente raro (un nombre como `website` o `url` lo rellenarían los gestores de formularios de personas reales). Si llega relleno, el servidor **responde como si todo hubiera ido bien** (303 a `/contact/sent` con acuse a `false`) y no guarda ni envía nada. No hay captcha ni prueba cognitiva (WCAG 3.3.8). El límite de envíos del servidor (§2.1.4) es la defensa real.
+Un campo oculto `hp_contact` que las personas no ven ni rellenan. Fuera de pantalla (no `display:none`), con `tabindex="-1"`, `aria-hidden="true"` y `autocomplete="off"`; nombre deliberadamente raro (un nombre como `website` o `url` lo rellenarían los gestores de formularios de personas reales). Si llega relleno, el servidor **responde como si todo hubiera ido bien** (303 a `/contact/sent` con acuse a `false`) y no guarda ni envía nada. La comprobación antibots ALTCHA (prueba de trabajo, sin ninguna tarea para la persona ni prueba cognitiva, WCAG 3.3.8) y el límite de envíos del servidor (§2.1.4) son las defensas principales; el campo trampa es un complemento. Con la comprobación activa, un envío sin ella recibe `CAPTCHA_REQUIRED` antes de llegar a la trampa: la trampa solo actúa con una comprobación válida.
 
 #### 2.1.4 Estados
 
@@ -139,19 +143,20 @@ Un campo oculto `hp_contact` que las personas no ven ni rellenan. Fuera de panta
 |---|---|
 | Inicial | Vacío (con sesión, correo relleno), casilla desmarcada, sin errores, sin `autofocus` |
 | Escribiendo (JS) | Contador del mensaje actualizado; nada más cambia |
-| Enviando (JS) | Botón «Enviando…», `aria-disabled="true"`, segundo envío ignorado, región `role="status"` oculta con «Enviando tu mensaje…». Los campos siguen editables y conservan lo escrito |
+| Enviando (JS) | Botón «Enviando…», `aria-disabled="true"`, segundo envío ignorado, región `role="status"` oculta con «Enviando tu mensaje…». Los campos siguen editables y conservan lo escrito. Si la comprobación no ha terminado, el botón pasa a «Enviando…» y la región de estado dice «Comprobando y enviando…» hasta que termina; después se envía sola |
 | Error de validación | Resumen + error por campo, **todos los valores conservados** (también el mensaje y la casilla). 400 |
 | Demasiados envíos | Bloque `role="alert"` con `contacto.error.limite`; valores conservados. 429 |
 | Error del servidor (no se guardó nada) | Bloque `role="alert"` con `contacto.error.servidor`; valores conservados. 5xx |
 | Resultado incierto (503, se perdió la conexión) | Bloque `role="alert"` con `contacto.error.resultado_incierto`; valores conservados; no hay enlace de comprobación (no hay dónde comprobarlo). El botón vuelve a «Enviar mensaje» |
 | Éxito | 303 a `/contact/sent` |
-| Sin JavaScript | `<form method="POST">` y recarga completa; sin contador (la ayuda dice el máximo); el resto igual |
+| Error de comprobación (400 `CAPTCHA_REQUIRED` / `CAPTCHA_INVALID`) | Resumen con `captcha.error.*`, error en el widget, valores conservados |
+| **Sin JavaScript** | Con la comprobación activa, no se puede enviar. Aviso `<noscript>` antes del primer campo con alternativa (dirección de soporte), valores conservados si se envía igual (error `CAPTCHA_REQUIRED` en el resumen). Con la comprobación desactivada, `<form method="POST">` y recarga completa; sin contador (la ayuda dice el máximo); el resto igual |
 
 **Límite de envíos** (decide el diseño técnico; propuesta): 3 mensajes por hora y 10 al día por IP, y 3 cada 24 h por correo del remitente. El acuse se limita por separado (1 cada 24 h por correo): si se supera, **el mensaje se guarda y se envía al equipo igual**, solo se omite el acuse y la cookie de §1.1 lleva `ack=false`.
 
 #### 2.1.5 Orden de tabulación
 
-Saltar al contenido → encabezado → (resumen de errores) → nombre → correo → teléfono → asunto → mensaje → casilla → enlace «Leer la política de privacidad» → «Enviar mensaje» → enlace de la política dentro de la cláusula informativa → pie. El campo trampa no es tabulable.
+Saltar al contenido → encabezado → (resumen de errores) → nombre → correo → teléfono → asunto → mensaje → casilla → enlace «Leer la política de privacidad» → **casilla del widget de comprobación** → «Enviar mensaje» → enlace de la política dentro de la cláusula informativa → pie. El campo trampa no es tabulable.
 
 ### 2.2 `/contact/sent`
 
@@ -419,19 +424,20 @@ Rige H0 §6 y §7.4. Añadidos de esta pantalla:
 - `/contact/sent`: foco al `<h1>` con JavaScript.
 - Tras un error de límite o de servidor, el foco va al bloque `role="alert"`; el mensaje del textarea no se toca ni se mueve el cursor.
 - El anillo de foco, el contraste y el objetivo táctil de 44×44 px son los de H0. El contador y el texto de error no dependen del color.
+- El widget de comprobación no roba nunca el foco. Un error de comprobación lleva el foco al resumen y el enlace `#captcha` a la casilla del widget.
 
-**Teclado**: todo funciona sin ratón; Intro envía desde los campos de una línea y añade un salto de línea en el textarea (comportamiento nativo, no se intercepta); la barra espaciadora marca la casilla.
+**Teclado**: todo funciona sin ratón; Intro envía desde los campos de una línea y añade un salto de línea en el textarea (comportamiento nativo, no se intercepta); la barra espaciadora marca la casilla; la casilla del widget está entre la casilla de privacidad y el botón.
 
 **Responsive**
 - Una columna. Menos de 30em: botones de ancho completo; el textarea a todo el ancho, sin scroll horizontal a 320 px. Desde 48em: formulario en la tarjeta de `--ancho-formulario` (28rem) como `/forgot-password`.
 - Textarea: 8 filas por defecto (≈ 12rem), `resize: vertical`, tamaño de letra 16 px o más (evita el zoom de iOS), `overflow-wrap: anywhere` para pegar texto sin espacios. A 200 % de zoom no se pierde contenido.
 - Correo de 254 caracteres y asunto de 120 sin espacios se parten, no desbordan. En la página de confirmación el correo se parte igual.
-- Sin límite de tiempo en el formulario ni sesión que caduque: es público.
+- Sin límite de tiempo para la persona: ni el formulario ni la sesión caducan. La comprobación antibots caduca a los 10 minutos, pero se repite sola al enviar sin perder lo escrito.
 - `Cache-Control: no-store` en `/contact/sent` (lleva el correo). `/contact` no necesita `no-store`, pero el navegador puede restaurar lo escrito al volver atrás: es comportamiento deseado.
 
 ## 8. Casos límite
 
-Mensaje de 3000 caracteres exactos (válido) y de 3001 (error); asunto de 2 y de 3 caracteres; correo de 254 caracteres; nombre con acentos, apóstrofos, emojis; mensaje solo de espacios o saltos de línea (cuenta como vacío); pegar 10 000 caracteres (contador en error, nada se corta, error de campo al enviar); teléfono con `+34 (600) 123-456` (válido) y `12345` (error) y vacío (válido); doble clic en «Enviar mensaje» (un solo mensaje); recargar `/contact/sent` (se vuelve al formulario vacío); abrir `/contact/sent` sin haber enviado (303 a `/contact`); sin JavaScript; con sesión (correo relleno); con lector de pantalla; sin conexión durante el envío (resultado incierto); envío con el campo trampa relleno (parece éxito, no se guarda).
+Mensaje de 3000 caracteres exactos (válido) y de 3001 (error); asunto de 2 y de 3 caracteres; correo de 254 caracteres; nombre con acentos, apóstrofos, emojis; mensaje solo de espacios o saltos de línea (cuenta como vacío); pegar 10 000 caracteres (contador en error, nada se corta, error de campo al enviar); teléfono con `+34 (600) 123-456` (válido) y `12345` (error) y vacío (válido); doble clic en «Enviar mensaje» (un solo mensaje); recargar `/contact/sent` (se vuelve al formulario vacío); abrir `/contact/sent` sin haber enviado (303 a `/contact`); sin JavaScript (con la comprobación activa, aviso y valores conservados al enviar); reto caducado tras 12 minutos (se repite solo); enviar antes de que termine la comprobación; con sesión (correo relleno); con lector de pantalla; sin conexión durante el envío (resultado incierto); envío con el campo trampa relleno (parece éxito, no se guarda).
 
 ## 9. Criterios de aceptación (para tester-qa)
 
@@ -477,8 +483,11 @@ Mensaje de 3000 caracteres exactos (válido) y de 3001 (error); asunto de 2 y de
 31. Todos los textos visibles de `/contact`, `/contact/sent` y el pie salen de `texts.ts` con las claves de §3 y coinciden con las tablas.
 32. La cláusula de §4 aparece **bajo** el botón «Enviar mensaje», con su `<h2>`, las seis etiquetas (Responsable, Finalidad, Base jurídica, Destinatarios, Derechos) y el enlace a la política; el texto cumple el contraste 4,5:1.
 33. Sin scroll horizontal a 320 px y con zoom del 200 %, también con un correo de 254 caracteres y un asunto de 120 caracteres sin espacios. Objetivos táctiles de 44×44 px. Botones apilados a ancho completo por debajo de 30em.
-34. El formulario completo se puede rellenar y enviar solo con teclado y funciona con JavaScript desactivado (excepto el contador y el anuncio de «Enviando…»).
-35. No hay captcha ni prueba cognitiva.
+34. El formulario completo se puede rellenar y enviar solo con teclado y con JavaScript. Con JavaScript desactivado y la comprobación activa, se ve el aviso antes de escribir y, si se envía igual, vuelve con todo conservado y el error de comprobación; con la comprobación desactivada, funciona sin JavaScript (excepto el contador y el anuncio de «Enviando…»).
+35. No hay ninguna prueba cognitiva ni reto de imagen o audio: la comprobación antibots (ALTCHA) es una prueba de trabajo que no requiere ninguna acción de la persona.
+36. Con la comprobación activa, el widget aparece entre la casilla de privacidad y el botón y el envío con la comprobación terminada no muestra ningún error.
+37. Pulsar «Enviar mensaje» antes de que termine hace un solo envío tras «Comprobando y enviando…».
+38. Los criterios 1–30 de §10 de [Protección antibots, diseño UX](captcha-diseno-ux.md) se aplican a `/contact`.
 
 ## 10. Preguntas abiertas
 

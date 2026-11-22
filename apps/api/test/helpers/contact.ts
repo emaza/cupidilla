@@ -31,6 +31,7 @@ export type ContactRow = {
   privacy_policy_version: string;
   created_at: Date;
   notified_at: Date | null;
+  ack_requested: boolean;
   length: number;
 };
 

@@ -49,6 +49,8 @@ export default defineConfig({
           'img-src': ['self', 'data:'],
           'font-src': ['self'],
           'connect-src': ['self'],
+          // El worker del widget antibots es un archivo propio (técnico de captcha §8.3): sin blob:.
+          'worker-src': ['self'],
           'form-action': formAction,
           'frame-ancestors': ['none'],
           'base-uri': ['self'],

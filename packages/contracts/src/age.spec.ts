@@ -136,16 +136,32 @@ describe('edad mínima distinta de 18', () => {
 describe('configResponseSchema', () => {
   const mail = { unverifiedReminder: true, passwordChangedNotice: false };
   const contact = { ackEmail: false };
+  // Comprobación antibots y soporte (técnico de captcha §5.2).
+  const captcha = { enabled: true };
+  const support = { email: 'soporte@example.com' };
 
   it('acepta la edad dentro del rango y rechaza lo demás', () => {
-    expect(configResponseSchema.parse({ minAge: 21, mail, contact })).toEqual({
+    expect(configResponseSchema.parse({ minAge: 21, mail, contact, captcha, support })).toEqual({
       minAge: 21,
       mail,
       contact,
+      captcha,
+      support,
     });
     for (const minAge of [17, 26, 21.5, '21', undefined]) {
-      expect(configResponseSchema.safeParse({ minAge, mail, contact }).success).toBe(false);
+      expect(
+        configResponseSchema.safeParse({ minAge, mail, contact, captcha, support }).success,
+      ).toBe(false);
     }
+  });
+
+  it('exige captcha.enabled y support.email (técnico de captcha §5.2)', () => {
+    expect(configResponseSchema.safeParse({ minAge: 18, mail, contact, support }).success).toBe(
+      false,
+    );
+    expect(configResponseSchema.safeParse({ minAge: 18, mail, contact, captcha }).success).toBe(
+      false,
+    );
   });
 
   it('exige la configuración de los correos opcionales (correo §5.8)', () => {

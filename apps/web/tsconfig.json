@@ -6,5 +6,11 @@
     "noImplicitOverride": true,
     "types": ["$app/types", "node"]
   },
-  "include": ["src", "tests", "vite.config.ts", "playwright.config.ts"]
+  "include": [
+    "src",
+    "tests",
+    "vite.config.ts",
+    "playwright.config.ts",
+    "playwright.captcha.config.ts"
+  ]
 }

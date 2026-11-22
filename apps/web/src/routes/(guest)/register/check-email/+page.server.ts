@@ -1,4 +1,5 @@
 import { redirect } from '@sveltejs/kit';
+import { captchaFromForm } from '#lib/forms/form-data.ts';
 import { api } from '#lib/server/api-client.ts';
 import { getPendingEmail } from '#lib/server/email-cookies.ts';
 import { urlMessage } from '#lib/server/oauth-notices.ts';
@@ -22,8 +23,13 @@ export const actions = {
   resend: async (event) => {
     const email = getPendingEmail(event.cookies, 'signup');
     if (!email) redirect(303, '/register');
-    const result = await api.requestEmailVerification(event, email);
+    const captcha = captchaFromForm(await event.request.formData());
+    const result = await api.requestEmailVerification(event, email, captcha);
     if (result.ok) redirect(303, '/register/check-email?notice=resent');
+    if (result.error.code === 'CAPTCHA_REQUIRED')
+      redirect(303, '/register/check-email?error=captcha-required');
+    if (result.error.code === 'CAPTCHA_INVALID')
+      redirect(303, '/register/check-email?error=captcha-invalid');
     if (result.status === 429) redirect(303, '/register/check-email?error=rate-limited');
     redirect(303, '/register/check-email?error=resend-failed');
   },

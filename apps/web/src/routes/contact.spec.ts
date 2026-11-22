@@ -84,6 +84,8 @@ describe('T10: acción de /contact', () => {
     expect(api.sendContactMessage).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ email: 'lucia@example.com', acceptPrivacy: true }),
+      // Sin comprobación en el formulario, sin X-Captcha.
+      undefined,
     );
     const cookie = cookies.jar.get(CONTACT_SENT_COOKIE);
     expect(cookie?.value).toBe('0:lucia@example.com');
@@ -109,6 +111,7 @@ describe('T10: acción de /contact', () => {
     expect(api.sendContactMessage).toHaveBeenLastCalledWith(
       expect.anything(),
       expect.objectContaining({ hp_contact: 'http://spam.example' }),
+      undefined,
     );
     expect(cookies.jar.get(CONTACT_SENT_COOKIE)?.value).toBe('0:lucia@example.com');
   });

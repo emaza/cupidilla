@@ -5,6 +5,8 @@ import { envSchema } from './env.schema.js';
 const base = {
   DATABASE_URL: 'postgres://u:p@127.0.0.1:5432/cupidilla_test',
   INTERNAL_API_KEY: 'k'.repeat(32),
+  // La comprobación antibots tiene su propio archivo (env.schema.captcha.spec.ts).
+  CAPTCHA_ENABLED: 'false',
   // Obligatorias desde el hito de correo (§8.1).
   PUBLIC_WEB_URL: 'http://localhost:5173',
   SMTP_URL: 'smtp://127.0.0.1:1025',

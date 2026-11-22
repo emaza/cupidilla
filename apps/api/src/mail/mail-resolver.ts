@@ -50,7 +50,6 @@ export interface OutboxRowToResolve {
 @Injectable()
 export class MailResolver {
   private readonly context: MailContext;
-  private readonly contactAck: boolean;
 
   constructor(
     private readonly identities: IdentitiesService,
@@ -61,7 +60,6 @@ export class MailResolver {
       webUrl: config.get('PUBLIC_WEB_URL', { infer: true }),
       supportAddress: config.get('MAIL_SUPPORT_ADDRESS', { infer: true }),
     };
-    this.contactAck = config.get('CONTACT_ACK_EMAIL', { infer: true });
   }
 
   async resolve(tx: Tx, row: OutboxRowToResolve): Promise<MailMessage | null> {
@@ -94,7 +92,11 @@ export class MailResolver {
     if (kind === 'contact_ack') {
       return { to: toEmail, ...renderContactAck(this.context, { id: message.id, email: toEmail }) };
     }
-    const rendered = renderContactMessage(this.context, { ...message, ackSent: this.contactAck });
+    // Lo que se decidió al recibir el mensaje, no lo que diga CONTACT_ACK_EMAIL al enviarlo.
+    const rendered = renderContactMessage(this.context, {
+      ...message,
+      ackSent: message.ackRequested,
+    });
     return { to: toEmail, replyTo: message.email, ...rendered };
   }
 

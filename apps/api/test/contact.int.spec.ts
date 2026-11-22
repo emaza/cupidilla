@@ -189,6 +189,36 @@ describe('T7: formulario de contacto', () => {
     }
   });
 
+  it('QA: con el campo trampa relleno y el resto no válido también responde 202 (no 400)', async () => {
+    for (const body of [
+      { hp_contact: 'http://spam.example' },
+      contactBody({ hp_contact: 'x', email: 'no-es-correo', extra: 1 }),
+    ]) {
+      const response = await send(body);
+      expect(response.status).toBe(202);
+      expect(response.text).toBe('');
+    }
+    // Sin la trampa (o con ella vacía o de otro tipo), el cuerpo no válido sigue dando 400.
+    for (const [n, hp_contact] of [undefined, '   ', 42].entries()) {
+      const response = await send(contactBody({ hp_contact, email: `no-es-correo-${n}` }));
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    }
+    await expectNothingSaved();
+  });
+
+  it('QA: «Acuse enviado» del correo interno es lo decidido al recibir el mensaje', async () => {
+    expect((await send(contactBody())).status).toBe(202);
+    const [row] = await contactRows(t.db);
+    expect(row?.ack_requested).toBe(false);
+    // Aunque al enviar se lea otra cosa, manda lo guardado con el mensaje.
+    await t.db.execute(sql`update contact_messages set ack_requested = true`);
+    await deliverMail(t.app);
+    expect(inbox(t.app).messagesTo(CONTACT_INBOX)[0]?.text).toContain(
+      'Acuse enviado al remitente: sí',
+    );
+  });
+
   it('C10: una versión de la política vieja da 409 PRIVACY_VERSION_OUTDATED', async () => {
     const response = await send(contactBody({ privacyPolicyVersion: '2026-10-vieja' }));
     expect(response.status).toBe(409);

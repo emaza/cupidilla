@@ -10,7 +10,7 @@ export interface ContactMessageInput {
   message: string;
   createdAt: Date;
   privacyPolicyVersion: string;
-  /** Si se encola el acuse al remitente (`CONTACT_ACK_EMAIL`). */
+  /** Si se encoló el acuse al remitente al recibir el mensaje (`contact_messages.ack_requested`). */
   ackSent: boolean;
 }
 

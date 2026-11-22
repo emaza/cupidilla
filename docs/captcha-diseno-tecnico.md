@@ -372,6 +372,7 @@ CAPTCHA_DIFFICULTY: z.preprocess(
 | `CAPTCHA_HMAC_KEY === INTERNAL_API_KEY` | «CAPTCHA_HMAC_KEY tiene que ser distinta de INTERNAL_API_KEY.» |
 | `NODE_ENV=production` y `CAPTCHA_DIFFICULTY=minimal` | «CAPTCHA_DIFFICULTY=minimal es solo para desarrollo y pruebas: no vale con NODE_ENV=production.» |
 
+- **En desarrollo** (`NODE_ENV=development`, decisión del CTO del 22-11-2026 para que `npm run dev` arranque con cualquier `.env`), la clave tampoco se exige: `CaptchaService` usa una aleatoria de esa ejecución y registra `{ event: 'captcha_ephemeral_key' }` como `warn`. Con `NODE_ENV=production` o `test` sigue siendo obligatoria (CA2).
 - La clave **no** se exige con `CAPTCHA_ENABLED=false`. Si viene, se valida igual (32 caracteres o más), para que un valor malo no espere escondido a que alguien active la comprobación.
 - Con `NODE_ENV=production` y `CAPTCHA_ENABLED=false`, la API arranca, pero registra al arrancar un aviso `{ event: 'captcha_disabled' }` con nivel `warn`. Es una decisión válida (por ejemplo, durante un incidente), pero tiene que verse.
 - El comentario de `booleanFlag` pasa a nombrar también `CAPTCHA_ENABLED`.

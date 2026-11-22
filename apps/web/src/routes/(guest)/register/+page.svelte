@@ -4,23 +4,32 @@
   import EmailField from '#lib/components/EmailField.svelte';
   import ErrorSummary from '#lib/components/ErrorSummary.svelte';
   import BirthDateFieldset from '#lib/components/BirthDateFieldset.svelte';
+  import CaptchaField from '#lib/components/CaptchaField.svelte';
+  import CaptchaNoscript from '#lib/components/CaptchaNoscript.svelte';
   import PasswordField from '#lib/components/PasswordField.svelte';
   import ProviderButtons from '#lib/components/ProviderButtons.svelte';
   import TermsCheckbox from '#lib/components/TermsCheckbox.svelte';
   import UrlMessage from '#lib/components/UrlMessage.svelte';
   import SubmitButton from '#lib/components/SubmitButton.svelte';
   import type { DatePart } from '#lib/forms/birth-date.ts';
+  import { createCaptcha } from '#lib/captcha/captcha.svelte.ts';
+  import { CAPTCHA_FAILURES_FIELD, captchaErrorText } from '#lib/forms/captcha.ts';
   import { createSubmission } from '#lib/forms/submission.svelte.ts';
   import { fill, pageTitle, t } from '#lib/texts.ts';
   import type { PageProps } from './$types';
 
   let { data, form }: PageProps = $props();
 
-  const submission = createSubmission();
+  const PROVIDER_NAMES = { google: 'Google', facebook: 'Facebook' } as const;
+  const captcha = createCaptcha();
+  const submission = createSubmission({ captcha });
 
   const values = $derived(form?.values);
   const fields = $derived(form?.errors?.fields ?? {});
   const general = $derived(form?.errors?.general);
+  const captchaError = $derived(
+    fields.captcha ? captchaErrorText(fields.captcha, data.supportEmail) : undefined,
+  );
   const invalidParts = $derived<DatePart[]>(form?.errors?.dateParts ?? []);
   const hasErrors = $derived(
     Object.keys(fields).length > 0 || general !== undefined || data.message?.kind === 'error',
@@ -38,7 +47,10 @@
       { target: 'password', key: fields.password },
       { target: invalidParts[0] ?? 'day', key: fields.birthDate },
       { target: 'acceptTerms', key: fields.acceptTerms },
-    ].flatMap(({ target, key }) => (key ? [{ target, text: t(key) }] : [])),
+    ]
+      .flatMap(({ target, key }) => (key ? [{ target, text: t(key) }] : []))
+      // La comprobación, la última (orden visual, UX de captcha §2.3).
+      .concat(captchaError ? [{ target: 'captcha', text: captchaError }] : []),
   );
 
   // Con JavaScript, el foco pasa al título de la pantalla de menor (UX §3.2.2).
@@ -85,6 +97,14 @@
       <p class="provider-separator">{t('proveedor.separador.registro')}</p>
     {/if}
 
+    {#if data.captcha}
+      <CaptchaNoscript
+        form="registro"
+        supportEmail={data.supportEmail}
+        providers={data.providers.map((provider) => PROVIDER_NAMES[provider])}
+      />
+    {/if}
+
     <p>{t('comun.campos_obligatorios')}</p>
 
     {#key form}
@@ -115,11 +135,18 @@
           error={fields.acceptTerms ? t(fields.acceptTerms) : undefined}
         />
 
+        {#if data.captcha}
+          <CaptchaField {captcha} error={captchaError} auto={form ? 'onload' : 'onfocus'} />
+          <input type="hidden" name={CAPTCHA_FAILURES_FIELD} value={form?.captchaFailures ?? 0} />
+        {/if}
+
         <div class="actions">
           <SubmitButton
             label={t('registro.boton.enviar')}
             sendingLabel={t('registro.boton.enviando')}
-            statusText={t('registro.estado.enviando')}
+            statusText={submission.checking
+              ? t('captcha.estado.enviando')
+              : t('registro.estado.enviando')}
             sending={submission.sending}
           />
         </div>

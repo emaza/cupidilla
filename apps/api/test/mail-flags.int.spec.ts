@@ -37,6 +37,8 @@ describe('EMAIL_UNVERIFIED_REMINDER=false', () => {
       minAge: 18,
       mail: { unverifiedReminder: false, passwordChangedNotice: true },
       contact: { ackEmail: false },
+      captcha: { enabled: false },
+      support: { email: 'soporte@example.com' },
     });
     expect((await request(t.app.getHttpServer()).get('/config')).status).toBe(403);
   });

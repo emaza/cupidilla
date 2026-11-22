@@ -9,6 +9,8 @@
     CONTACT_SUBJECT_MIN,
     contactTextLength,
   } from '@cupidilla/contracts';
+  import CaptchaField from '#lib/components/CaptchaField.svelte';
+  import CaptchaNoscript from '#lib/components/CaptchaNoscript.svelte';
   import EmailField from '#lib/components/EmailField.svelte';
   import ErrorSummary from '#lib/components/ErrorSummary.svelte';
   import HoneypotField from '#lib/components/HoneypotField.svelte';
@@ -16,6 +18,8 @@
   import PrivacyCheckbox from '#lib/components/PrivacyCheckbox.svelte';
   import SubmitButton from '#lib/components/SubmitButton.svelte';
   import TextField from '#lib/components/TextField.svelte';
+  import { createCaptcha } from '#lib/captcha/captcha.svelte.ts';
+  import { CAPTCHA_FAILURES_FIELD, captchaErrorText } from '#lib/forms/captcha.ts';
   import { CONTACT_FIELDS, type ContactField } from '#lib/forms/contact.ts';
   import { createSubmission } from '#lib/forms/submission.svelte.ts';
   import { fill, pageTitle, t, type TextKey } from '#lib/texts.ts';
@@ -23,10 +27,16 @@
 
   let { data, form }: PageProps = $props();
 
-  const submission = createSubmission();
+  const captcha = createCaptcha();
+  const submission = createSubmission({ captcha });
 
   const values = $derived(form?.values);
-  const fields = $derived<Partial<Record<ContactField, TextKey>>>(form?.errors?.fields ?? {});
+  const fields = $derived<Partial<Record<ContactField | 'captcha', TextKey>>>(
+    form?.errors?.fields ?? {},
+  );
+  const captchaError = $derived(
+    fields.captcha ? captchaErrorText(fields.captcha, data.supportEmail) : undefined,
+  );
   const general = $derived(form?.errors?.general);
   const hasErrors = $derived(Object.keys(fields).length > 0 || general !== undefined);
 
@@ -50,8 +60,8 @@
   const summary = $derived(
     CONTACT_FIELDS.flatMap((field) => {
       const text = errorText(field);
-      return text ? [{ target: field, text }] : [];
-    }),
+      return text ? [{ target: field as string, text }] : [];
+    }).concat(captchaError ? [{ target: 'captcha', text: captchaError }] : []),
   );
 
   // El enlace de la cláusula es «política de privacidad» dentro de su frase (UX §4).
@@ -69,6 +79,10 @@
   <h1>{t('contacto.titulo')}</h1>
   <p>{t('contacto.texto.intro')}</p>
   <p>{t('contacto.texto.obligatorios')}</p>
+
+  {#if data.captcha}
+    <CaptchaNoscript form="contacto" supportEmail={data.supportEmail} />
+  {/if}
 
   {#key form}
     <form method="POST" novalidate use:enhance={submission.submit}>
@@ -114,12 +128,18 @@
         checked={values?.acceptPrivacy ?? false}
         error={errorText('acceptPrivacy')}
       />
+      {#if data.captcha}
+        <CaptchaField {captcha} error={captchaError} auto={form ? 'onload' : 'onfocus'} />
+        <input type="hidden" name={CAPTCHA_FAILURES_FIELD} value={form?.captchaFailures ?? 0} />
+      {/if}
       <HoneypotField />
       <div class="actions">
         <SubmitButton
           label={t('contacto.boton.enviar')}
           sendingLabel={t('contacto.boton.enviando')}
-          statusText={t('contacto.estado.enviando')}
+          statusText={submission.checking
+            ? t('captcha.estado.enviando')
+            : t('contacto.estado.enviando')}
           sending={submission.sending}
         />
       </div>

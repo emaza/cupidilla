@@ -7,7 +7,8 @@ import { e2eServers } from './helpers/servers.ts';
  * `npm run test:e2e:serve`: deja corriendo API, web y proveedor falso en los puertos de los e2e,
  * para lanzar `npx playwright test <archivo>` sin recompilar. Playwright los reutiliza
  * (`reuseExistingServer` fuera de CI). Tras cambiar código hay que parar este proceso y
- * volver a lanzarlo: compila al arrancar y no recarga.
+ * volver a lanzarlo: compila al arrancar y no recarga. Con `E2E_CAPTCHA=1`, los de la suite con la
+ * comprobación antibots (`npm run test:e2e:captcha`).
  */
 const ROOT = resolve(import.meta.dirname, '../../../..');
 const children: ChildProcess[] = [];
@@ -50,7 +51,7 @@ process.on('SIGINT', () => stopAll(0));
 process.on('SIGTERM', () => stopAll(0));
 
 await assertMailpitUp();
-const servers = e2eServers();
+const servers = e2eServers({ captcha: process.env.E2E_CAPTCHA === '1' });
 for (const server of servers) {
   if (stopping) break;
   if (

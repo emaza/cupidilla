@@ -11,6 +11,8 @@ let cached: {
   value: number;
   mail: ConfigResponse['mail'];
   contact: ConfigResponse['contact'];
+  captcha: ConfigResponse['captcha'];
+  support: ConfigResponse['support'];
   at: number;
 } | null = null;
 let failedAt: number | null = null;
@@ -33,6 +35,8 @@ async function refresh(event: RequestEvent): Promise<number | null> {
       value: result.data.minAge,
       mail: result.data.mail,
       contact: result.data.contact,
+      captcha: result.data.captcha,
+      support: result.data.support,
       at: now,
     };
     failedAt = null;
@@ -89,4 +93,22 @@ export async function displayContactConfig(
 ): Promise<ConfigResponse['contact']> {
   await currentMinAge(event, { respectBackoff: true }).catch(() => null);
   return cached?.contact ?? { ackEmail: false };
+}
+
+/**
+ * Comprobación antibots (técnico de captcha §5.2), de la misma caché. Si nunca se ha sabido,
+ * desactivada: la página no pinta el widget y, si la API la exige, responde `CAPTCHA_REQUIRED`.
+ * La API sigue decidiendo.
+ */
+export async function displayCaptchaConfig(
+  event: RequestEvent,
+): Promise<ConfigResponse['captcha']> {
+  await currentMinAge(event, { respectBackoff: true }).catch(() => null);
+  return cached?.captcha ?? { enabled: false };
+}
+
+/** Dirección de soporte (`MAIL_SUPPORT_ADDRESS`, técnico de captcha §7.2), o `null` si no se sabe. */
+export async function displaySupportEmail(event: RequestEvent): Promise<string | null> {
+  await currentMinAge(event, { respectBackoff: true }).catch(() => null);
+  return cached?.support.email ?? null;
 }

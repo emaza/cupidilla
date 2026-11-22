@@ -39,7 +39,10 @@ const optional = <T extends z.ZodType>(schema: T) =>
 const withDefault = (schema: z.ZodString | z.ZodEmail, fallback: string) =>
   z.preprocess((value) => (value === '' ? undefined : value), schema.default(fallback));
 
-/** Interruptores (`EMAIL_*`, `CONTACT_ACK_EMAIL`): solo `true` o `false` (como `API_URL_ALLOW_HTTP` en la web). */
+/**
+ * Interruptores (`EMAIL_*`, `CONTACT_ACK_EMAIL`, `CAPTCHA_ENABLED`): solo `true` o `false` (como
+ * `API_URL_ALLOW_HTTP` en la web).
+ */
 const booleanFlag = (name: string, fallback: boolean) =>
   z.preprocess(
     (value) => (value === '' ? undefined : value),
@@ -175,6 +178,33 @@ function checkMail(env: Record<string, unknown>, ctx: z.RefinementCtx): void {
   }
 }
 
+/**
+ * Reglas de la comprobación antibots (técnico de captcha §5.1). Los mensajes nombran la variable
+ * y nunca muestran su valor.
+ */
+function checkCaptcha(env: Record<string, unknown>, ctx: z.RefinementCtx): void {
+  const issue = (path: string, message: string) =>
+    ctx.addIssue({ code: 'custom', path: [path], message });
+  const key = env.CAPTCHA_HMAC_KEY;
+  // En desarrollo, sin clave arranca con una aleatoria de esa ejecución (CaptchaService lo avisa):
+  // `npm run dev` funciona con cualquier .env. En producción y en las pruebas es obligatoria.
+  if (env.CAPTCHA_ENABLED === true && key === undefined && env.NODE_ENV !== 'development') {
+    issue(
+      'CAPTCHA_HMAC_KEY',
+      'CAPTCHA_HMAC_KEY es obligatoria con CAPTCHA_ENABLED=true (32 caracteres o más). Para desactivar la comprobación, CAPTCHA_ENABLED=false.',
+    );
+  }
+  if (typeof key === 'string' && key === env.INTERNAL_API_KEY) {
+    issue('CAPTCHA_HMAC_KEY', 'CAPTCHA_HMAC_KEY tiene que ser distinta de INTERNAL_API_KEY.');
+  }
+  if (env.NODE_ENV === 'production' && env.CAPTCHA_DIFFICULTY === 'minimal') {
+    issue(
+      'CAPTCHA_DIFFICULTY',
+      'CAPTCHA_DIFFICULTY=minimal es solo para desarrollo y pruebas: no vale con NODE_ENV=production.',
+    );
+  }
+}
+
 /** Variables de entorno de la API. Si alguna no es válida, la API no arranca. */
 export const envSchema = z
   .object({
@@ -247,11 +277,25 @@ export const envSchema = z
     OAUTH_HTTP_TIMEOUT_MS: z.coerce.number().int().min(500).max(4000).default(3000),
     // Solo pruebas: apunta los dos proveedores al proveedor falso local.
     OAUTH_FAKE_PROVIDER_URL: optional(z.url({ protocol: /^http$/ })),
+    // Protección antibots (técnico de captcha §5). Activada por defecto (A10).
+    CAPTCHA_ENABLED: booleanFlag('CAPTCHA_ENABLED', true),
+    // Clave HMAC de los retos. Obligatoria con CAPTCHA_ENABLED=true salvo en desarrollo (checkCaptcha).
+    CAPTCHA_HMAC_KEY: optional(
+      z.string().min(32, { error: 'CAPTCHA_HMAC_KEY tiene que tener 32 caracteres o más.' }),
+    ),
+    // normal o minimal. minimal no vale con NODE_ENV=production (checkCaptcha).
+    CAPTCHA_DIFFICULTY: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z
+        .enum(['normal', 'minimal'], { error: 'CAPTCHA_DIFFICULTY solo admite normal o minimal.' })
+        .default('normal'),
+    ),
   })
   .superRefine((env, ctx) => {
     checkOAuth(env, ctx);
     checkPublicWebUrl(env, ctx);
     checkMail(env, ctx);
+    checkCaptcha(env, ctx);
   });
 
 export type Env = z.infer<typeof envSchema>;

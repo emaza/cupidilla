@@ -20,6 +20,8 @@ describe('GET /config (edad mínima por defecto)', () => {
       minAge: 18,
       mail: { unverifiedReminder: true, passwordChangedNotice: true },
       contact: { ackEmail: false },
+      captcha: { enabled: false },
+      support: { email: 'soporte@example.com' },
     });
   });
 

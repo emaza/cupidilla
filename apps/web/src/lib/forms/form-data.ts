@@ -1,4 +1,10 @@
-import { isFieldIssue, type FieldError, type FieldIssue } from '@cupidilla/contracts';
+import {
+  CAPTCHA_FIELD,
+  CAPTCHA_PAYLOAD_MAX,
+  isFieldIssue,
+  type FieldError,
+  type FieldIssue,
+} from '@cupidilla/contracts';
 import type { TextKey } from '#lib/texts.ts';
 
 /** Errores que una acción devuelve a su página: por campo (`name` del HTML) y uno general. */
@@ -37,4 +43,13 @@ export function firstApiIssueByField(fields: readonly FieldError[] = []): Map<st
     if (!result.has(field)) result.set(field, issue);
   }
   return result;
+}
+
+/**
+ * Solución del widget antibots (técnico de captcha §6, paso 5): la cadena recortada, o `undefined`
+ * si está vacía o pasa de `CAPTCHA_PAYLOAD_MAX` (la API ni la intentaría leer).
+ */
+export function captchaFromForm(data: FormData): string | undefined {
+  const value = textField(data, CAPTCHA_FIELD).trim();
+  return value === '' || value.length > CAPTCHA_PAYLOAD_MAX ? undefined : value;
 }

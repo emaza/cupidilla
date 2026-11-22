@@ -24,6 +24,7 @@ import {
 } from '../common/decorators/current-session.decorator.js';
 import { AllowDuringDataReview } from '../common/decorators/allow-during-data-review.decorator.js';
 import { Public } from '../common/decorators/public.decorator.js';
+import { RequiresCaptcha } from '../common/decorators/requires-captcha.decorator.js';
 import {
   ACCOUNT_THROTTLER,
   EMAIL_THROTTLER,
@@ -45,6 +46,7 @@ export class AuthController {
   /** Registro uniforme (correo §5.1): siempre 202 sin cuerpo y sin sesión. */
   @Post('register')
   @Public()
+  @RequiresCaptcha()
   @HttpCode(202)
   @Throttle({
     [IP_THROTTLER]: { limit: 5, ttl: THROTTLE_TTL.hour },
@@ -54,9 +56,14 @@ export class AuthController {
     await this.auth.register(body);
   }
 
-  /** Pedir (otra vez) el correo de verificación: siempre 202, exista o no la cuenta (§5.3). */
+  /**
+   * Pedir (otra vez) el correo de verificación: siempre 202, exista o no la cuenta (§5.3). Con la
+   * comprobación antibots (decisión del CTO en el UX de captcha): manda correos a una dirección
+   * escrita a mano.
+   */
   @Post('email-verification/request')
   @Public()
+  @RequiresCaptcha()
   @HttpCode(202)
   @Throttle({
     [IP_THROTTLER]: { limit: 5, ttl: THROTTLE_TTL.quarterHour },
@@ -98,6 +105,7 @@ export class AuthController {
   /** Pedir el enlace de recuperación: siempre 202, exista o no la cuenta (§5.5). */
   @Post('password-reset/request')
   @Public()
+  @RequiresCaptcha()
   @HttpCode(202)
   @Throttle({
     [IP_THROTTLER]: { limit: 5, ttl: THROTTLE_TTL.quarterHour },

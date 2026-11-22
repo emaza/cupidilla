@@ -1,6 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { errorMessages } from '#lib/errors/messages.ts';
-import { textField } from '#lib/forms/form-data.ts';
+import { captchaFromForm, textField } from '#lib/forms/form-data.ts';
 import {
   accountDetailsView,
   emailSectionView,
@@ -69,8 +69,11 @@ export const actions = {
     const user = event.locals.user;
     if (!user) redirect(303, '/login?next=/account');
     if (user.emailVerified) redirect(303, '/account?notice=verification-already');
-    const result = await api.requestEmailVerification(event, user.email);
+    const captcha = captchaFromForm(await event.request.formData());
+    const result = await api.requestEmailVerification(event, user.email, captcha);
     if (result.ok) redirect(303, '/account?notice=verification-sent');
+    if (result.error.code === 'CAPTCHA_REQUIRED') redirect(303, '/account?error=captcha-required');
+    if (result.error.code === 'CAPTCHA_INVALID') redirect(303, '/account?error=captcha-invalid');
     if (result.status === 429) redirect(303, '/account?error=rate-limited');
     redirect(303, '/account?error=verification-failed');
   },

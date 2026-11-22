@@ -1,15 +1,19 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { enhance } from '$app/forms';
+  import CaptchaField from '#lib/components/CaptchaField.svelte';
+  import CaptchaNoscript from '#lib/components/CaptchaNoscript.svelte';
   import SubmitButton from '#lib/components/SubmitButton.svelte';
   import UrlMessage from '#lib/components/UrlMessage.svelte';
+  import { createCaptcha } from '#lib/captcha/captcha.svelte.ts';
   import { createSubmission } from '#lib/forms/submission.svelte.ts';
   import { fill, pageTitle, t } from '#lib/texts.ts';
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
 
-  const submission = createSubmission();
+  const captcha = createCaptcha();
+  const submission = createSubmission({ captcha });
 
   // Página de resultado: con JavaScript, el foco va al título para que se lea (correo UX §3.1).
   // Con un error de la URL, el foco lo toma el error.
@@ -33,12 +37,20 @@
   <h2>{t('revisar.ayuda.titulo')}</h2>
   <p class="typed-email">{fill('revisar.ayuda.texto', { correo: data.email })}</p>
 
-  <form method="POST" action="?/resend" use:enhance={submission.submit}>
+  {#if data.captcha}
+    <CaptchaNoscript form="reenvio" supportEmail={data.supportEmail} />
+  {/if}
+  <form method="POST" action="?/resend" novalidate use:enhance={submission.submit}>
+    {#if data.captcha}
+      <CaptchaField {captcha} auto="onload" variant="button" />
+    {/if}
     <div class="actions">
       <SubmitButton
         label={t('correo.boton.reenviar')}
         sendingLabel={t('correo.boton.reenviando')}
-        statusText={t('correo.estado.reenviando')}
+        statusText={submission.checking
+          ? t('captcha.estado.enviando')
+          : t('correo.estado.reenviando')}
         sending={submission.sending}
       />
     </div>
