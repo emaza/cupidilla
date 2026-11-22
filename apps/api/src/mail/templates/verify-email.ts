@@ -27,7 +27,13 @@ export function renderVerifyEmail(context: MailContext, input: VerifyEmailInput)
       },
       {
         type: 'strong',
-        text: `Si no has sido tú, no hagas nada: ignora este mensaje. Tu correo no se usará para nada más y, si nadie lo confirma, la cuenta se borra sola el ${formatSpanishDate(input.deletionAt)}. Si quieres quedarte con tu correo antes de esa fecha, crea una contraseña nueva en ${context.webUrl}/forgot-password.`,
+        text: `Si no has sido tú, no hagas nada: ignora este mensaje. Tu correo no se usará para nada más y, si nadie lo confirma, la cuenta se borra sola el ${formatSpanishDate(input.deletionAt)}. Si quieres quedarte con tu correo antes de esa fecha, crea una contraseña nueva:`,
+      },
+      {
+        type: 'action',
+        label: 'Quedarme con mi correo',
+        url: `${context.webUrl}/forgot-password`,
+        secondary: true,
       },
     ],
   });

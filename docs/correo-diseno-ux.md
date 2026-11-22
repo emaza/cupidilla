@@ -550,7 +550,7 @@ Cuándo: alta con un correo nuevo, y reenvíos. Un solo enlace vivo (los anterio
 
 - **Asunto**: `Confirma tu correo`
 - **Titular**: Confirma tu correo
-- **Botón**: Confirmar mi correo
+- **Botones**: Confirmar mi correo · Quedarme con mi correo (secundario, a `{web}/forgot-password`)
 - **Texto plano**:
 
 ```
@@ -562,7 +562,9 @@ Alguien ha creado una cuenta de Cupidilla con este correo ({correo}). Si has sid
 
 Al abrir el enlace tendrás que escribir la contraseña de la cuenta (la que elegiste al crearla) y pulsar un botón. El enlace caduca en 24 horas y solo sirve una vez. Si pides otro mensaje, este deja de funcionar.
 
-Si no has sido tú, no hagas nada: ignora este mensaje. Tu correo no se usará para nada más y, si nadie lo confirma, la cuenta se borra sola el {fecha}. Si quieres quedarte con tu correo antes de esa fecha, crea una contraseña nueva en {web}/forgot-password.
+Si no has sido tú, no hagas nada: ignora este mensaje. Tu correo no se usará para nada más y, si nadie lo confirma, la cuenta se borra sola el {fecha}. Si quieres quedarte con tu correo antes de esa fecha, crea una contraseña nueva:
+
+{web}/forgot-password
 
 Cupidilla. Este mensaje es automático; no hace falta que lo respondas. Si necesitas ayuda, escribe a {soporte}.
 ```
@@ -676,7 +678,7 @@ Cuándo: cuenta con contraseña y correo sin confirmar, **el 5.º día desde su 
 
 - **Asunto**: `Confirma tu correo o borraremos tu cuenta`
 - **Titular**: Tu cuenta se borrará pronto
-- **Botón**: Confirmar mi correo
+- **Botones**: Confirmar mi correo · Quedarme con mi correo (secundario, a `{web}/forgot-password`)
 - **Texto plano**:
 
 ```
@@ -690,7 +692,11 @@ Para conservarla, confirma tu correo:
 
 Al abrir el enlace tendrás que escribir la contraseña de la cuenta y pulsar un botón. El enlace caduca en 24 horas y solo sirve una vez. Si pides otro mensaje, este deja de funcionar.
 
-Si no has sido tú, no hagas nada: la cuenta se borrará sola y tu correo no se usará para nada más. Si quieres quedarte con tu correo antes de esa fecha, crea una contraseña nueva en {web}/forgot-password. Si tienes dudas, escribe a {soporte}.
+Si no has sido tú, no hagas nada: la cuenta se borrará sola y tu correo no se usará para nada más. Si quieres quedarte con tu correo antes de esa fecha, crea una contraseña nueva:
+
+{web}/forgot-password
+
+Si tienes dudas, escribe a {soporte}.
 
 Cupidilla. Este mensaje es automático; no hace falta que lo respondas. Si necesitas ayuda, escribe a {soporte}.
 ```

@@ -46,3 +46,19 @@ describe('B6-2: los valores interpolados van escapados en el HTML', () => {
     expect(mail.html).toContain('be&lt;b&gt;to@example.com');
   });
 });
+
+describe('B6-3: «Quedarme con mi correo» va en su línea y como botón', () => {
+  const FORGOT = 'http://localhost:5173/forgot-password';
+  const renders = [
+    ['Confirma tu correo', renderVerifyEmail],
+    ['recordatorio', renderVerifyReminder],
+  ] as const;
+
+  it.each(renders)('%s', (_, render) => {
+    const mail = render(context, { email: 'beto@example.com', link: LINK, deletionAt: DELETION });
+    expect(mail.text.split('\n')).toContain(FORGOT);
+    expect(mail.text).not.toContain(`${FORGOT}.`);
+    expect(mail.html).toContain(`<a href="${FORGOT}"`);
+    expect(mail.html).toContain('Quedarme con mi correo');
+  });
+});
