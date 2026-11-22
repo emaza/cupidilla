@@ -38,6 +38,14 @@ const integrationOptions = {
 
 export default defineConfig({
   test: {
+    // A nivel raíz para que agregue los tres proyectos; el lcov lo lee SonarQube.
+    coverage: {
+      provider: 'v8',
+      reporter: ['text-summary', ['lcov', { projectRoot: '../..' }]],
+      reportsDirectory: 'coverage',
+      include: ['src/**'],
+      exclude: ['src/**/*.spec.ts'],
+    },
     projects: [
       {
         test: {

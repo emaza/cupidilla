@@ -45,7 +45,7 @@ export function createPool(settings: PoolSettings): pg.Pool {
   });
   // Todo error al conseguir un cliente (también el de un `query` suelto, que pasa por aquí) se
   // marca: no se llegó a enviar nada, así que nunca es «resultado incierto» (§6.3).
-  type ConnectCallback = Parameters<pg.Pool['connect']>[0] & {};
+  type ConnectCallback = NonNullable<Parameters<pg.Pool['connect']>[0]>;
   const connect = pool.connect.bind(pool) as (
     callback?: ConnectCallback,
   ) => Promise<pg.PoolClient> | undefined;

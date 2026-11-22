@@ -13,6 +13,7 @@
     "start:e2e": "node scripts/reset-db.ts && node scripts/migrate.ts && node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:unit": "vitest run --project unit",
     "test:int": "vitest run --project integration --project integration-serial",
     "db:generate": "drizzle-kit generate",
